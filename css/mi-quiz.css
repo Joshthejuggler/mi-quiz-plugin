@@ -1,0 +1,61 @@
+:root{
+  --mi-primary-color:#ef4444;
+  --mi-primary-color-dark:#dc2626;
+  --mi-light-gray:#e5e7eb;
+  --mi-medium-gray:#d1d5db;
+  --mi-text-color:#374151;
+}
+#mi-quiz-container{max-width:860px;margin:0 auto}
+.mi-quiz-card{
+  background:#fff;border:1px solid var(--mi-light-gray);border-radius:12px;
+  padding:2em;box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);
+  text-align:center
+}
+.mi-quiz-button{
+  background:var(--mi-primary-color);color:#1C2A44;border:none;padding:10px 20px;
+  border-radius:8px;font-weight:700;cursor:pointer;transition:background .2s
+}
+.mi-quiz-button:hover{background:var(--mi-primary-color-dark)}
+.mi-quiz-question-container{display:flex;align-items:center;justify-content:center;height:120px;margin-bottom:1.2em;padding:0 1em}
+.mi-quiz-question-text{font-size:1.2em;color:var(--mi-text-color)}
+.mi-progress-wrapper{display:flex;align-items:center;gap:1em;margin-bottom:1em}
+.mi-progress-container{flex-grow:1;background:#e0e0e0;border-radius:4px;overflow:hidden}
+.mi-progress-bar{width:0%;height:8px;background:var(--mi-primary-color);transition:width .3s}
+.mi-progress-counter{font-size:.9em;color:#555;white-space:nowrap}
+.mi-quiz-likert-options{display:flex;justify-content:center;flex-wrap:wrap;gap:10px}
+.mi-quiz-option-wrapper{display:flex;flex-basis:95px;flex-grow:1}
+.mi-quiz-likert-options input[type=radio]{display:none}
+.mi-quiz-likert-options label{
+  display:flex;flex-direction:column;justify-content:center;width:100%;
+  min-height:50px;padding:10px 5px;border:2px solid var(--mi-medium-gray);
+  border-radius:8px;cursor:pointer;transition:.2s;text-align:center
+}
+.mi-quiz-likert-options label:hover{border-color:#9ca3af;transform:translateY(-2px)}
+.mi-quiz-likert-options input[type=radio]:checked+label{
+  background:var(--mi-primary-color);border-color:var(--mi-primary-color-dark);color:#fff
+}
+@media (max-width:600px){
+  .mi-quiz-question-container{height:120px}
+  .mi-quiz-likert-options{flex-direction:column;gap:8px}
+  .mi-quiz-option-wrapper{flex-basis:auto;flex-grow:0;width:100%}
+  .mi-quiz-likert-options label{flex-direction:row;align-items:center;justify-content:center;padding:12px 15px;min-height:0;text-align:center}
+}
+
+.mi-quiz-footer {
+  display: flex;
+  justify-content: center;
+  gap: 1em;
+  margin-top: 2em; /* This adds the space above the buttons */
+}
+
+@media (max-width: 600px) {
+  .mi-quiz-likert-options .likert-num {
+    margin-right: 15px;
+  }
+}
+
+.mi-age-options {
+  display: flex;
+  flex-direction: column;
+  row-gap: 10px;
+}
