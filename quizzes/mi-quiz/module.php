@@ -5,7 +5,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 // Data is now loaded "just-in-time" within the methods that need it for maximum reliability.
 
 class MI_Quiz_Plugin_AI {
-    const VERSION           = '9.4';
+    const VERSION           = '9.7';
     const OPT_GROUP         = 'miq_settings';
     const OPT_BCC           = 'miq_bcc_emails';
     const OPT_ANTITHREAD    = 'miq_antithread';
@@ -13,6 +13,16 @@ class MI_Quiz_Plugin_AI {
     const TRANSIENT_QUIZ_RESULTS_PREFIX = 'miq_quiz_results_';
 
     public function __construct() {
+        // Register this quiz with the core platform to appear in the dashboard.
+        if (class_exists('Micro_Coach_Core')) {
+            Micro_Coach_Core::register_quiz('mi-quiz', [
+                'title'            => 'Multiple Intelligences Quiz',
+                'shortcode'        => 'mi_quiz',
+                'results_meta_key' => 'miq_quiz_results',
+                'order'            => 10, // Controls the display order in the dashboard.
+            ]);
+        }
+
         // Frontend & admin hooks
         add_shortcode('mi_quiz', [ $this, 'render_quiz' ]);
         if ( is_admin() ) {
@@ -29,6 +39,7 @@ class MI_Quiz_Plugin_AI {
         add_action('wp_ajax_miq_delete_subs',          [ $this, 'ajax_delete_subs' ]);
         add_action('wp_ajax_miq_export_subs',          [ $this, 'ajax_export_subs' ]);
         add_action('wp_ajax_miq_save_user_results',    [ $this, 'ajax_save_user_results' ]);
+        add_action('wp_ajax_miq_delete_user_results',  [ $this, 'ajax_delete_user_results' ]);
         add_action('wp_ajax_miq_generate_pdf',         [ $this, 'ajax_generate_pdf' ]);
     }
 
@@ -480,6 +491,23 @@ class MI_Quiz_Plugin_AI {
             ['Attachment' => true]
         );
         exit;
+    }
+
+    public function ajax_delete_user_results() {
+        check_ajax_referer('miq_nonce');
+
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error('You must be logged in to delete results.');
+        }
+
+        $user_id = get_current_user_id();
+
+        if ( delete_user_meta($user_id, 'miq_quiz_results') ) {
+            wp_send_json_success('Your results have been deleted.');
+        } else {
+            // This can happen if meta didn't exist, which is not an error in this context.
+            wp_send_json_success('No results found to delete, or they were already deleted.');
+        }
     }
 }
 

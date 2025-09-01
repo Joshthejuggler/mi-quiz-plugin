@@ -302,27 +302,27 @@
 
     const actionsContainer = $id('mi-results-actions');
 
-    const downloadBtn = document.createElement('button');
-    downloadBtn.type = 'button';
-    downloadBtn.className = 'mi-quiz-button';
-    downloadBtn.textContent = 'Download PDF';
-    downloadBtn.addEventListener('click', () => {
-        downloadBtn.textContent = 'Generating...';
-        downloadBtn.disabled = true;
+    // Helper to create buttons, reducing code repetition.
+    function createActionButton(text, classes, onClick) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = classes;
+        btn.textContent = text;
+        btn.addEventListener('click', onClick);
+        return btn;
+    }
 
-        // This new approach sends the HTML to the server for reliable PDF generation.
+    // --- Create and Append Buttons ---
+
+    // Download PDF Button
+    const downloadBtn = createActionButton('Download PDF', 'mi-quiz-button', (e) => {
+        const btn = e.currentTarget;
+        btn.textContent = 'Generating...';
+        btn.disabled = true;
         const resultsHtml = $id('mi-results-content').innerHTML;
-        const body = new URLSearchParams({
-            action: 'miq_generate_pdf',
-            _ajax_nonce: ajaxNonce,
-            results_html: resultsHtml
-        });
-
+        const body = new URLSearchParams({ action: 'miq_generate_pdf', _ajax_nonce: ajaxNonce, results_html: resultsHtml });
         fetch(ajaxUrl, { method: 'POST', body })
-            .then(response => {
-                if (response.ok) return response.blob();
-                throw new Error('Network response was not ok.');
-            })
+            .then(response => response.ok ? response.blob() : Promise.reject('Network response was not ok.'))
             .then(blob => {
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -339,45 +339,29 @@
                 alert('Sorry, there was an error generating the PDF.');
             })
             .finally(() => {
-                downloadBtn.textContent = 'Download PDF';
-                downloadBtn.disabled = false;
+                btn.textContent = 'Download PDF';
+                btn.disabled = false;
             });
     });
     actionsContainer.appendChild(downloadBtn);
 
+    // --- Handle Data Saving and Emailing ---
     if (isLoggedIn && !isPostRegistration) {
         const content = generateResultsHtml();
-        const body = new URLSearchParams({
-            action: 'miq_email_results',
-            _ajax_nonce: ajaxNonce,
-            email: currentUser.email,
-            first_name: currentUser.firstName || 'Quiz Taker',
-            last_name: currentUser.lastName || '',
-            results_html: content
-        });
+        const body = new URLSearchParams({ action: 'miq_email_results', _ajax_nonce: ajaxNonce, email: currentUser.email, first_name: currentUser.firstName || 'Quiz Taker', last_name: currentUser.lastName || '', results_html: content });
         fetch(ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
     }
 
     if (currentUser) {
         const resultsData = { detailed, top5, bottom3, top3, age };
-        fetch(ajaxUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                action: 'miq_save_user_results',
-                _ajax_nonce: ajaxNonce,
-                user_id: currentUser.id,
-                results: JSON.stringify(resultsData)
-            })
-        });
+        const body = new URLSearchParams({ action: 'miq_save_user_results', _ajax_nonce: ajaxNonce, user_id: currentUser.id, results: JSON.stringify(resultsData) });
+        fetch(ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
     }
 
+    // --- Add Logged-In User Buttons ---
     if (isLoggedIn) {
-        const retakeBtn = document.createElement('button');
-        retakeBtn.type = 'button';
-        retakeBtn.className = 'mi-quiz-button';
-        retakeBtn.textContent = 'Retake Quiz';
-        retakeBtn.addEventListener('click', () => {
+        // Retake Quiz Button
+        const retakeBtn = createActionButton('Retake Quiz', 'mi-quiz-button', () => {
             if (confirm('Are you sure? Your saved results will be overwritten when you complete the new quiz.')) {
                 resultsDiv.style.display = 'none';
                 resultsDiv.innerHTML = '';
@@ -386,8 +370,38 @@
             }
         });
         actionsContainer.appendChild(retakeBtn);
+
+        // Delete Results Button
+        const deleteBtn = createActionButton('Delete My Results', 'mi-quiz-button mi-quiz-button-secondary', (e) => {
+            if (!confirm('Are you sure you want to permanently delete your saved results? This cannot be undone.')) return;
+            
+            const btn = e.currentTarget;
+            btn.textContent = 'Deleting...';
+            btn.disabled = true;
+
+            const body = new URLSearchParams({ action: 'miq_delete_user_results', _ajax_nonce: ajaxNonce });
+            fetch(ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
+                .then(r => r.json())
+                .then(j => {
+                    if (j.success) {
+                        currentUser.savedResults = null;
+                        top3 = []; detailed = {}; top5 = []; bottom3 = [];
+                        alert('Your results have been deleted.');
+                        resultsDiv.style.display = 'none';
+                        resultsDiv.innerHTML = '';
+                        ageGate.style.display = 'block';
+                        window.scrollTo(0,0);
+                    } else {
+                        alert('Error: ' + (j.data || 'Could not delete results.'));
+                        btn.textContent = 'Delete My Results';
+                        btn.disabled = false;
+                    }
+                });
+        });
+        actionsContainer.appendChild(deleteBtn);
     }
 
+    // --- Finalize Display ---
     devTools && (devTools.style.display='none');
     form2.style.display='none'; resultsDiv.style.display='block';
     window.scrollTo(0,0);

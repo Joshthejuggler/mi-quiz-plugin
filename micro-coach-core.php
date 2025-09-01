@@ -20,10 +20,16 @@ if (file_exists(plugin_dir_path(__FILE__) . 'vendor/autoload.php')) {
  */
 class Micro_Coach_Core {
     private $loaded_modules = [];
+    private static $registered_quizzes = [];
 
     public function __construct() {
         // Scan the 'quizzes' directory and load each module.
         $this->load_quiz_modules();
+
+        // Add the new shortcode for the quiz dashboard.
+        add_shortcode('quiz_dashboard', [$this, 'render_quiz_dashboard']);
+
+        add_action('save_post', [$this, 'clear_shortcode_page_transients']);
 
         // Add an admin notice to show which modules were loaded.
         add_action('admin_notices', [$this, 'show_loaded_modules_notice']);
@@ -43,6 +49,104 @@ class Micro_Coach_Core {
     }
 
     /**
+     * Allows quiz modules to register themselves with the core platform.
+     * @param string $id A unique ID for the quiz (e.g., 'mi-quiz').
+     * @param array $args An array of quiz metadata.
+     */
+    public static function register_quiz($id, $args) {
+        $defaults = [
+            'title'            => 'Untitled Quiz',
+            'shortcode'        => '',
+            'results_meta_key' => '',
+            'order'            => 99,
+        ];
+        self::$registered_quizzes[$id] = wp_parse_args($args, $defaults);
+    }
+
+    /**
+     * Returns the array of all registered quizzes.
+     * @return array
+     */
+    public static function get_quizzes() {
+        return self::$registered_quizzes;
+    }
+
+    /**
+     * Renders the [quiz_dashboard] shortcode content.
+     */
+    public function render_quiz_dashboard() {
+        $quizzes = self::get_quizzes();
+        if (empty($quizzes)) {
+            return current_user_can('manage_options') ? '<p><em>Quiz Dashboard: No quizzes have been registered.</em></p>' : '';
+        }
+
+        // Sort quizzes by the 'order' property.
+        uasort($quizzes, function($a, $b) {
+            return ($a['order'] ?? 99) <=> ($b['order'] ?? 99);
+        });
+
+        $user_id = get_current_user_id();
+        wp_enqueue_style('dashicons');
+
+        ob_start();
+        ?>
+        <style>
+            .quiz-dashboard-list { list-style: none; padding: 0; margin: 1em 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; max-width: 700px; }
+            .quiz-dashboard-item { display: flex; align-items: baseline; padding: 12px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 10px; background: #fff; gap: 15px; }
+            .quiz-dashboard-status { flex-shrink: 0; width: 24px; text-align: center; }
+            .quiz-dashboard-status .dashicons-yes-alt { color: #4CAF50; font-size: 24px; /* Adjusted for better baseline alignment */ }
+            .quiz-dashboard-title { flex-grow: 1; font-size: 1.1em; font-weight: 500; }
+            .quiz-dashboard-actions { flex-shrink: 0; }
+            .quiz-dashboard-button { text-decoration: none; background: #ef4444; color: #fff; padding: 8px 16px; border-radius: 5px; font-weight: bold; font-size: 0.9em; transition: background 0.2s; white-space: nowrap; }
+            .quiz-dashboard-button:hover { background: #dc2626; color: #fff; }
+        </style>
+        <div class="quiz-dashboard">
+            <ul class="quiz-dashboard-list">
+                <?php foreach ($quizzes as $id => $quiz): ?>
+                    <?php
+                    $has_results = $user_id && !empty($quiz['results_meta_key']) && !empty(get_user_meta($user_id, $quiz['results_meta_key'], true));
+                    $quiz_page_url = $this->find_page_by_shortcode($quiz['shortcode']);
+                    if (!$quiz_page_url) continue; // Don't show if its page can't be found.
+                    ?>
+                    <li class="quiz-dashboard-item">
+                        <div class="quiz-dashboard-status">
+                            <?php if ($has_results): ?>
+                                <span class="dashicons dashicons-yes-alt" title="Completed"></span>
+                            <?php endif; ?>
+                        </div>
+                        <div class="quiz-dashboard-title"><?php echo esc_html($quiz['title']); ?></div>
+                        <div class="quiz-dashboard-actions">
+                            <a href="<?php echo esc_url($quiz_page_url); ?>" class="quiz-dashboard-button">
+                                <?php echo $has_results ? 'View Results' : 'Start Quiz'; ?>
+                            </a>
+                        </div>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Finds the permalink of the first page that contains a given shortcode.
+     * Results are cached in a transient to improve performance.
+     */
+    private function find_page_by_shortcode($shortcode_tag) {
+        if (empty($shortcode_tag)) return null;
+        $transient_key = 'page_url_for_' . $shortcode_tag;
+        if (false !== ($cached_url = get_transient($transient_key))) return $cached_url;
+
+        $query = new WP_Query(['post_type' => ['page', 'post'], 'post_status' => 'publish', 'posts_per_page' => -1, 's' => '[' . $shortcode_tag]);
+        $url = null;
+        if ($query->have_posts()) {
+            foreach ($query->posts as $p) { if (has_shortcode($p->post_content, $shortcode_tag)) { $url = get_permalink($p->ID); break; } }
+        }
+        set_transient($transient_key, $url, DAY_IN_SECONDS); // Cache for 1 day.
+        return $url;
+    }
+
+    /**
      * Displays an admin notice to confirm which modules have been loaded.
      * This is a helpful diagnostic tool.
      */
@@ -53,6 +157,16 @@ class Micro_Coach_Core {
         } else {
             $modules_list = esc_html(implode(', ', $this->loaded_modules));
             echo '<div class="notice notice-success is-dismissible"><p><strong>Micro-Coach Quiz Platform:</strong> Successfully loaded the following quiz modules: <strong>' . $modules_list . '</strong>.</p></div>';
+        }
+    }
+
+    /**
+     * Clears page URL transients when a post is saved to keep the dashboard links fresh.
+     */
+    public function clear_shortcode_page_transients() {
+        $quizzes = self::get_quizzes();
+        foreach ($quizzes as $quiz) {
+            if (!empty($quiz['shortcode'])) delete_transient('page_url_for_' . $quiz['shortcode']);
         }
     }
 }

@@ -18,6 +18,13 @@
   border-radius:8px;font-weight:700;cursor:pointer;transition:background .2s
 }
 .mi-quiz-button:hover{background:var(--mi-primary-color-dark)}
+.mi-quiz-button-secondary {
+  background-color: #6c757d;
+  color: #fff;
+}
+.mi-quiz-button-secondary:hover {
+  background-color: #5a6268;
+}
 .mi-quiz-button-small {
   margin-left: 10px;
   padding: 5px 10px;
