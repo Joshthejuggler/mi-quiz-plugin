@@ -15,6 +15,8 @@ class CDT_Quiz_Plugin {
                 'shortcode'        => self::SHORTCODE,
                 'results_meta_key' => self::META_KEY,
                 'order'            => 30,
+                'description'      => 'Measure your ability to handle conflicting beliefs and discover how it impacts your decision-making and personal growth.',
+                'depends_on'       => 'mi-quiz',
             ]);
         }
 

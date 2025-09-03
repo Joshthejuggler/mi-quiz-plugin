@@ -21,6 +21,8 @@ if (file_exists(plugin_dir_path(__FILE__) . 'vendor/autoload.php')) {
 class Micro_Coach_Core {
     private $loaded_modules = [];
     private static $registered_quizzes = [];
+    const OPT_GROUP = 'mc_quiz_platform_settings';
+    const OPT_DESCRIPTIONS = 'mc_quiz_descriptions';
 
     public function __construct() {
         // Scan the 'quizzes' directory and load each module.
@@ -28,6 +30,12 @@ class Micro_Coach_Core {
 
         // Add the new shortcode for the quiz dashboard.
         add_shortcode('quiz_dashboard', [$this, 'render_quiz_dashboard']);
+
+        if (is_admin()) {
+            // Add admin settings page for the platform.
+            add_action('admin_menu', [$this, 'add_settings_page'], 9);
+            add_action('admin_init', [$this, 'register_settings']);
+        }
 
         add_action('save_post', [$this, 'clear_shortcode_page_transients']);
 
@@ -59,6 +67,8 @@ class Micro_Coach_Core {
             'shortcode'        => '',
             'results_meta_key' => '',
             'order'            => 99,
+            'description'      => '',
+            'depends_on'       => null,
         ];
         self::$registered_quizzes[$id] = wp_parse_args($args, $defaults);
     }
@@ -69,6 +79,78 @@ class Micro_Coach_Core {
      */
     public static function get_quizzes() {
         return self::$registered_quizzes;
+    }
+
+    /**
+     * Adds the main settings page for the quiz platform.
+     */
+    public function add_settings_page() {
+        add_menu_page(
+            'Quiz Platform Settings',
+            'Quiz Platform',
+            'manage_options',
+            'quiz-platform-settings',
+            [$this, 'render_settings_page'],
+            'dashicons-forms',
+            58 // Position it near other quiz menus.
+        );
+
+        add_submenu_page(
+            'quiz-platform-settings',
+            'Quiz Platform Settings',
+            'Settings',
+            'manage_options',
+            'quiz-platform-settings', // Use parent slug for the main settings page
+            [$this, 'render_settings_page']
+        );
+    }
+
+    /**
+     * Registers settings for the quiz platform, like descriptions.
+     */
+    public function register_settings() {
+        register_setting(self::OPT_GROUP, self::OPT_DESCRIPTIONS, [$this, 'sanitize_descriptions']);
+        add_settings_section('mc_quiz_descriptions_section', 'Quiz Descriptions', null, 'quiz-platform-settings');
+
+        $quizzes = self::get_quizzes();
+        uasort($quizzes, function($a, $b) {
+            return ($a['order'] ?? 99) <=> ($b['order'] ?? 99);
+        });
+
+        $descriptions = get_option(self::OPT_DESCRIPTIONS, []);
+
+        foreach ($quizzes as $id => $quiz) {
+            add_settings_field(
+                'mc_quiz_desc_' . $id,
+                $quiz['title'],
+                function() use ($id, $quiz, $descriptions) {
+                    $value = isset($descriptions[$id]) ? esc_textarea($descriptions[$id]) : '';
+                    echo '<textarea name="' . self::OPT_DESCRIPTIONS . '[' . esc_attr($id) . ']" rows="3" style="width: 90%; max-width: 500px;">' . $value . '</textarea>';
+                    echo '<p class="description">This text will be shown on the dashboard if the user has not yet taken this quiz. Default: <em>' . esc_html($quiz['description']) . '</em></p>';
+                },
+                'quiz-platform-settings',
+                'mc_quiz_descriptions_section'
+            );
+        }
+    }
+
+    public function sanitize_descriptions($input) {
+        $sanitized = [];
+        if (is_array($input)) {
+            foreach ($input as $id => $desc) {
+                $sanitized[sanitize_key($id)] = sanitize_textarea_field(stripslashes($desc));
+            }
+        }
+        return $sanitized;
+    }
+
+    public function render_settings_page() {
+        ?><div class="wrap"><h1>Quiz Platform Settings</h1>
+        <form method="post" action="options.php"><?php
+            settings_fields(self::OPT_GROUP);
+            do_settings_sections('quiz-platform-settings');
+            submit_button();
+        ?></form></div><?php
     }
 
     /**
@@ -86,39 +168,81 @@ class Micro_Coach_Core {
         });
 
         $user_id = get_current_user_id();
+        $saved_descriptions = get_option(self::OPT_DESCRIPTIONS, []);
         wp_enqueue_style('dashicons');
 
         ob_start();
         ?>
         <style>
             .quiz-dashboard-list { list-style: none; padding: 0; margin: 1em 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; max-width: 700px; }
-            .quiz-dashboard-item { display: flex; align-items: baseline; padding: 12px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 10px; background: #fff; gap: 15px; }
-            .quiz-dashboard-status { flex-shrink: 0; width: 24px; text-align: center; }
-            .quiz-dashboard-status .dashicons-yes-alt { color: #4CAF50; font-size: 24px; /* Adjusted for better baseline alignment */ }
-            .quiz-dashboard-title { flex-grow: 1; font-size: 1.1em; font-weight: 500; }
+            .quiz-dashboard-item { display: flex; align-items: flex-start; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 12px; background: #fff; gap: 15px; }
+            .quiz-dashboard-status { flex-shrink: 0; width: 24px; text-align: center; margin-top: 3px; }
+            .quiz-dashboard-status .dashicons-yes-alt { color: #4CAF50; font-size: 24px; }
+            .quiz-dashboard-status .dashicons-lock { color: #9e9e9e; font-size: 22px; }
+            .quiz-dashboard-details { flex-grow: 1; }
+            .quiz-dashboard-title { font-size: 1.1em; font-weight: 500; margin-bottom: 0.25em; }
+            .quiz-dashboard-description { font-size: 0.9em; color: #666; }
             .quiz-dashboard-actions { flex-shrink: 0; }
-            .quiz-dashboard-button { text-decoration: none; background: #ef4444; color: #fff; padding: 8px 16px; border-radius: 5px; font-weight: bold; font-size: 0.9em; transition: background 0.2s; white-space: nowrap; }
+            .quiz-dashboard-button { text-decoration: none; background: #ef4444; color: #fff; padding: 8px 16px; border-radius: 5px; font-weight: bold; font-size: 0.9em; transition: background 0.2s; white-space: nowrap; display: inline-block; }
             .quiz-dashboard-button:hover { background: #dc2626; color: #fff; }
+            .quiz-dashboard-button.is-disabled { background: #ccc; color: #888; cursor: not-allowed; }
+            .quiz-dashboard-button.is-disabled:hover { background: #ccc; }
         </style>
         <div class="quiz-dashboard">
             <ul class="quiz-dashboard-list">
-                <?php foreach ($quizzes as $id => $quiz): ?>
-                    <?php
-                    $has_results = $user_id && !empty($quiz['results_meta_key']) && !empty(get_user_meta($user_id, $quiz['results_meta_key'], true));
+                <?php
+                // Pre-calculate completion status for all quizzes to check dependencies efficiently.
+                $completion_status = [];
+                if ($user_id) {
+                    foreach ($quizzes as $id => $quiz) {
+                        $completion_status[$id] = !empty($quiz['results_meta_key']) && !empty(get_user_meta($user_id, $quiz['results_meta_key'], true));
+                    }
+                }
+
+                foreach ($quizzes as $id => $quiz):
+                    $has_results = $completion_status[$id] ?? false;
                     $quiz_page_url = $this->find_page_by_shortcode($quiz['shortcode']);
                     if (!$quiz_page_url) continue; // Don't show if its page can't be found.
+
+                    // Check dependencies.
+                    $dependency_met = true;
+                    $dependency_title = '';
+                    if (!empty($quiz['depends_on'])) {
+                        $dependency_id = $quiz['depends_on'];
+                        if (isset($quizzes[$dependency_id])) {
+                            $dependency_title = $quizzes[$dependency_id]['title'];
+                            if (!($completion_status[$dependency_id] ?? false)) {
+                                $dependency_met = false;
+                            }
+                        }
+                    }
+
+                    $description = !empty($saved_descriptions[$id]) ? $saved_descriptions[$id] : $quiz['description'];
                     ?>
                     <li class="quiz-dashboard-item">
                         <div class="quiz-dashboard-status">
                             <?php if ($has_results): ?>
                                 <span class="dashicons dashicons-yes-alt" title="Completed"></span>
+                            <?php elseif (!$dependency_met): ?>
+                                <span class="dashicons dashicons-lock" title="Locked"></span>
                             <?php endif; ?>
                         </div>
-                        <div class="quiz-dashboard-title"><?php echo esc_html($quiz['title']); ?></div>
+                        <div class="quiz-dashboard-details">
+                            <div class="quiz-dashboard-title"><?php echo esc_html($quiz['title']); ?></div>
+                            <?php if (!$has_results && !empty($description)): ?>
+                                <div class="quiz-dashboard-description"><?php echo esc_html($description); ?></div>
+                            <?php endif; ?>
+                        </div>
                         <div class="quiz-dashboard-actions">
-                            <a href="<?php echo esc_url($quiz_page_url); ?>" class="quiz-dashboard-button">
-                                <?php echo $has_results ? 'View Results' : 'Start Quiz'; ?>
-                            </a>
+                            <?php if ($dependency_met): ?>
+                                <a href="<?php echo esc_url($quiz_page_url); ?>" class="quiz-dashboard-button">
+                                    <?php echo $has_results ? 'View Results' : 'Start Quiz'; ?>
+                                </a>
+                            <?php else: ?>
+                                <span class="quiz-dashboard-button is-disabled" title="<?php printf(esc_attr__('Please complete "%s" first.'), esc_attr($dependency_title)); ?>">
+                                    <?php _e('Locked'); ?>
+                                </span>
+                            <?php endif; ?>
                         </div>
                     </li>
                 <?php endforeach; ?>

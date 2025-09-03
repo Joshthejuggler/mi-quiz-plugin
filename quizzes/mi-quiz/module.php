@@ -20,6 +20,7 @@ class MI_Quiz_Plugin_AI {
                 'shortcode'        => 'mi_quiz',
                 'results_meta_key' => 'miq_quiz_results',
                 'order'            => 10, // Controls the display order in the dashboard.
+                'description'      => 'Discover your unique blend of intelligences and unlock your full potential with a personalized action plan.',
             ]);
         }
 
@@ -41,6 +42,9 @@ class MI_Quiz_Plugin_AI {
         add_action('wp_ajax_miq_save_user_results',    [ $this, 'ajax_save_user_results' ]);
         add_action('wp_ajax_miq_delete_user_results',  [ $this, 'ajax_delete_user_results' ]);
         add_action('wp_ajax_miq_generate_pdf',         [ $this, 'ajax_generate_pdf' ]);
+
+        // Hook into WordPress user deletion to clean up our custom table.
+        add_action('delete_user', [ $this, 'handle_user_deletion' ]);
     }
 
     /** Create/upgrade the subscribers table */
@@ -70,51 +74,65 @@ class MI_Quiz_Plugin_AI {
 
     /** Admin: settings + subscribers pages */
     public function add_settings_pages() {
-        add_options_page('MI Quiz Settings','MI Quiz','manage_options','mi-quiz-settings',[ $this,'render_settings_page' ]);
-        add_menu_page('MI Quiz Subscribers','MI Quiz Subs','manage_options','mi-quiz-subs',[ $this,'render_subs_page' ],'dashicons-email',59);
+        // The subscribers page is now a submenu of the main Quiz Platform.
+        add_submenu_page(
+            'quiz-platform-settings',      // Parent slug
+            'MI Quiz Subscribers',         // Page title
+            'MI Quiz Subs',                // Menu title
+            'manage_options',              // Capability
+            'mi-quiz-subs',                // Menu slug
+            [ $this,'render_subs_page' ]   // Function
+        );
     }
 
     public function register_settings() {
-        register_setting( self::OPT_GROUP, self::OPT_BCC );
-        register_setting( self::OPT_GROUP, self::OPT_ANTITHREAD );
-        add_settings_section( 'miq_main', 'Main Settings', '__return_false', 'mi-quiz-settings' );
+        // Register settings with the core platform's group.
+        register_setting( 'mc_quiz_platform_settings', self::OPT_BCC );
+        register_setting( 'mc_quiz_platform_settings', self::OPT_ANTITHREAD );
 
-        add_settings_field( self::OPT_BCC, 'BCC Results Email', function(){
-            $v = esc_attr( get_option(self::OPT_BCC,'') );
-            echo '<input type="text" style="width:480px" name="'.esc_attr(self::OPT_BCC).'" value="'.$v.'" placeholder="admin@example.com, another@example.com">';
-            echo '<p class="description">Admins to notify with a copy of results. Comma-separated.</p>';
-        }, 'mi-quiz-settings', 'miq_main' );
+        // Add a new section to the main Quiz Platform settings page.
+        add_settings_section(
+            'miq_main',                      // Section ID
+            'MI Quiz Settings',              // Section Title
+            function() {
+                echo '<p>Settings specific to the Multiple Intelligences Quiz, such as email notifications.</p>';
+            },
+            'quiz-platform-settings'         // Page slug
+        );
 
-        add_settings_field( self::OPT_ANTITHREAD, 'Reduce Inbox Threading', function(){
-            $checked = get_option(self::OPT_ANTITHREAD,'1') ? 'checked' : '';
-            echo '<label><input type="checkbox" name="'.esc_attr(self::OPT_ANTITHREAD).'" value="1" '.$checked.'> Add an invisible token to subjects so repeated sends don’t collapse into one thread.</label>';
-        }, 'mi-quiz-settings', 'miq_main' );
-    }
+        add_settings_field(
+            self::OPT_BCC, 'BCC Results Email', function(){
+                $v = esc_attr( get_option(self::OPT_BCC,'') );
+                echo '<input type="text" style="width:480px" name="'.esc_attr(self::OPT_BCC).'" value="'.$v.'" placeholder="admin@example.com, another@example.com">';
+                echo '<p class="description">Admins to notify with a copy of results. Comma-separated.</p>';
+            }, 'quiz-platform-settings', 'miq_main' );
 
-    public function render_settings_page(){
-        ?><div class="wrap"><h1>MI Quiz Settings</h1>
-        <form method="post" action="options.php"><?php
-            settings_fields(self::OPT_GROUP);
-            do_settings_sections('mi-quiz-settings');
-            submit_button();
-        ?></form></div><?php
+        add_settings_field(
+            self::OPT_ANTITHREAD, 'Reduce Inbox Threading', function(){
+                $checked = get_option(self::OPT_ANTITHREAD,'1') ? 'checked' : '';
+                echo '<label><input type="checkbox" name="'.esc_attr(self::OPT_ANTITHREAD).'" value="1" '.$checked.'> Add an invisible token to subjects so repeated sends don’t collapse into one thread.</label>';
+            }, 'quiz-platform-settings', 'miq_main' );
     }
 
     public function render_subs_page(){
         global $wpdb; $table = $wpdb->prefix . self::TABLE_SUBSCRIBERS;
         $rows = $wpdb->get_results("SELECT * FROM `$table` ORDER BY id DESC LIMIT 5000", ARRAY_A);
         $export_url = wp_nonce_url( admin_url('admin-ajax.php?action=miq_export_subs'), 'miq_nonce' );
-        echo '<div class="wrap"><h1>Subscribers</h1>';
+        echo '<div class="wrap"><h1>MI Quiz Subscribers</h1>';
         echo '<p><a class="button button-secondary" href="'.esc_url($export_url).'">Download CSV</a></p>';
         if ( empty($rows) ) { echo '<p>No subscribers yet.</p></div>'; return; }
-        echo '<p><button class="button button-primary" id="miq-del-selected">Delete Selected</button></p>';
+        echo '<div class="tablenav top"><div class="alignleft actions bulkactions">
+                <button type="button" class="button" id="miq-select-all-btn">Select All</button>
+                <button type="button" class="button" id="miq-deselect-all-btn">Deselect All</button>
+                <button type="button" class="button button-primary" id="miq-del-selected">Delete Selected</button>
+              </div></div>';
         echo '<table class="widefat striped"><thead><tr>
                 <th class="miq-subs-checkbox-col"><input type="checkbox" id="miq-check-all"></th>
                 <th>ID</th><th>Date</th><th>First</th><th>Last</th><th>Email</th><th>IP</th>
               </tr></thead><tbody>';
         foreach ($rows as $r){
             echo '<tr>'.
-              '<td><input type="checkbox" class="miq-row" value="'.intval($r['id']).'"></td>'.
+              '<th scope="row" class="check-column"><input type="checkbox" class="miq-row" value="'.intval($r['id']).'"></th>'.
               '<td>'.intval($r['id']).'</td>'.
               '<td>'.esc_html($r['created_at']).'</td>'.
               '<td>'.esc_html($r['first_name']).'</td>'.
@@ -129,8 +147,18 @@ class MI_Quiz_Plugin_AI {
           const $ = s => document.querySelector(s);
           const $$ = s => Array.from(document.querySelectorAll(s));
           const nonce = '<?php echo esc_js( wp_create_nonce('miq_nonce') ); ?>';
+          const selectAllBtn = $('#miq-select-all-btn');
+          const deselectAllBtn = $('#miq-deselect-all-btn');
+
+          const setChecks = (checked) => {
+            $$('.miq-row').forEach(cb => cb.checked = checked);
+            $('#miq-check-all').checked = checked;
+          };
+
           const all = $('#miq-check-all');
-          all && all.addEventListener('change', ()=> $$('.miq-row').forEach(cb=> cb.checked = all.checked));
+          all && all.addEventListener('change', () => setChecks(all.checked));
+          selectAllBtn && selectAllBtn.addEventListener('click', () => setChecks(true));
+          deselectAllBtn && deselectAllBtn.addEventListener('click', () => setChecks(false));
           const del = $('#miq-del-selected');
           del && del.addEventListener('click', ()=>{
             const ids = $$('.miq-row').filter(c=>c.checked).map(c=>c.value);
@@ -148,15 +176,28 @@ class MI_Quiz_Plugin_AI {
     }
 
     public function ajax_delete_subs(){
-        if(!current_user_can('manage_options')) wp_send_json_error('No permission');
+        if(!current_user_can('manage_options')) {
+            wp_send_json_error('No permission');
+        }
         check_ajax_referer('miq_nonce');
-        $ids = array_filter(array_map('intval',(array)($_POST['ids']??[])));
-        if(empty($ids)) wp_send_json_error('No IDs');
-        global $wpdb; $table=$wpdb->prefix.self::TABLE_SUBSCRIBERS;
-        $in = implode(',', array_fill(0, count($ids), '%d'));
-        $res = $wpdb->query( $wpdb->prepare("DELETE FROM `$table` WHERE id IN ($in)", $ids) );
 
-        wp_send_json_success(['deleted'=>(int)$res]);
+        // The 'ids' parameter from JS will be a comma-separated string.
+        $ids_raw = isset($_POST['ids']) ? wp_unslash($_POST['ids']) : '';
+        if (empty($ids_raw)) {
+            wp_send_json_error('No IDs provided.');
+        }
+
+        // Explode the string into an array, then sanitize each ID to ensure they are integers.
+        $ids = array_filter(array_map('intval', explode(',', $ids_raw)));
+        if (empty($ids)) {
+            wp_send_json_error('No valid IDs provided.');
+        }
+
+        global $wpdb; $table = $wpdb->prefix . self::TABLE_SUBSCRIBERS;
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+        $res = $wpdb->query( $wpdb->prepare("DELETE FROM `$table` WHERE id IN ($placeholders)", $ids) );
+
+        wp_send_json_success(['deleted' => (int)$res]);
     }
 
     public function ajax_export_subs(){
@@ -179,6 +220,25 @@ class MI_Quiz_Plugin_AI {
         }
         fclose($out);
         exit;
+    }
+
+    /**
+     * When a WordPress user is deleted, remove them from our subscriber list.
+     * This is important for data privacy and hygiene.
+     *
+     * @param int $user_id The ID of the user being deleted.
+     */
+    public function handle_user_deletion($user_id) {
+        // Get user object before it's deleted to retrieve the email.
+        $user = get_userdata($user_id);
+        if (!$user) {
+            return;
+        }
+
+        $email = $user->user_email;
+
+        global $wpdb;
+        $wpdb->delete($wpdb->prefix . self::TABLE_SUBSCRIBERS, ['email' => $email], ['%s']);
     }
 
     public function ajax_magic_register() {
