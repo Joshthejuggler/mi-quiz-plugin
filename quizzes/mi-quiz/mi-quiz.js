@@ -1,6 +1,6 @@
 (function(){
-  const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data } = miq_quiz_data;
-  const { cats: CATS, q1: Q1, q2: Q2, career: CAREER, lev: LEV, grow: GROW, likert: LIKERT } = data;
+  const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, cdtQuizUrl } = miq_quiz_data;
+  const { cats: CATS, q1: Q1, q2: Q2, career: CAREER, lev: LEV, grow: GROW, likert: LIKERT, cdtPrompts } = data;
   const isLoggedIn = !!currentUser;
 
   const $id=(s)=>document.getElementById(s);
@@ -8,7 +8,7 @@
         inter=$id('mi-quiz-intermission'), resultsDiv=$id('mi-quiz-results'),
         devTools=$id('mi-dev-tools'), autoBtn=$id('mi-autofill-run');
 
-  let age='adult', top3=[], detailed={}, top5=[], bottom3=[];
+  let age='adult', top3=[], detailed={}, top5=[], bottom3=[], part1Scores={};
 
   function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
 
@@ -64,12 +64,45 @@
     return shuffle(out);
   }
 
-  function autoFill(form, both=false){
+  function autoFill(form, both = false) {
     const steps=form.querySelectorAll('.mi-step'), submit=form.querySelector('.mi-submit-final');
+
+    // --- New logic for more random results ---
+    let biasMap = {};
+    if (form === form1) {
+        const categories = shuffle(Object.keys(CATS));
+        // Create a clear separation of scores to ensure random top/bottom 3
+        categories.forEach((cat, index) => {
+            if (index < 3) {
+                biasMap[cat] = 'high'; // These will be the top 3
+            } else if (index < 6) {
+                biasMap[cat] = 'low'; // These will be in the bottom
+            } else {
+                biasMap[cat] = 'mid'; // The rest are in the middle
+            }
+        });
+    }
+    // --- End new logic ---
+
     let k=0; (function tick(){
       if(k>=steps.length){ submit?.click(); if(both && form===form1){ setTimeout(()=>{ $id('mi-start-part2')?.click(); setTimeout(()=>autoFill(form2,false),200); },200);} return; }
-      const pick = Math.floor(Math.random()*5)+1, radio = steps[k].querySelector('input[value="'+pick+'"]');
-      if(radio){ radio.checked=true; radio.dispatchEvent(new Event('change',{bubbles:true})); }
+      
+      let pick;
+      const step = steps[k];
+      const category = step.dataset.cat;
+
+      if (form === form1 && biasMap[category]) {
+          const bias = biasMap[category];
+          if (bias === 'high') { pick = Math.floor(Math.random() * 2) + 4; } // 4 or 5
+          else if (bias === 'low') { pick = Math.floor(Math.random() * 2) + 1; } // 1 or 2
+          else { pick = Math.floor(Math.random() * 2) + 3; } // 3 or 4
+      } else {
+          // Original random logic for part 2 or if something goes wrong
+          pick = Math.floor(Math.random() * 5) + 1;
+      }
+
+      const radio = step.querySelector('input[value="'+pick+'"]');
+      if (radio) { radio.checked = true; radio.dispatchEvent(new Event('change', { bubbles: true })); }
       k++; setTimeout(tick,16);
     })();
   }
@@ -88,7 +121,7 @@
       localStorage.removeItem(PENDING_RESULTS_KEY);
   }
 
-  function showLoginRegister(emailHtml) {
+  function showLoginRegister(emailHtml, resultsData) {
       resultsDiv.innerHTML = `
           <div class="mi-results-section bg-secondary">
               <h2 class="mi-section-title">Get Your Full Results & Action Plan</h2>
@@ -126,7 +159,14 @@
           statusEl.style.color = 'inherit';
           regBtn.disabled = true;
 
-          const body = new URLSearchParams({ action: 'miq_magic_register', _ajax_nonce: ajaxNonce, email: email, first_name: firstName, results_html: emailHtml });
+          const body = new URLSearchParams({ 
+              action: 'miq_magic_register', 
+              _ajax_nonce: ajaxNonce, 
+              email: email, 
+              first_name: firstName, 
+              results_html: emailHtml,
+              results_data: JSON.stringify(resultsData) // Send the raw data
+          });
 
           fetch(ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
           .then(r => r.json())
@@ -166,6 +206,7 @@
           const cat=s.getAttribute('data-cat'), v=s.querySelector('input[type=radio]:checked')?.value;
           if(cat && v) scores[cat]=(scores[cat]||0)+parseInt(v,10);
         });
+        part1Scores = scores;
         top3 = Object.entries(scores).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k])=>k);
         $id('mi-top3-list').innerHTML = top3.map(sl=>`<li>${CATS[sl]||sl}</li>`).join('');
         form1.style.display='none'; devTools && (devTools.style.display='none'); inter.style.display='block';
@@ -218,13 +259,25 @@
     subs.sort((a,b)=>b.score-a.score);
     top5=subs.slice(0,5); bottom3=subs.slice(-3).reverse();
 
+    const resultsData = { detailed, top5, bottom3, top3, age, part1Scores };
+
     if (!isLoggedIn) {
-        const resultsToStore = { detailed, top5, bottom3, top3, age };
-        storeQuizResults(resultsToStore);
         const emailHtml = generateResultsHtml();
-        showLoginRegister(emailHtml);
+        showLoginRegister(emailHtml, resultsData);
         return;
     }
+
+    // For logged-in users, save and email immediately.
+    // 1. Save to DB
+    const saveBody = new URLSearchParams({ action: 'miq_save_user_results', _ajax_nonce: ajaxNonce, user_id: currentUser.id, results: JSON.stringify(resultsData) });
+    fetch(ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: saveBody });
+
+    // 2. Email results
+    const emailHtml = generateResultsHtml();
+    const emailBody = new URLSearchParams({ action: 'miq_email_results', _ajax_nonce: ajaxNonce, email: currentUser.email, first_name: currentUser.firstName || 'Quiz Taker', last_name: currentUser.lastName || '', results_html: emailHtml });
+    fetch(ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: emailBody });
+
+    // 3. Render the results on screen
     renderResults();
   }
 
@@ -292,9 +345,8 @@
     return titleHtml + detailedHtml + top5Html + careerHtml + growthHtml;
   }
 
-  function renderResults(isPostRegistration = false) {
+  function renderResults() {
     const resultsContent = generateResultsHtml();
-
     resultsDiv.innerHTML = `
         <div id="mi-results-content">${resultsContent}</div>
         <div id="mi-results-actions" class="results-actions-container"></div>
@@ -345,19 +397,6 @@
     });
     actionsContainer.appendChild(downloadBtn);
 
-    // --- Handle Data Saving and Emailing ---
-    if (isLoggedIn && !isPostRegistration) {
-        const content = generateResultsHtml();
-        const body = new URLSearchParams({ action: 'miq_email_results', _ajax_nonce: ajaxNonce, email: currentUser.email, first_name: currentUser.firstName || 'Quiz Taker', last_name: currentUser.lastName || '', results_html: content });
-        fetch(ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
-    }
-
-    if (currentUser) {
-        const resultsData = { detailed, top5, bottom3, top3, age };
-        const body = new URLSearchParams({ action: 'miq_save_user_results', _ajax_nonce: ajaxNonce, user_id: currentUser.id, results: JSON.stringify(resultsData) });
-        fetch(ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
-    }
-
     // --- Add Logged-In User Buttons ---
     if (isLoggedIn) {
         // Retake Quiz Button
@@ -401,6 +440,28 @@
         actionsContainer.appendChild(deleteBtn);
     }
 
+    // --- Add CDT Prompt Section (after buttons) ---
+    if (cdtPrompts && cdtQuizUrl && top3 && top3.length >= 3) {
+        const sortedTop3 = [...top3].sort();
+        const promptKey = sortedTop3.join('_');
+        const promptData = cdtPrompts[promptKey];
+
+        if (promptData && promptData.prompt) {
+            const cdtPromptHtml = `
+                <div class="mi-results-section cdt-prompt-section bg-secondary">
+                    <h2 class="mi-section-title">Your Next Step: The Skill of Self-Discovery</h2>
+                    <p>${promptData.prompt}</p>
+                    <div class="mi-results-actions" style="text-align: center; margin-top: 1.5em;">
+                        <a href="${cdtQuizUrl}" class="mi-quiz-button mi-quiz-button-next-step">Take the CDT Quiz Now</a>
+                    </div>
+                </div>
+            `;
+            // Append this section to the main results container, so it appears after the action buttons.
+            resultsDiv.insertAdjacentHTML('beforeend', cdtPromptHtml);
+        }
+    }
+
+
     // --- Finalize Display ---
     devTools && (devTools.style.display='none');
     form2.style.display='none'; resultsDiv.style.display='block';
@@ -409,27 +470,14 @@
 
   // On page load, check for any existing results to display
   if (currentUser) {
-      const pendingResults = getStoredQuizResults();
-      if (pendingResults) {
-          age = pendingResults.age;
-          top3 = pendingResults.top3;
-          detailed = pendingResults.detailed;
-          top5 = pendingResults.top5;
-          bottom3 = pendingResults.bottom3;
-
-          ageGate.style.display = 'none';
-          renderResults(true);
-          
-          clearStoredQuizResults();
-          return;
-      }
-
       if (currentUser.savedResults) {
-          age = currentUser.savedResults.age;
-          top3 = currentUser.savedResults.top3;
-          detailed = currentUser.savedResults.detailed;
-          top5 = currentUser.savedResults.top5;
-          bottom3 = currentUser.savedResults.bottom3;
+          const r = currentUser.savedResults;
+          age = r.age || 'adult';
+          top3 = r.top3 || [];
+          detailed = r.detailed || {};
+          top5 = r.top5 || [];
+          bottom3 = r.bottom3 || [];
+          part1Scores = r.part1Scores || {};
 
           ageGate.style.display = 'none';
           renderResults();

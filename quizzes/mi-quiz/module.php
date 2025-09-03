@@ -247,6 +247,7 @@ class MI_Quiz_Plugin_AI {
         $email      = isset($_POST['email']) ? sanitize_email($_POST['email']) : '';
         $first_name = isset($_POST['first_name']) ? sanitize_text_field($_POST['first_name']) : '';
         $results_html = isset($_POST['results_html']) ? wp_kses_post(wp_unslash($_POST['results_html'])) : '';
+        $results_data = isset($_POST['results_data']) ? json_decode(stripslashes($_POST['results_data']), true) : [];
 
         if (!is_email($email)) {
             wp_send_json_error('Please provide a valid email address.');
@@ -281,6 +282,11 @@ class MI_Quiz_Plugin_AI {
         wp_update_user(['ID' => $user_id, 'first_name' => $first_name, 'display_name' => $first_name]);
         wp_set_current_user($user_id, $username);
         wp_set_auth_cookie($user_id, true);
+
+        // Save the quiz results to the new user's meta.
+        if (!empty($results_data) && is_array($results_data)) {
+            update_user_meta($user_id, 'miq_quiz_results', $results_data);
+        }
 
         global $wpdb; 
         $table = $wpdb->prefix . self::TABLE_SUBSCRIBERS;
@@ -336,6 +342,13 @@ class MI_Quiz_Plugin_AI {
             require $questions_file; // defines $mi_categories, $mi_questions, etc. in *this* function's scope
         }
 
+        // Load the new CDT prompts.
+        $prompts_file = __DIR__ . '/mi-cdt-prompts.php';
+        $mi_cdt_prompts = [];
+        if ( file_exists( $prompts_file ) ) {
+            require $prompts_file;
+        }
+
         // Prefer local vars (from the require), fall back to $GLOBALS, else empty array.
         $cats   = isset($mi_categories)          ? $mi_categories          : ($GLOBALS['mi_categories'] ?? []);
         $q1     = isset($mi_questions)           ? $mi_questions           : ($GLOBALS['mi_questions'] ?? []);
@@ -343,6 +356,8 @@ class MI_Quiz_Plugin_AI {
         $career = isset($mi_career_suggestions)  ? $mi_career_suggestions  : ($GLOBALS['mi_career_suggestions'] ?? []);
         $lev    = isset($mi_leverage_tips)       ? $mi_leverage_tips       : ($GLOBALS['mi_leverage_tips'] ?? []);
         $grow   = isset($mi_growth_tips)         ? $mi_growth_tips         : ($GLOBALS['mi_growth_tips'] ?? []);
+
+        $cdt_quiz_url = $this->_find_page_by_shortcode('cdt_quiz');
 
         $user_data = null;
         if (is_user_logged_in()) {
@@ -362,6 +377,7 @@ class MI_Quiz_Plugin_AI {
             'ajaxUrl'     => admin_url('admin-ajax.php'),
             'ajaxNonce'   => wp_create_nonce('miq_nonce'),
             'loginUrl'    => wp_login_url(get_permalink()),
+            'cdtQuizUrl'  => $cdt_quiz_url,
             'data'        => [
                 'cats'   => $cats,
                 'q1'     => $q1,
@@ -370,11 +386,30 @@ class MI_Quiz_Plugin_AI {
                 'lev'    => $lev,
                 'grow'   => $grow,
                 'likert' => [1 => 'Not at all like me', 2 => 'Not really like me', 3 => 'Somewhat like me', 4 => 'Mostly like me', 5 => 'Very much like me'],
+                'cdtPrompts' => $mi_cdt_prompts,
             ],
         ];
 
         wp_localize_script('mi-quiz-js', 'miq_quiz_data', $localized_data);
         wp_enqueue_script('mi-quiz-js');
+    }
+
+    /**
+     * Finds the permalink of the first page that contains a given shortcode.
+     * A private copy of the core platform's method to avoid complex dependencies.
+     */
+    private function _find_page_by_shortcode($shortcode_tag) {
+        if (empty($shortcode_tag)) return null;
+        $transient_key = 'page_url_for_' . $shortcode_tag;
+        if (false !== ($cached_url = get_transient($transient_key))) return $cached_url;
+
+        $query = new WP_Query(['post_type' => ['page', 'post'], 'post_status' => 'publish', 'posts_per_page' => -1, 's' => '[' . $shortcode_tag]);
+        $url = null;
+        if ($query->have_posts()) {
+            foreach ($query->posts as $p) { if (has_shortcode($p->post_content, $shortcode_tag)) { $url = get_permalink($p->ID); break; } }
+        }
+        set_transient($transient_key, $url, DAY_IN_SECONDS);
+        return $url;
     }
 
     private function maybe_antithread($subject){
@@ -464,6 +499,29 @@ class MI_Quiz_Plugin_AI {
         }
 
         ob_start(); ?>
+        <style>
+            .cdt-prompt-section {
+                margin-top: 2.5em; /* Adds space above the "Next Step" section */
+            }
+            .cdt-prompt-section .mi-quiz-button-next-step {
+                background-color: #2563eb; /* A prominent blue */
+                color: #ffffff;
+                padding: 12px 24px;
+                font-size: 1.1em;
+                border-radius: 8px;
+                text-decoration: none;
+                font-weight: bold;
+                display: inline-block;
+                transition: background-color 0.2s, transform 0.2s;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .cdt-prompt-section .mi-quiz-button-next-step:hover {
+                background-color: #1d4ed8; /* Darker blue */
+                color: #ffffff;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            }
+        </style>
         <div id="mi-quiz-container">
           <div id="mi-age-gate">
             <div class="mi-quiz-card">

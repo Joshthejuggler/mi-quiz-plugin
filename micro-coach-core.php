@@ -174,19 +174,74 @@ class Micro_Coach_Core {
         ob_start();
         ?>
         <style>
-            .quiz-dashboard-list { list-style: none; padding: 0; margin: 1em 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; max-width: 700px; }
-            .quiz-dashboard-item { display: flex; align-items: flex-start; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 12px; background: #fff; gap: 15px; }
-            .quiz-dashboard-status { flex-shrink: 0; width: 24px; text-align: center; margin-top: 3px; }
-            .quiz-dashboard-status .dashicons-yes-alt { color: #4CAF50; font-size: 24px; }
-            .quiz-dashboard-status .dashicons-lock { color: #9e9e9e; font-size: 22px; }
-            .quiz-dashboard-details { flex-grow: 1; }
-            .quiz-dashboard-title { font-size: 1.1em; font-weight: 500; margin-bottom: 0.25em; }
-            .quiz-dashboard-description { font-size: 0.9em; color: #666; }
+            /* General Layout & Spacing */
+            .quiz-dashboard-list { 
+                list-style: none; 
+                padding: 0; 
+                margin: 1em 0; 
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; 
+                max-width: 700px; 
+            }
+            .quiz-dashboard-item { 
+                background: #fff;
+                border: 1px solid #e2e8f0; /* Softer border */
+                border-radius: 12px;
+                margin-bottom: 16px;
+                padding: 16px 24px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); /* Softer shadow */
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            /* Header Section */
+            .quiz-dashboard-item-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 16px;
+            }
+            .quiz-dashboard-item-title-group {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+            .quiz-dashboard-title { 
+                font-size: 1.1em; 
+                font-weight: 600;
+                margin: 0;
+                color: #1a202c;
+            }
+            .quiz-dashboard-status-badge {
+                font-size: 0.75em;
+                font-weight: 600;
+                padding: 4px 8px;
+                border-radius: 9999px;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+            .quiz-dashboard-status-badge.completed { background-color: #e6f4ea; color: #34a853; }
+            .quiz-dashboard-status-badge.locked { background-color: #f1f3f4; color: #5f6368; }
+
+            /* Body / Content Section */
+            .quiz-dashboard-item-body { padding-top: 12px; border-top: 1px solid #e2e8f0; }
+            .quiz-dashboard-description { font-size: 0.9em; color: #4a5568; line-height: 1.5; margin: 0; }
+            .quiz-dashboard-insight-panel { background-color: #f7fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 8px; margin-top: 12px; }
+            .quiz-dashboard-insight-panel .panel-title { font-weight: 600; margin: 0 0 8px 0; font-size: 0.9em; color: #2d3748; }
+            .quiz-dashboard-insight-panel p { font-size: 0.9em; color: #4a5568; line-height: 1.6; max-width: 70ch; margin: 0; }
+            .insight-panel-prediction { border-left: 4px solid #ef4444; }
+            .insight-panel-profile { border-left: 4px solid #4CAF50; }
+
+            /* Chips for Top Intelligences */
+            .quiz-dashboard-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+            .chip { background-color: #e2e8f0; color: #2d3748; padding: 4px 12px; border-radius: 16px; font-size: 0.85em; font-weight: 500; }
+
+            /* Actions & Buttons */
             .quiz-dashboard-actions { flex-shrink: 0; }
-            .quiz-dashboard-button { text-decoration: none; background: #ef4444; color: #fff; padding: 8px 16px; border-radius: 5px; font-weight: bold; font-size: 0.9em; transition: background 0.2s; white-space: nowrap; display: inline-block; }
-            .quiz-dashboard-button:hover { background: #dc2626; color: #fff; }
-            .quiz-dashboard-button.is-disabled { background: #ccc; color: #888; cursor: not-allowed; }
-            .quiz-dashboard-button.is-disabled:hover { background: #ccc; }
+            .quiz-dashboard-button { text-decoration: none; background: #ef4444; color: #fff; padding: 8px 16px; border-radius: 9999px; font-weight: 600; font-size: 0.9em; transition: all 0.2s; white-space: nowrap; display: inline-block; border: 1px solid transparent; }
+            .quiz-dashboard-button:hover { background: #dc2626; color: #fff; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+            .quiz-dashboard-button.is-disabled { background: #e2e8f0; color: #a0aec0; cursor: not-allowed; }
+            .quiz-dashboard-button.is-disabled:hover { background: #e2e8f0; transform: none; box-shadow: none; }
         </style>
         <div class="quiz-dashboard">
             <ul class="quiz-dashboard-list">
@@ -218,32 +273,101 @@ class Micro_Coach_Core {
                     }
 
                     $description = !empty($saved_descriptions[$id]) ? $saved_descriptions[$id] : $quiz['description'];
+                    $prediction_paragraph = '';
+
+                    // Dynamically set the CDT quiz description if the MI quiz is complete.
+                    if ($id === 'cdt-quiz' && ($completion_status['mi-quiz'] ?? false)) {
+                        $mi_prompts_file = plugin_dir_path(__FILE__) . 'quizzes/mi-quiz/mi-cdt-prompts.php';
+                        if (file_exists($mi_prompts_file)) {
+                            require $mi_prompts_file; // Use require instead of require_once to ensure it loads in this scope.
+                            $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
+
+                            // Make this more robust: if top3 is missing but part1Scores exists, recalculate it.
+                            if (is_array($mi_results)) {
+                                if (empty($mi_results['top3']) && !empty($mi_results['part1Scores']) && is_array($mi_results['part1Scores'])) {
+                                    $scores = $mi_results['part1Scores'];
+                                    arsort($scores); // Sort scores descending, maintaining keys
+                                    $mi_results['top3'] = array_keys(array_slice($scores, 0, 3, true));
+                                }
+                            }
+
+                            // Check for top 3 results to generate the composite key.
+                            if (!empty($mi_results['top3']) && count($mi_results['top3']) >= 3 && isset($mi_cdt_prompts)) {
+                                $top3_keys = $mi_results['top3'];
+                                sort($top3_keys); // Sort alphabetically to create a consistent key.
+                                $prompt_key = implode('_', $top3_keys);
+
+                                if (isset($mi_cdt_prompts[$prompt_key]['prompt'])) {
+                                    $prediction_paragraph = $mi_cdt_prompts[$prompt_key]['prompt'];
+                                }
+                            }
+                        }
+                    }
+
+                    // Prepare MI profile content if applicable
+                    $mi_profile_content = '';
+                    if ($has_results && $id === 'mi-quiz') {
+                        $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
+                        $mi_questions_file = plugin_dir_path(__FILE__) . 'quizzes/mi-quiz/mi-questions.php';
+                        if (file_exists($mi_questions_file)) {
+                            require $mi_questions_file; // defines $mi_categories
+                            if (!empty($mi_results['top3']) && isset($mi_categories)) {
+                                $top3_names = array_map(function($slug) use ($mi_categories) {
+                                    return $mi_categories[$slug] ?? ucfirst(str_replace('-', ' ', $slug));
+                                }, $mi_results['top3']);
+                                $mi_profile_content = $top3_names;
+                            }
+                        }
+                    }
+
                     ?>
                     <li class="quiz-dashboard-item">
-                        <div class="quiz-dashboard-status">
-                            <?php if ($has_results): ?>
-                                <span class="dashicons dashicons-yes-alt" title="Completed"></span>
-                            <?php elseif (!$dependency_met): ?>
-                                <span class="dashicons dashicons-lock" title="Locked"></span>
-                            <?php endif; ?>
+                        <div class="quiz-dashboard-item-header">
+                            <div class="quiz-dashboard-item-title-group">
+                                <h3 class="quiz-dashboard-title"><?php echo esc_html($quiz['title']); ?></h3>
+                                <?php if ($has_results): ?>
+                                    <span class="quiz-dashboard-status-badge completed">Completed</span>
+                                <?php elseif (!$dependency_met): ?>
+                                    <span class="quiz-dashboard-status-badge locked">Locked</span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="quiz-dashboard-actions">
+                                <?php if ($dependency_met): ?>
+                                    <a href="<?php echo esc_url($quiz_page_url); ?>" class="quiz-dashboard-button">
+                                        <?php echo $has_results ? 'View Results' : 'Start Quiz'; ?>
+                                    </a>
+                                <?php else: ?>
+                                    <span class="quiz-dashboard-button is-disabled" title="<?php printf(esc_attr__('Please complete "%s" first.'), esc_attr($dependency_title)); ?>">
+                                        <?php _e('Locked'); ?>
+                                    </span>
+                                <?php endif; ?>
+                            </div>
                         </div>
-                        <div class="quiz-dashboard-details">
-                            <div class="quiz-dashboard-title"><?php echo esc_html($quiz['title']); ?></div>
-                            <?php if (!$has_results && !empty($description)): ?>
-                                <div class="quiz-dashboard-description"><?php echo esc_html($description); ?></div>
-                            <?php endif; ?>
-                        </div>
-                        <div class="quiz-dashboard-actions">
-                            <?php if ($dependency_met): ?>
-                                <a href="<?php echo esc_url($quiz_page_url); ?>" class="quiz-dashboard-button">
-                                    <?php echo $has_results ? 'View Results' : 'Start Quiz'; ?>
-                                </a>
-                            <?php else: ?>
-                                <span class="quiz-dashboard-button is-disabled" title="<?php printf(esc_attr__('Please complete "%s" first.'), esc_attr($dependency_title)); ?>">
-                                    <?php _e('Locked'); ?>
-                                </span>
-                            <?php endif; ?>
-                        </div>
+
+                        <?php if ((!$has_results && (!empty($description) || !empty($prediction_paragraph))) || !empty($mi_profile_content)): ?>
+                            <div class="quiz-dashboard-item-body">
+                                <?php if (!$has_results): ?>
+                                    <?php if (!empty($description)): ?>
+                                        <p class="quiz-dashboard-description"><?php echo esc_html($description); ?></p>
+                                    <?php endif; ?>
+                                    <?php if (!empty($prediction_paragraph)): ?>
+                                        <div class="quiz-dashboard-insight-panel insight-panel-prediction">
+                                            <p class="panel-title">Your Personalized CDT Prediction</p>
+                                            <p><?php echo esc_html($prediction_paragraph); ?></p>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php elseif (!empty($mi_profile_content)): ?>
+                                    <div class="quiz-dashboard-insight-panel insight-panel-profile">
+                                        <p class="panel-title">Your Top Intelligences</p>
+                                        <div class="quiz-dashboard-chips">
+                                            <?php foreach ($mi_profile_content as $name): ?>
+                                                <span class="chip"><?php echo esc_html($name); ?></span>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                     </li>
                 <?php endforeach; ?>
             </ul>
