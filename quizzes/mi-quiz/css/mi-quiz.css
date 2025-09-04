@@ -7,10 +7,34 @@
   --mi-medium-gray:#d1d5db;
   --mi-text-color:#374151;
 }
-#mi-quiz-container{max-width:860px;margin:0 auto}
+.quiz-wrapper {
+    max-width: 860px;
+    margin: 2em auto;
+    border: 1px solid var(--mi-light-gray);
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);
+    overflow: hidden; /* Ensures child corners don't poke out */
+}
+.back-bar {
+  background: #fafbfc;
+  border-bottom: 1px solid #edf0f3;
+  padding: 10px 16px;
+}
+.back-bar .back-link {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #5f6b7a;
+  text-decoration: none;
+}
+.back-bar .back-link:hover {
+  color: #2b2f36;
+}
+#mi-quiz-container{
+  padding: 2em;
+}
 .mi-quiz-card{
-  background:#fff;border:1px solid var(--mi-light-gray);border-radius:12px;
-  padding:2em;box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);
+  background:#fff;
+  /* Border, padding, and shadow are now on the wrapper/container */
   text-align:center
 }
 .mi-quiz-button{

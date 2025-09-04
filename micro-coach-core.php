@@ -1,18 +1,5 @@
 <?php
-/*
-Plugin Name: Micro-Coach Quiz Platform
-Description: A modular platform for hosting various quizzes.
-Version: 1.0
-Author: Your Name
-License: GPL2
-*/
-
 if ( ! defined( 'ABSPATH' ) ) exit;
-
-// Include the Composer autoloader for PHP libraries like Dompdf.
-if (file_exists(plugin_dir_path(__FILE__) . 'vendor/autoload.php')) {
-    require_once plugin_dir_path(__FILE__) . 'vendor/autoload.php';
-}
 
 /**
  * The main Core class for the quiz platform.
@@ -25,9 +12,6 @@ class Micro_Coach_Core {
     const OPT_DESCRIPTIONS = 'mc_quiz_descriptions';
 
     public function __construct() {
-        // Scan the 'quizzes' directory and load each module.
-        $this->load_quiz_modules();
-
         // Add the new shortcode for the quiz dashboard.
         add_shortcode('quiz_dashboard', [$this, 'render_quiz_dashboard']);
 
@@ -38,22 +22,6 @@ class Micro_Coach_Core {
         }
 
         add_action('save_post', [$this, 'clear_shortcode_page_transients']);
-
-        // Add an admin notice to show which modules were loaded.
-        add_action('admin_notices', [$this, 'show_loaded_modules_notice']);
-    }
-
-    public function load_quiz_modules() {
-        $quizzes_dir = plugin_dir_path(__FILE__) . 'quizzes/';
-
-        // Look for any subdirectory within the 'quizzes' folder.
-        foreach (glob($quizzes_dir . '*', GLOB_ONLYDIR) as $quiz_dir) {
-            $module_file = $quiz_dir . '/module.php';
-            if (file_exists($module_file)) {
-                require_once $module_file;
-                $this->loaded_modules[] = basename($quiz_dir);
-            }
-        }
     }
 
     /**
@@ -170,166 +138,109 @@ class Micro_Coach_Core {
         $user_id = get_current_user_id();
         $saved_descriptions = get_option(self::OPT_DESCRIPTIONS, []);
         wp_enqueue_style('dashicons');
-
+ 
         ob_start();
-        ?>
-        <style>
-            /* General Layout & Spacing */
-            .quiz-dashboard-list { 
-                list-style: none; 
-                padding: 0; 
-                margin: 1em 0; 
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; 
-                max-width: 700px; 
+ 
+        if ( $user_id ) { // Logged-in user view
+            // --- Calculate Progress & Next Step ---
+            $u = wp_get_current_user();
+            if ( ! empty( $u->first_name ) ) {
+                $first = $u->first_name;
+            } elseif ( ! empty( $u->display_name ) ) {
+                $first = $u->display_name;
+            } else {
+                $first = "Friend";
             }
-            .quiz-dashboard-item { 
-                background: #fff;
-                border: 1px solid #e2e8f0; /* Softer border */
-                border-radius: 12px;
-                margin-bottom: 16px;
-                padding: 16px 24px;
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); /* Softer shadow */
-                display: flex;
-                flex-direction: column;
-                gap: 12px;
+            $greetings = [
+                "Welcome back, {$first} — what will you discover today?",
+                "Good to see you, {$first}. Your journey continues.",
+                "Hi {$first}, ready for another step in self-discovery?",
+                "{$first}, small steps lead to big insights."
+            ];
+            $greeting = $greetings[ array_rand( $greetings ) ];
+ 
+            $completion_status = [];
+            foreach ($quizzes as $id => $quiz) {
+                $completion_status[$id] = !empty($quiz['results_meta_key']) && !empty(get_user_meta($user_id, $quiz['results_meta_key'], true));
             }
-
-            /* Header Section */
-            .quiz-dashboard-item-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                gap: 16px;
-            }
-            .quiz-dashboard-item-title-group {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            }
-            .quiz-dashboard-title { 
-                font-size: 1.1em; 
-                font-weight: 600;
-                margin: 0;
-                color: #1a202c;
-            }
-            .quiz-dashboard-status-badge {
-                font-size: 0.75em;
-                font-weight: 600;
-                padding: 4px 8px;
-                border-radius: 9999px;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-            }
-            .quiz-dashboard-status-badge.completed { background-color: #e6f4ea; color: #34a853; }
-            .quiz-dashboard-status-badge.locked { background-color: #f1f3f4; color: #5f6368; }
-
-            /* Body / Content Section */
-            .quiz-dashboard-item-body { padding-top: 12px; border-top: 1px solid #e2e8f0; }
-            .quiz-dashboard-description { font-size: 0.9em; color: #4a5568; line-height: 1.5; margin: 0; }
-            .quiz-dashboard-insight-panel { background-color: #f7fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 8px; margin-top: 12px; }
-            .quiz-dashboard-insight-panel .panel-title { font-weight: 600; margin: 0 0 8px 0; font-size: 0.9em; color: #2d3748; }
-            .quiz-dashboard-insight-panel p { font-size: 0.9em; color: #4a5568; line-height: 1.6; max-width: 70ch; margin: 0; }
-            .insight-panel-prediction { border-left: 4px solid #ef4444; }
-            .insight-panel-profile { border-left: 4px solid #4CAF50; }
-
-            /* Chips for Top Intelligences */
-            .quiz-dashboard-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-            .chip { background-color: #e2e8f0; color: #2d3748; padding: 4px 12px; border-radius: 16px; font-size: 0.85em; font-weight: 500; }
-
-            /* Actions & Buttons */
-            .quiz-dashboard-actions { flex-shrink: 0; }
-            .quiz-dashboard-button { text-decoration: none; background: #ef4444; color: #fff; padding: 8px 16px; border-radius: 9999px; font-weight: 600; font-size: 0.9em; transition: all 0.2s; white-space: nowrap; display: inline-block; border: 1px solid transparent; }
-            .quiz-dashboard-button:hover { background: #dc2626; color: #fff; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
-            .quiz-dashboard-button.is-disabled { background: #e2e8f0; color: #a0aec0; cursor: not-allowed; }
-            .quiz-dashboard-button.is-disabled:hover { background: #e2e8f0; transform: none; box-shadow: none; }
-        </style>
-        <div class="quiz-dashboard">
-            <ul class="quiz-dashboard-list">
-                <?php
-                // Pre-calculate completion status for all quizzes to check dependencies efficiently.
-                $completion_status = [];
-                if ($user_id) {
-                    foreach ($quizzes as $id => $quiz) {
-                        $completion_status[$id] = !empty($quiz['results_meta_key']) && !empty(get_user_meta($user_id, $quiz['results_meta_key'], true));
+            $total_quizzes = count($quizzes);
+            $completed_quizzes = count(array_filter($completion_status));
+            $progress_pct = ($total_quizzes > 0) ? round(($completed_quizzes / $total_quizzes) * 100) : 0;
+ 
+            $next_step_url = '';
+            $next_step_title = 'All Complete!';
+            if ($progress_pct < 100) {
+                foreach ($quizzes as $id => $quiz) {
+                    $dependency_met = true;
+                    if (!empty($quiz['depends_on']) && !($completion_status[$quiz['depends_on']] ?? false)) {
+                        $dependency_met = false;
+                    }
+                    if ($dependency_met && !($completion_status[$id] ?? false)) {
+                        $next_step_url = $this->find_page_by_shortcode($quiz['shortcode']);
+                        $next_step_title = 'Next Step: ' . $quiz['title'];
+                        break;
                     }
                 }
-
-                foreach ($quizzes as $id => $quiz):
-                    $has_results = $completion_status[$id] ?? false;
-                    $quiz_page_url = $this->find_page_by_shortcode($quiz['shortcode']);
-                    if (!$quiz_page_url) continue; // Don't show if its page can't be found.
-
-                    // Check dependencies.
-                    $dependency_met = true;
-                    $dependency_title = '';
-                    if (!empty($quiz['depends_on'])) {
-                        $dependency_id = $quiz['depends_on'];
-                        if (isset($quizzes[$dependency_id])) {
-                            $dependency_title = $quizzes[$dependency_id]['title'];
-                            if (!($completion_status[$dependency_id] ?? false)) {
-                                $dependency_met = false;
-                            }
-                        }
-                    }
-
-                    $description = !empty($saved_descriptions[$id]) ? $saved_descriptions[$id] : $quiz['description'];
-                    $prediction_paragraph = '';
-
-                    // Dynamically set the CDT quiz description if the MI quiz is complete.
-                    if ($id === 'cdt-quiz' && ($completion_status['mi-quiz'] ?? false)) {
-                        $mi_prompts_file = plugin_dir_path(__FILE__) . 'quizzes/mi-quiz/mi-cdt-prompts.php';
-                        if (file_exists($mi_prompts_file)) {
-                            require $mi_prompts_file; // Use require instead of require_once to ensure it loads in this scope.
-                            $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
-
-                            // Make this more robust: if top3 is missing but part1Scores exists, recalculate it.
-                            if (is_array($mi_results)) {
-                                if (empty($mi_results['top3']) && !empty($mi_results['part1Scores']) && is_array($mi_results['part1Scores'])) {
-                                    $scores = $mi_results['part1Scores'];
-                                    arsort($scores); // Sort scores descending, maintaining keys
-                                    $mi_results['top3'] = array_keys(array_slice($scores, 0, 3, true));
-                                }
-                            }
-
-                            // Check for top 3 results to generate the composite key.
-                            if (!empty($mi_results['top3']) && count($mi_results['top3']) >= 3 && isset($mi_cdt_prompts)) {
-                                $top3_keys = $mi_results['top3'];
-                                sort($top3_keys); // Sort alphabetically to create a consistent key.
-                                $prompt_key = implode('_', $top3_keys);
-
-                                if (isset($mi_cdt_prompts[$prompt_key]['prompt'])) {
-                                    $prediction_paragraph = $mi_cdt_prompts[$prompt_key]['prompt'];
+            }
+            ?>
+            <div class="quiz-dashboard-container">
+                <!-- Hero / Greeting Row -->
+                <div class="quiz-dashboard-hero">
+                    <div class="quiz-dashboard-hero-greeting">
+                        <h2 class="greeting-title"><?php echo esc_html($greeting); ?></h2>
+                        <p class="greeting-subtitle">Your journey of self-discovery is a marathon, not a sprint. Each step reveals something new.</p>
+                    </div>
+                    <div class="quiz-dashboard-hero-progress-card">
+                        <div class="progress-card-header">
+                            <h3 class="progress-card-title">Your Progress</h3>
+                            <span class="progress-card-percent"><?php echo esc_html($progress_pct); ?>%</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" style="width: <?php echo esc_attr($progress_pct); ?>%;"></div>
+                        </div>
+                        <?php if ($next_step_url): ?>
+                            <a href="<?php echo esc_url($next_step_url); ?>" class="quiz-dashboard-button progress-card-next-step-btn"><?php echo esc_html($next_step_title); ?></a>
+                        <?php else: ?>
+                            <span class="quiz-dashboard-button is-disabled progress-card-next-step-btn"><?php echo esc_html($next_step_title); ?></span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+ 
+                <!-- Your Path Section -->
+                <h2 class="quiz-dashboard-section-title">Your Path</h2>
+                <div class="quiz-dashboard-grid">
+                    <?php
+                    foreach ($quizzes as $id => $quiz):
+                        $has_results = $completion_status[$id] ?? false;
+                        $quiz_page_url = $this->find_page_by_shortcode($quiz['shortcode']);
+                        if (!$quiz_page_url) continue;
+ 
+                        $dependency_met = true;
+                        $dependency_title = '';
+                        if (!empty($quiz['depends_on'])) {
+                            $dependency_id = $quiz['depends_on'];
+                            if (isset($quizzes[$dependency_id])) {
+                                $dependency_title = $quizzes[$dependency_id]['title'];
+                                if (!($completion_status[$dependency_id] ?? false)) {
+                                    $dependency_met = false;
                                 }
                             }
                         }
-                    }
-
-                    // Prepare MI profile content if applicable
-                    $mi_profile_content = '';
-                    if ($has_results && $id === 'mi-quiz') {
-                        $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
-                        $mi_questions_file = plugin_dir_path(__FILE__) . 'quizzes/mi-quiz/mi-questions.php';
-                        if (file_exists($mi_questions_file)) {
-                            require $mi_questions_file; // defines $mi_categories
-                            if (!empty($mi_results['top3']) && isset($mi_categories)) {
-                                $top3_names = array_map(function($slug) use ($mi_categories) {
-                                    return $mi_categories[$slug] ?? ucfirst(str_replace('-', ' ', $slug));
-                                }, $mi_results['top3']);
-                                $mi_profile_content = $top3_names;
-                            }
-                        }
-                    }
-
-                    ?>
-                    <li class="quiz-dashboard-item">
-                        <div class="quiz-dashboard-item-header">
-                            <div class="quiz-dashboard-item-title-group">
+                        $description = !empty($saved_descriptions[$id]) ? $saved_descriptions[$id] : $quiz['description'];
+                        ?>
+                        <div class="quiz-dashboard-item <?php if (!$dependency_met) echo 'is-locked'; ?>">
+                            <div class="quiz-dashboard-item-header">
                                 <h3 class="quiz-dashboard-title"><?php echo esc_html($quiz['title']); ?></h3>
                                 <?php if ($has_results): ?>
                                     <span class="quiz-dashboard-status-badge completed">Completed</span>
                                 <?php elseif (!$dependency_met): ?>
                                     <span class="quiz-dashboard-status-badge locked">Locked</span>
+                                <?php else: ?>
+                                    <span class="quiz-dashboard-status-badge not-started">Not Started</span>
                                 <?php endif; ?>
+                            </div>
+                            <div class="quiz-dashboard-item-body">
+                                <p class="quiz-dashboard-description"><?php echo esc_html($description); ?></p>
                             </div>
                             <div class="quiz-dashboard-actions">
                                 <?php if ($dependency_met): ?>
@@ -343,35 +254,207 @@ class Micro_Coach_Core {
                                 <?php endif; ?>
                             </div>
                         </div>
-
-                        <?php if ((!$has_results && (!empty($description) || !empty($prediction_paragraph))) || !empty($mi_profile_content)): ?>
-                            <div class="quiz-dashboard-item-body">
-                                <?php if (!$has_results): ?>
-                                    <?php if (!empty($description)): ?>
-                                        <p class="quiz-dashboard-description"><?php echo esc_html($description); ?></p>
-                                    <?php endif; ?>
-                                    <?php if (!empty($prediction_paragraph)): ?>
-                                        <div class="quiz-dashboard-insight-panel insight-panel-prediction">
-                                            <p class="panel-title">Your Personalized CDT Prediction</p>
-                                            <p><?php echo esc_html($prediction_paragraph); ?></p>
-                                        </div>
-                                    <?php endif; ?>
-                                <?php elseif (!empty($mi_profile_content)): ?>
-                                    <div class="quiz-dashboard-insight-panel insight-panel-profile">
-                                        <p class="panel-title">Your Top Intelligences</p>
-                                        <div class="quiz-dashboard-chips">
-                                            <?php foreach ($mi_profile_content as $name): ?>
-                                                <span class="chip"><?php echo esc_html($name); ?></span>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </div>
-                                <?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
+ 
+                <!-- Insights & Activity Section (Placeholders) -->
+                <h2 class="quiz-dashboard-section-title">Insights &amp; Activity</h2>
+                <div class="quiz-dashboard-lower-grid">
+                    <div class="insight-panel">
+                        <h3 class="panel-title">Latest Insight</h3>
+                        <p class="placeholder-text"><em>This area will dynamically show a key insight from your most recently completed assessment. Complete a quiz to see it in action!</em></p>
+                    </div>
+                    <div class="activity-panel">
+                        <h3 class="panel-title">Recent Activity</h3>
+                        <ul class="activity-list">
+                            <li><span class="activity-date">Yesterday:</span> Completed the MI Quiz</li>
+                            <li><span class="activity-date">3 Days Ago:</span> Created your account</li>
+                        </ul>
+                    </div>
+                </div>
+ 
+                <!-- Resources Section (Placeholder) -->
+                <div class="quiz-dashboard-resources">
+                    <a href="#" class="resource-link"><span class="dashicons dashicons-editor-help"></span> Help Center</a>
+                    <a href="#" class="resource-link"><span class="dashicons dashicons-info"></span> FAQs</a>
+                    <a href="#" class="resource-link"><span class="dashicons dashicons-email-alt"></span> Contact Us</a>
+                </div>
+            </div>
+ 
+        <?php } else { // Logged-out user view ?>
+            <style>
+                .quiz-dashboard-auth-prompt {
+                    background: #fff;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 12px;
+                    padding: 24px 32px;
+                    text-align: center;
+                    max-width: 500px;
+                    margin: 2em auto;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+                }
+                .quiz-dashboard-auth-prompt h2 {
+                    font-size: 1.5em;
+                    margin-top: 0;
+                    color: #1a202c;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+                }
+                .quiz-dashboard-auth-prompt p {
+                    font-size: 1em;
+                    color: #4a5568;
+                    margin-bottom: 1.5em;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+                }
+                .quiz-dashboard-auth-actions {
+                    display: flex;
+                    gap: 12px;
+                    justify-content: center;
+                }
+                .quiz-dashboard-button-secondary {
+                    background: #f1f3f4;
+                    color: #2d3748;
+                    border-color: #e2e8f0;
+                }
+                .quiz-dashboard-button-secondary:hover {
+                    background: #e2e8f0;
+                    color: #1a202c;
+                }
+            </style>
+            <div class="quiz-dashboard-auth-prompt">
+                <h2>Welcome to Skill of Self-Discovery</h2>
+                <p>Explore guided assessments and AI-powered tools that help you understand your strengths, navigate challenges, and grow with intention. Please select an option below to start your journey or view your progress.</p>
+                <div class="quiz-dashboard-auth-actions">
+                    <button type="button" id="quiz-dashboard-new-user" class="quiz-dashboard-button">I'm a New User</button>
+                    <a href="<?php echo esc_url(wp_login_url(get_permalink())); ?>" class="quiz-dashboard-button quiz-dashboard-button-secondary">Returning User? Log In</a>
+                </div>
+            </div>
+            <div id="quiz-dashboard-main-content" style="display:none;">
+                <div class="quiz-dashboard">
+                    <ul class="quiz-dashboard-list" style="margin-top:0;">
+                        <?php foreach ($quizzes as $id => $quiz):
+                            $quiz_page_url = $this->find_page_by_shortcode($quiz['shortcode']);
+                            if (!$quiz_page_url) continue;
+                            $description = !empty($saved_descriptions[$id]) ? $saved_descriptions[$id] : $quiz['description'];
+                        ?>
+                        <li class="quiz-dashboard-item">
+                            <div class="quiz-dashboard-item-header">
+                                <div class="quiz-dashboard-item-title-group">
+                                    <h3 class="quiz-dashboard-title"><?php echo esc_html($quiz['title']); ?></h3>
+                                </div>
+                                <div class="quiz-dashboard-actions">
+                                    <a href="<?php echo esc_url($quiz_page_url); ?>" class="quiz-dashboard-button">Start Quiz</a>
+                                </div>
                             </div>
-                        <?php endif; ?>
-                    </li>
-                <?php endforeach; ?>
-            </ul>
-        </div>
+                            <div class="quiz-dashboard-item-body">
+                                <p class="quiz-dashboard-description"><?php echo esc_html($description); ?></p>
+                            </div>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+            </div>
+        <?php } ?>
+ 
+        <style>
+            .quiz-dashboard-container { max-width: 900px; margin: 2em auto; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; }
+            .quiz-dashboard-hero { display: flex; align-items: stretch; gap: 24px; margin-bottom: 2em; }
+            .quiz-dashboard-hero-greeting { flex-grow: 1; }
+            .greeting-title { font-size: 1.8em; font-weight: 600; color: #1a202c; margin: 0 0 0.25em 0; }
+            .greeting-subtitle { font-size: 1em; color: #4a5568; margin: 0; }
+            .quiz-dashboard-hero-progress-card { flex-basis: 320px; flex-shrink: 0; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; }
+            .progress-card-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+            .progress-card-title { font-size: 1em; font-weight: 600; margin: 0; color: #2d3748; }
+            .progress-card-percent { font-size: 0.9em; font-weight: 600; color: #4a5568; }
+            .progress-bar-container { width: 100%; background: #e2e8f0; border-radius: 99px; height: 8px; overflow: hidden; margin-bottom: 20px; }
+            .progress-bar-fill { background: #4CAF50; height: 100%; transition: width 0.5s ease-in-out; }
+            .progress-card-next-step-btn { margin-top: auto; }
+ 
+            .quiz-dashboard-section-title { margin-top: 2.5em; margin-bottom: 1em; font-size: 1.5em; font-weight: 600; color: #1a202c; padding-bottom: 0.5em; border-bottom: 1px solid #e2e8f0; }
+ 
+            .quiz-dashboard-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin-bottom: 2.5em; }
+            .quiz-dashboard-list { 
+                list-style: none; 
+                padding: 0; 
+                margin: 1em 0; 
+            }
+            .quiz-dashboard-item { 
+                background: #fff;
+                border: 1px solid #e2e8f0;
+                border-radius: 12px;
+                padding: 20px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+                display: flex;
+                flex-direction: column;
+                transition: all 0.2s ease-in-out;
+            }
+            .quiz-dashboard-item:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.07), 0 4px 6px -4px rgba(0,0,0,0.07); }
+            .quiz-dashboard-item.is-locked { opacity: 0.6; background: #f8fafc; pointer-events: none; }
+            .quiz-dashboard-item.is-locked .quiz-dashboard-actions .quiz-dashboard-button { pointer-events: auto; } /* Allow tooltip on button */
+ 
+            .quiz-dashboard-item-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 12px;
+            }
+            .quiz-dashboard-item-body { border-top: 1px solid #e2e8f0; padding-top: 12px; flex-grow: 1; }
+            .quiz-dashboard-actions { margin-top: 16px; }
+ 
+            .quiz-dashboard-title { 
+                font-size: 1.1em; 
+                font-weight: 600;
+                margin: 0;
+                color: #1a202c;
+            }
+            .quiz-dashboard-status-badge { font-size: 0.75em; font-weight: 600; padding: 4px 8px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.05em; }
+            .quiz-dashboard-status-badge.completed { background-color: #e6f4ea; color: #34a853; }
+            .quiz-dashboard-status-badge.locked { background-color: #f1f3f4; color: #5f6368; }
+            .quiz-dashboard-status-badge.not-started { background-color: #eef2ff; color: #4f46e5; }
+ 
+            .quiz-dashboard-description { font-size: 0.9em; color: #4a5568; line-height: 1.5; margin: 0; }
+ 
+            .quiz-dashboard-button { text-decoration: none; background: #ef4444; color: #fff; padding: 8px 16px; border-radius: 9999px; font-weight: 600; font-size: 0.9em; transition: all 0.2s; white-space: nowrap; display: inline-block; border: 1px solid transparent; }
+            .quiz-dashboard-button:hover { background: #dc2626; color: #fff; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+            .quiz-dashboard-button.is-disabled { background: #e2e8f0; color: #a0aec0; cursor: not-allowed; }
+            .quiz-dashboard-button.is-disabled:hover { background: #e2e8f0; transform: none; box-shadow: none; }
+ 
+            .quiz-dashboard-lower-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
+            .panel-title { font-size: 1.1em; font-weight: 600; margin: 0 0 1em 0; color: #1a202c; }
+            .insight-panel, .activity-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); transition: all 0.2s ease-in-out; }
+            .placeholder-text { color: #64748b; font-style: italic; }
+            .activity-list { list-style: none; padding: 0; margin: 0; }
+            .activity-list li { padding: 8px 0; border-bottom: 1px solid #f1f3f4; font-size: 0.9em; color: #4a5568; }
+            .activity-list li:last-child { border-bottom: none; }
+            .activity-date { font-weight: 500; color: #2d3748; margin-right: 8px; }
+ 
+            .quiz-dashboard-resources { display: flex; gap: 24px; justify-content: center; margin-top: 2.5em; padding-top: 1.5em; border-top: 1px solid #e2e8f0; }
+            .resource-link { color: #4a5568; text-decoration: none; font-size: 0.9em; display: flex; align-items: center; gap: 6px; }
+            .resource-link:hover { color: #1a202c; }
+ 
+            @media (max-width: 768px) {
+                .quiz-dashboard-hero { flex-direction: column; }
+                .quiz-dashboard-grid { grid-template-columns: 1fr; }
+                .quiz-dashboard-lower-grid { grid-template-columns: 1fr; }
+            }
+        </style>
+        
+        <?php if ( ! $user_id ): // Script for logged-out prompt ?>
+            <script type="text/javascript">
+            document.addEventListener('DOMContentLoaded', function() {
+                var newUserBtn = document.getElementById('quiz-dashboard-new-user');
+                var authPrompt = document.querySelector('.quiz-dashboard-auth-prompt');
+                var mainContent = document.getElementById('quiz-dashboard-main-content');
+
+                if (newUserBtn && authPrompt && mainContent) {
+                    newUserBtn.addEventListener('click', function() {
+                        authPrompt.style.display = 'none';
+                        mainContent.style.display = 'block';
+                    });
+                }
+            });
+            </script>
+        <?php endif; ?>
         <?php
         return ob_get_clean();
     }
@@ -395,20 +478,6 @@ class Micro_Coach_Core {
     }
 
     /**
-     * Displays an admin notice to confirm which modules have been loaded.
-     * This is a helpful diagnostic tool.
-     */
-    public function show_loaded_modules_notice() {
-        $quizzes_dir_path = plugin_dir_path(__FILE__) . 'quizzes/';
-        if (empty($this->loaded_modules)) {
-            echo '<div class="notice notice-error"><p><strong>Micro-Coach Quiz Platform Warning:</strong> No quiz modules were found. The platform looked in the following directory: <code>' . esc_html($quizzes_dir_path) . '</code>. Please ensure your quiz modules (e.g., a "mi-quiz" folder) are placed in their own subdirectories there.</p></div>';
-        } else {
-            $modules_list = esc_html(implode(', ', $this->loaded_modules));
-            echo '<div class="notice notice-success is-dismissible"><p><strong>Micro-Coach Quiz Platform:</strong> Successfully loaded the following quiz modules: <strong>' . $modules_list . '</strong>.</p></div>';
-        }
-    }
-
-    /**
      * Clears page URL transients when a post is saved to keep the dashboard links fresh.
      */
     public function clear_shortcode_page_transients() {
@@ -418,33 +487,3 @@ class Micro_Coach_Core {
         }
     }
 }
-
-// Boot the platform.
-add_action('plugins_loaded', function() { new Micro_Coach_Core(); });
-
-/**
- * Activation hook for the entire platform.
- * It finds all modules and runs their static 'activate' method if it exists.
- */
-function micro_coach_platform_activate() {
-    $quizzes_dir = plugin_dir_path(__FILE__) . 'quizzes/';
-    foreach (glob($quizzes_dir . '*', GLOB_ONLYDIR) as $quiz_dir) {
-        $module_file = $quiz_dir . '/module.php';
-        if (file_exists($module_file)) {
-            // Get all declared classes before we load the module file.
-            $before = get_declared_classes();
-            require_once $module_file;
-            // Get all declared classes after, and find the new one.
-            $after = get_declared_classes();
-            $new_classes = array_diff($after, $before);
-
-            foreach ($new_classes as $class_name) {
-                // If the new class has a static 'activate' method, run it.
-                if (method_exists($class_name, 'activate')) {
-                    call_user_func([$class_name, 'activate']);
-                }
-            }
-        }
-    }
-}
-register_activation_hook(__FILE__, 'micro_coach_platform_activate');

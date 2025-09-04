@@ -26,6 +26,7 @@ class MI_Quiz_Plugin_AI {
 
         // Frontend & admin hooks
         add_shortcode('mi_quiz', [ $this, 'render_quiz' ]);
+        add_shortcode('mi-quiz', [ $this, 'render_quiz' ]); // Add alias for convenience.
         if ( is_admin() ) {
             add_action('admin_menu',  [ $this, 'add_settings_pages' ]);
             add_action('admin_init',  [ $this, 'register_settings' ]);
@@ -296,29 +297,48 @@ class MI_Quiz_Plugin_AI {
              ON DUPLICATE KEY UPDATE 
                 created_at = VALUES(created_at),
                 first_name = VALUES(first_name),
-                ip         = VALUES(ip)",
+                ip         = VALUES(ip)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
             current_time('mysql'), $first_name, $email, $_SERVER['REMOTE_ADDR'] ?? ''
         ));
 
+        // Send a single, comprehensive welcome email with results and a password reset link.
         if (!empty($results_html)) {
-            $body = '<html><body><h1>Here are your quiz results:</h1>'.$results_html.'<p>Thank you for taking the quiz!</p></body></html>';
-            
-            $subject_user = $this->maybe_antithread( sprintf('Your MI Quiz Results — %s', $first_name) );
+            // Get user data to generate the password reset link.
+            $user = get_userdata($user_id);
+            $key = get_password_reset_key($user);
+            $reset_url = network_site_url("wp-login.php?action=rp&key=$key&login=" . rawurlencode($user->user_login), 'login');
+
+            // Build a more helpful email body for the user.
+            $user_email_body = '<html><body>';
+            $user_email_body .= sprintf('<h1>Welcome, %s!</h1>', esc_html($first_name));
+            $user_email_body .= '<p>Thank you for taking the Multiple Intelligences Quiz! Your account has been created, and you are now logged in on this device.</p>';
+            $user_email_body .= '<h2>Secure Your Account</h2>';
+            $user_email_body .= '<p>To access your account from other devices or to log in again later, you must set a password. Please click the secure link below to do so now:</p>';
+            $user_email_body .= sprintf('<p style="text-align:center; margin: 2em 0;"><a href="%s" style="background-color:#ef4444;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;">Set Your Password</a></p>', esc_url($reset_url));
+            $user_email_body .= '<p>This link is valid for 24 hours. If it expires, you can use the "Lost your password?" link on the login page.</p>';
+            $user_email_body .= '<hr style="margin: 2em 0;">';
+            $user_email_body .= '<h2>Your Quiz Results</h2>';
+            $user_email_body .= $results_html;
+            $user_email_body .= '</body></html>';
+
+            $subject_user = $this->maybe_antithread( 'Welcome! Your MI Quiz Results & Account Info' );
             $headers_user = [
                 'Content-Type: text/html; charset=UTF-8',
                 sprintf('Reply-To: "%s" <%s>', $first_name, $email),
             ];
-            wp_mail($email, $subject_user, $body, $headers_user);
+            wp_mail($email, $subject_user, $user_email_body, $headers_user);
 
+            // Send a separate, simpler email to the admin/BCC list.
             $admin_list_raw = array_filter(array_map('trim', explode(',', get_option(self::OPT_BCC, ''))));
             if (!empty($admin_list_raw)) {
+                $admin_body = '<html><body><h1>Quiz results for ' . esc_html($first_name) . ' (' . esc_html($email) . ')</h1>' . $results_html . '</body></html>';
                 $subject_admin = $this->maybe_antithread( sprintf('[MI Quiz] Results for %s <%s>', $first_name, $email) );
                 $headers_admin = [
                     'Content-Type: text/html; charset=UTF-8',
                     sprintf('Reply-To: "%s" <%s>', $first_name, $email),
                     'Bcc: ' . implode(', ', $admin_list_raw),
                 ];
-                wp_mail($admin_list_raw[0], $subject_admin, $body, $headers_admin);
+                wp_mail($admin_list_raw[0], $subject_admin, $admin_body, $headers_admin);
             }
         }
 
@@ -350,12 +370,12 @@ class MI_Quiz_Plugin_AI {
         }
 
         // Prefer local vars (from the require), fall back to $GLOBALS, else empty array.
-        $cats   = isset($mi_categories)          ? $mi_categories          : ($GLOBALS['mi_categories'] ?? []);
-        $q1     = isset($mi_questions)           ? $mi_questions           : ($GLOBALS['mi_questions'] ?? []);
-        $q2     = isset($mi_part_two_questions)  ? $mi_part_two_questions  : ($GLOBALS['mi_part_two_questions'] ?? []);
-        $career = isset($mi_career_suggestions)  ? $mi_career_suggestions  : ($GLOBALS['mi_career_suggestions'] ?? []);
-        $lev    = isset($mi_leverage_tips)       ? $mi_leverage_tips       : ($GLOBALS['mi_leverage_tips'] ?? []);
-        $grow   = isset($mi_growth_tips)         ? $mi_growth_tips         : ($GLOBALS['mi_growth_tips'] ?? []);
+        $cats   = $mi_categories          ?? $GLOBALS['mi_categories']          ?? [];
+        $q1     = $mi_questions           ?? $GLOBALS['mi_questions']           ?? [];
+        $q2     = $mi_part_two_questions  ?? $GLOBALS['mi_part_two_questions']  ?? [];
+        $career = $mi_career_suggestions  ?? $GLOBALS['mi_career_suggestions']  ?? [];
+        $lev    = $mi_leverage_tips       ?? $GLOBALS['mi_leverage_tips']       ?? [];
+        $grow   = $mi_growth_tips         ?? $GLOBALS['mi_growth_tips']         ?? [];
 
         $cdt_quiz_url = $this->_find_page_by_shortcode('cdt_quiz');
 
@@ -479,7 +499,7 @@ class MI_Quiz_Plugin_AI {
                 created_at = VALUES(created_at),
                 first_name = VALUES(first_name),
                 last_name  = VALUES(last_name),
-                ip         = VALUES(ip)",
+                ip         = VALUES(ip)", // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
             current_time('mysql'), $first_name, $last_name, $email, $_SERVER['REMOTE_ADDR'] ?? ''
         ));
 
@@ -491,6 +511,7 @@ class MI_Quiz_Plugin_AI {
     public function render_quiz() {
         // Assets are now enqueued conditionally in enqueue_assets(),
         // so these calls are no longer needed here.
+        $dashboard_url = $this->_find_page_by_shortcode('quiz_dashboard');
 
         $questions_file_path = dirname(__FILE__) . '/mi-questions.php';
         if (!file_exists($questions_file_path)) {
@@ -498,67 +519,75 @@ class MI_Quiz_Plugin_AI {
             return '<div style="border:2px solid red; padding:1em; background:#fbeaea; color: #000;">' . $error_message . '</div>';
         }
 
-        ob_start(); ?>
-        <style>
-            .cdt-prompt-section {
-                margin-top: 2.5em; /* Adds space above the "Next Step" section */
-            }
-            .cdt-prompt-section .mi-quiz-button-next-step {
-                background-color: #2563eb; /* A prominent blue */
-                color: #ffffff;
-                padding: 12px 24px;
-                font-size: 1.1em;
-                border-radius: 8px;
-                text-decoration: none;
-                font-weight: bold;
-                display: inline-block;
-                transition: background-color 0.2s, transform 0.2s;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .cdt-prompt-section .mi-quiz-button-next-step:hover {
-                background-color: #1d4ed8; /* Darker blue */
-                color: #ffffff;
-                transform: translateY(-1px);
-                box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-            }
-        </style>
-        <div id="mi-quiz-container">
-          <div id="mi-age-gate">
-            <div class="mi-quiz-card">
-              <h2 class="mi-section-title">Welcome!</h2>
-              <p>To tailor the questions for you, please select the option that best describes you:</p>
-              <div class="mi-age-options">
-                <button type="button" class="mi-quiz-button" data-age-group="teen">Teen / High School</button>
-                <button type="button" class="mi-quiz-button" data-age-group="graduate">Student / Recent Graduate</button>
-                <button type="button" class="mi-quiz-button" data-age-group="adult">Adult / Professional</button>
+        ob_start();
+        ?>
+        <div class="quiz-wrapper">
+            <?php if ($dashboard_url): ?>
+                <div class="back-bar">
+                    <a href="<?php echo esc_url($dashboard_url); ?>" class="back-link">&larr; Return to Dashboard</a>
+                </div>
+            <?php endif; ?>
+            <style>
+                .cdt-prompt-section {
+                    margin-top: 2.5em; /* Adds space above the "Next Step" section */
+                }
+                .cdt-prompt-section .mi-quiz-button-next-step {
+                    background-color: #2563eb; /* A prominent blue */
+                    color: #ffffff;
+                    padding: 12px 24px;
+                    font-size: 1.1em;
+                    border-radius: 8px;
+                    text-decoration: none;
+                    font-weight: bold;
+                    display: inline-block;
+                    transition: background-color 0.2s, transform 0.2s;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                .cdt-prompt-section .mi-quiz-button-next-step:hover {
+                    background-color: #1d4ed8; /* Darker blue */
+                    color: #ffffff;
+                    transform: translateY(-1px);
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+                }
+            </style>
+            <div id="mi-quiz-container">
+              <div id="mi-age-gate">
+                <div class="mi-quiz-card">
+                  <h2 class="mi-section-title">Welcome!</h2>
+                  <p>To tailor the questions for you, please select the option that best describes you:</p>
+                  <div class="mi-age-options">
+                    <button type="button" class="mi-quiz-button" data-age-group="teen">Teen / High School</button>
+                    <button type="button" class="mi-quiz-button" data-age-group="graduate">Student / Recent Graduate</button>
+                    <button type="button" class="mi-quiz-button" data-age-group="adult">Adult / Professional</button>
+                  </div>
+                  <div class="mi-quiz-notice">
+                    <?php if (is_user_logged_in()): ?>
+                        <p>Welcome back! At the end of the quiz, your results will be automatically emailed to your account address and saved to your profile.</p>
+                    <?php else: ?>
+                        <p>This quiz is the first step toward unlocking your potential. At the end, you'll receive a comprehensive report detailing your top intelligences and a personalized action plan to help you grow. To view your results and save your progress, simply enter your name and email to create your free account.</p>
+                    <?php endif; ?>
+                  </div>
+                </div>
               </div>
-              <div class="mi-quiz-notice">
-                <?php if (is_user_logged_in()): ?>
-                    <p>Welcome back! At the end of the quiz, your results will be automatically emailed to your account address and saved to your profile.</p>
-                <?php else: ?>
-                    <p>Ready to unlock your potential? After the quiz, simply enter your name and email to create a free account, view your full results, and get your personalized action plan sent to your inbox.</p>
-                <?php endif; ?>
+
+              <div id="mi-dev-tools" style="display:none;">
+                <strong>Dev tools:</strong>
+                <button type="button" id="mi-autofill-run" class="mi-quiz-button mi-quiz-button-small">Auto-Fill</button>
               </div>
+
+              <form id="mi-quiz-form-part1" style="display:none;"></form>
+
+              <div id="mi-quiz-intermission" style="display:none;">
+                <h2 class="mi-section-title">Your Top Intelligences</h2>
+                <p>Based on your answers, these are your top three intelligences:</p>
+                <ul id="mi-top3-list"></ul>
+                <p>Now, let's explore these three areas in more detail.</p>
+                <button type="button" id="mi-start-part2" class="mi-quiz-button">Start Part 2</button>
+              </div>
+
+              <form id="mi-quiz-form-part2" style="display:none;"></form>
+              <div id="mi-quiz-results" style="display:none;"></div>
             </div>
-          </div>
-
-          <div id="mi-dev-tools" style="display:none;">
-            <strong>Dev tools:</strong>
-            <button type="button" id="mi-autofill-run" class="mi-quiz-button mi-quiz-button-small">Auto-Fill</button>
-          </div>
-
-          <form id="mi-quiz-form-part1" style="display:none;"></form>
-
-          <div id="mi-quiz-intermission" style="display:none;">
-            <h2 class="mi-section-title">Your Top Intelligences</h2>
-            <p>Based on your answers, these are your top three intelligences:</p>
-            <ul id="mi-top3-list"></ul>
-            <p>Now, let's explore these three areas in more detail.</p>
-            <button type="button" id="mi-start-part2" class="mi-quiz-button">Start Part 2</button>
-          </div>
-
-          <form id="mi-quiz-form-part2" style="display:none;"></form>
-          <div id="mi-quiz-results" style="display:none;"></div>
         </div>
         <?php
         return ob_get_clean();
@@ -628,6 +657,3 @@ class MI_Quiz_Plugin_AI {
         }
     }
 }
-
-// This file is loaded by the core plugin, so we just need to instantiate the module.
-new MI_Quiz_Plugin_AI();

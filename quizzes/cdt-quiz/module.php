@@ -22,6 +22,7 @@ class CDT_Quiz_Plugin {
 
         // 2. Add the shortcode to display the quiz.
         add_shortcode(self::SHORTCODE, [ $this, 'render_quiz' ]);
+        add_shortcode('cdt-quiz', [ $this, 'render_quiz' ]); // Add alias for convenience.
 
         // 3. Enqueue this quiz's specific assets.
         add_action('wp_enqueue_scripts', [ $this, 'enqueue_assets' ]);
@@ -74,7 +75,19 @@ class CDT_Quiz_Plugin {
     }
 
     public function render_quiz() {
-        return '<div id="cdt-quiz-container"><div class="cdt-quiz-card"><p>Loading Quiz...</p></div></div>';
+        $dashboard_url = $this->_find_page_by_shortcode('quiz_dashboard');
+        ob_start();
+        ?>
+        <div class="quiz-wrapper">
+            <?php if ($dashboard_url): ?>
+                <div class="back-bar">
+                    <a href="<?php echo esc_url($dashboard_url); ?>" class="back-link">&larr; Return to Dashboard</a>
+                </div>
+            <?php endif; ?>
+            <div id="cdt-quiz-container"><div class="cdt-quiz-card"><p>Loading Quiz...</p></div></div>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 
     public function ajax_save_user_results() {
@@ -118,6 +131,22 @@ class CDT_Quiz_Plugin {
             wp_send_json_success('No results found to delete, or they were already deleted.');
         }
     }
-}
 
-new CDT_Quiz_Plugin();
+    /**
+     * Finds the permalink of the first page that contains a given shortcode.
+     * A private copy of the core platform's method to avoid complex dependencies.
+     */
+    private function _find_page_by_shortcode($shortcode_tag) {
+        if (empty($shortcode_tag)) return null;
+        $transient_key = 'page_url_for_' . $shortcode_tag;
+        if (false !== ($cached_url = get_transient($transient_key))) return $cached_url;
+
+        $query = new WP_Query(['post_type' => ['page', 'post'], 'post_status' => 'publish', 'posts_per_page' => -1, 's' => '[' . $shortcode_tag]);
+        $url = null;
+        if ($query->have_posts()) {
+            foreach ($query->posts as $p) { if (has_shortcode($p->post_content, $shortcode_tag)) { $url = get_permalink($p->ID); break; } }
+        }
+        set_transient($transient_key, $url, DAY_IN_SECONDS);
+        return $url;
+    }
+}

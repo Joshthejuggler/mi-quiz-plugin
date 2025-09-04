@@ -23,9 +23,9 @@
               <h2 class="cdt-section-title">Cognitive Dissonance Tolerance Quiz</h2>
               <p>To begin, please select the option that best describes you:</p>
               <div class="cdt-age-options">
-                <button type="button" class="cdt-quiz-button" data-age-group="teen">12–18</button>
-                <button type="button" class="cdt-quiz-button" data-age-group="graduate">18–24</button>
-                <button type="button" class="cdt-quiz-button" data-age-group="adult">Working Professional</button>
+                <button type="button" class="cdt-quiz-button" data-age-group="teen">Teen / High School</button>
+                <button type="button" class="cdt-quiz-button" data-age-group="graduate">Student / Recent Graduate</button>
+                <button type="button" class="cdt-quiz-button" data-age-group="adult">Adult / Professional</button>
               </div>
               <div class="cdt-quiz-notice">
                 <p>${isLoggedIn ? 'Your results will be saved to your profile.' : `You can <a href="${loginUrl}">log in or create an account</a> to save your results.`}</p>

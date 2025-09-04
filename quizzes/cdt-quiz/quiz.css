@@ -6,10 +6,34 @@
   --cdt-medium-gray:#d1d5db;
   --cdt-text-color:#374151;
 }
-#cdt-quiz-container{max-width:860px;margin:2em auto}
+.quiz-wrapper {
+    max-width: 860px;
+    margin: 2em auto;
+    border: 1px solid var(--cdt-light-gray);
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);
+    overflow: hidden; /* Ensures child corners don't poke out */
+}
+.back-bar {
+  background: #fafbfc;
+  border-bottom: 1px solid #edf0f3;
+  padding: 10px 16px;
+}
+.back-bar .back-link {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #5f6b7a;
+  text-decoration: none;
+}
+.back-bar .back-link:hover {
+  color: #2b2f36;
+}
+#cdt-quiz-container{
+  padding: 2em;
+}
 .cdt-quiz-card{
-  background:#fff;border:1px solid var(--cdt-light-gray);border-radius:12px;
-  padding:2em;box-shadow:0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);
+  background:#fff;
+  /* Border, padding, and shadow are now on the wrapper/container */
   text-align:center
 }
 .cdt-quiz-button{
@@ -109,4 +133,10 @@
   .cdt-quiz-likert-options{flex-direction:column;gap:8px}
   .cdt-quiz-option-wrapper{flex-basis:auto;flex-grow:0;width:100%}
   .cdt-quiz-likert-options span{flex-direction:row;align-items:center;justify-content:center;padding:12px 15px;min-height:0;text-align:center}
+}
+
+@media (max-width: 900px) {
+    .quiz-wrapper {
+        margin: 2em 1em; /* Add side margins on smaller screens */
+    }
 }
