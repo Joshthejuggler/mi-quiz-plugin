@@ -16,6 +16,7 @@ class CDT_Quiz_Plugin {
                 'results_meta_key' => self::META_KEY,
                 'order'            => 30,
                 'description'      => 'Measure your ability to handle conflicting beliefs and discover how it impacts your decision-making and personal growth.',
+                'description_completed' => 'This assessment measures your capacity to navigate conflicting values and ideas, a key skill for personal and professional growth.',
                 'depends_on'       => 'mi-quiz',
             ]);
         }
@@ -94,6 +95,7 @@ class CDT_Quiz_Plugin {
         check_ajax_referer('cdt_nonce');
         $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
         $results = isset($_POST['results']) ? json_decode(stripslashes($_POST['results']), true) : [];
+        $results_html = isset($_POST['results_html']) ? wp_kses_post(wp_unslash($_POST['results_html'])) : '';
 
         if (!$user_id || !is_array($results) || !current_user_can('edit_user', $user_id)) {
             wp_send_json_error('Invalid data or permissions.');
@@ -101,6 +103,7 @@ class CDT_Quiz_Plugin {
 
         // Sanitize results before saving
         $sanitized_results = [];
+        $sanitized_results['completed_at'] = time(); // Add timestamp
         if (isset($results['ageGroup'])) {
             $sanitized_results['ageGroup'] = sanitize_text_field($results['ageGroup']);
         }
@@ -148,5 +151,51 @@ class CDT_Quiz_Plugin {
         }
         set_transient($transient_key, $url, DAY_IN_SECONDS);
         return $url;
+    }
+
+    /**
+     * Adds an invisible character to email subjects to prevent threading.
+     */
+    private function maybe_antithread($subject){
+        if ( ! get_option('miq_antithread', '1') ) return $subject;
+        $zw = "\xE2\x80\x8B";
+        return $subject . str_repeat($zw, wp_rand(1,3));
+    }
+
+    /**
+     * Generates a PDF from HTML content and saves it to a temporary file.
+     *
+     * @param string $results_html The HTML content of the results.
+     * @return string|null The full server path to the generated PDF, or null on failure.
+     */
+    private function _generate_pdf_for_attachment($results_html) {
+        if (!class_exists('Dompdf\Dompdf') || empty($results_html)) {
+            return null;
+        }
+
+        $full_html = '<!DOCTYPE html><html><head><meta charset="utf-8">';
+        $css_path = plugin_dir_path(__FILE__) . 'quiz.css';
+        if (file_exists($css_path)) {
+            $full_html .= '<style>' . file_get_contents($css_path) . '</style>';
+        }
+        $full_html .= '</head><body style="padding: 1em;">' . $results_html . '</body></html>';
+
+        $options = new \Dompdf\Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('isHtml5ParserEnabled', true);
+
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->loadHtml($full_html);
+        $dompdf->setPaper('letter', 'portrait');
+        $dompdf->render();
+
+        $pdf_content = $dompdf->output();
+
+        $upload_dir = wp_upload_dir();
+        $temp_dir = trailingslashit($upload_dir['basedir']) . 'cdt-quiz-pdfs';
+        if (!file_exists($temp_dir)) { wp_mkdir_p($temp_dir); }
+
+        $filepath = trailingslashit($temp_dir) . 'cdt-results-' . wp_generate_password(12, false) . '.pdf';
+        return file_put_contents($filepath, $pdf_content) ? $filepath : null;
     }
 }

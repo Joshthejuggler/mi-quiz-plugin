@@ -168,7 +168,12 @@
         });
 
         if (isLoggedIn) {
-            saveResultsToServer();
+            // Grab the inner HTML of the card we just rendered to send for the PDF.
+            const resultsCardHtml = container.querySelector('.cdt-quiz-card').innerHTML;
+            // The h2 is outside the card, so we'll add it for a complete PDF.
+            const fullResultsHtml = `<h2>Your Cognitive Dissonance Tolerance Profile</h2>` + resultsCardHtml;
+
+            saveResultsToServer(fullResultsHtml);
 
             // Add the "Delete Results" button for logged-in users.
             const actionsContainer = $id('cdt-results-actions');
@@ -214,17 +219,24 @@
         }
     }
 
-    function saveResultsToServer() {
+    function saveResultsToServer(resultsHtml = '') {
         if (!isLoggedIn) return;
+
+        const bodyParams = { 
+            action: 'cdt_save_user_results', 
+            _ajax_nonce: ajaxNonce, 
+            user_id: currentUser.id, 
+            results: JSON.stringify(quizState) 
+        };
+
+        if (resultsHtml) {
+            bodyParams.results_html = resultsHtml;
+        }
+
         fetch(ajaxUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ 
-                action: 'cdt_save_user_results', 
-                _ajax_nonce: ajaxNonce, 
-                user_id: currentUser.id, 
-                results: JSON.stringify(quizState) 
-            })
+            body: new URLSearchParams(bodyParams)
         });
     }
 

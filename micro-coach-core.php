@@ -36,6 +36,7 @@ class Micro_Coach_Core {
             'results_meta_key' => '',
             'order'            => 99,
             'description'      => '',
+            'description_completed' => '',
             'depends_on'       => null,
         ];
         self::$registered_quizzes[$id] = wp_parse_args($args, $defaults);
@@ -130,11 +131,6 @@ class Micro_Coach_Core {
             return current_user_can('manage_options') ? '<p><em>Quiz Dashboard: No quizzes have been registered.</em></p>' : '';
         }
 
-        // Sort quizzes by the 'order' property.
-        uasort($quizzes, function($a, $b) {
-            return ($a['order'] ?? 99) <=> ($b['order'] ?? 99);
-        });
-
         $user_id = get_current_user_id();
         $saved_descriptions = get_option(self::OPT_DESCRIPTIONS, []);
         wp_enqueue_style('dashicons');
@@ -159,10 +155,71 @@ class Micro_Coach_Core {
             ];
             $greeting = $greetings[ array_rand( $greetings ) ];
  
+            // --- Build Activity Feed & Latest Insight ---
+            $activity_feed = [];
+            foreach ($quizzes as $id => $quiz) {
+                if (!empty($quiz['results_meta_key'])) {
+                    $results = get_user_meta($user_id, $quiz['results_meta_key'], true);
+                    if (!empty($results) && is_array($results) && isset($results['completed_at'])) {
+                        $activity_feed[] = [
+                            'quiz_id'    => $id,
+                            'quiz_title' => $quiz['title'],
+                            'timestamp'  => $results['completed_at'],
+                            'results'    => $results,
+                        ];
+                    }
+                }
+            }
+
+            // Add account creation to the feed
+            $user_data = get_userdata($user_id);
+            $activity_feed[] = [
+                'quiz_id'    => 'account_creation',
+                'quiz_title' => 'Created your account',
+                'timestamp'  => strtotime($user_data->user_registered),
+                'results'    => [],
+            ];
+
+            // Sort the feed by timestamp descending
+            usort($activity_feed, function($a, $b) {
+                return $b['timestamp'] <=> $a['timestamp'];
+            });
+
+            $latest_insight_html = '<p class="placeholder-text"><em>Complete an assessment to see your first insight here!</em></p>';
+            $latest_activity = null;
+            // Find the most recent *quiz* activity for the insight panel
+            foreach ($activity_feed as $activity) {
+                if ($activity['quiz_id'] !== 'account_creation') {
+                    $latest_activity = $activity;
+                    break;
+                }
+            }
+
+            // --- Calculate completion status for sorting and progress ---
             $completion_status = [];
             foreach ($quizzes as $id => $quiz) {
                 $completion_status[$id] = !empty($quiz['results_meta_key']) && !empty(get_user_meta($user_id, $quiz['results_meta_key'], true));
             }
+
+            // --- Sort Quizzes for Display ---
+            // Add ID to each quiz for sorting purposes
+            foreach ($quizzes as $id => &$quiz) {
+                $quiz['id'] = $id;
+            }
+            unset($quiz); // Unset reference
+
+            // Sort by completion status first, then by order.
+            uasort($quizzes, function($a, $b) use ($completion_status) {
+                $completed_a = $completion_status[$a['id']] ?? false;
+                $completed_b = $completion_status[$b['id']] ?? false;
+
+                if ($completed_a === $completed_b) {
+                    return ($a['order'] ?? 99) <=> ($b['order'] ?? 99); // Secondary sort: by order
+                }
+
+                return $completed_a <=> $completed_b; // Primary sort: incomplete (false) before complete (true)
+            });
+
             $total_quizzes = count($quizzes);
             $completed_quizzes = count(array_filter($completion_status));
             $progress_pct = ($total_quizzes > 0) ? round(($completed_quizzes / $total_quizzes) * 100) : 0;
@@ -226,7 +283,53 @@ class Micro_Coach_Core {
                                 }
                             }
                         }
-                        $description = !empty($saved_descriptions[$id]) ? $saved_descriptions[$id] : $quiz['description'];
+
+                        if ($has_results && !empty($quiz['description_completed'])) {
+                            $description = $quiz['description_completed'];
+                        } else {
+                            // The admin-editable description should only apply to the initial state.
+                            $description = !empty($saved_descriptions[$id]) ? $saved_descriptions[$id] : $quiz['description'];
+                        }
+
+                        $prediction_paragraph = '';
+                        if ($id === 'cdt-quiz' && ($completion_status['mi-quiz'] ?? false)) {
+                            $mi_prompts_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/mi-quiz/mi-cdt-prompts.php';
+                            if (file_exists($mi_prompts_file)) {
+                                require $mi_prompts_file;
+                                $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
+
+                                if (is_array($mi_results) && empty($mi_results['top3']) && !empty($mi_results['part1Scores']) && is_array($mi_results['part1Scores'])) {
+                                    $scores = $mi_results['part1Scores'];
+                                    arsort($scores);
+                                    $mi_results['top3'] = array_keys(array_slice($scores, 0, 3, true));
+                                }
+
+                                if (!empty($mi_results['top3']) && count($mi_results['top3']) >= 3 && isset($mi_cdt_prompts)) {
+                                    $top3_keys = $mi_results['top3'];
+                                    sort($top3_keys);
+                                    $prompt_key = implode('_', $top3_keys);
+
+                                    if (isset($mi_cdt_prompts[$prompt_key]['prompt'])) {
+                                        $prediction_paragraph = $mi_cdt_prompts[$prompt_key]['prompt'];
+                                    }
+                                }
+                            }
+                        }
+
+                        $mi_profile_content = '';
+                        if ($has_results && $id === 'mi-quiz') {
+                            $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
+                            $mi_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/mi-quiz/mi-questions.php';
+                            if (file_exists($mi_questions_file)) {
+                                require_once $mi_questions_file;
+                                if (!empty($mi_results['top3']) && isset($mi_categories)) {
+                                    $top3_names = array_map(function($slug) use ($mi_categories) {
+                                        return $mi_categories[$slug] ?? ucfirst(str_replace('-', ' ', $slug));
+                                    }, $mi_results['top3']);
+                                    $mi_profile_content = $top3_names;
+                                }
+                            }
+                        }
                         ?>
                         <div class="quiz-dashboard-item <?php if (!$dependency_met) echo 'is-locked'; ?>">
                             <div class="quiz-dashboard-item-header">
@@ -241,10 +344,27 @@ class Micro_Coach_Core {
                             </div>
                             <div class="quiz-dashboard-item-body">
                                 <p class="quiz-dashboard-description"><?php echo esc_html($description); ?></p>
+
+                                <?php if (!empty($mi_profile_content)): ?>
+                                    <div class="quiz-dashboard-insight-panel insight-panel-profile">
+                                        <h4 class="insight-panel-title">Your Top Intelligences</h4>
+                                        <div class="quiz-dashboard-chips">
+                                            <?php foreach ($mi_profile_content as $name): ?>
+                                                <span class="chip"><?php echo esc_html($name); ?></span>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if (!empty($prediction_paragraph)): ?>
+                                    <div class="quiz-dashboard-insight-panel insight-panel-prediction">
+                                        <h4 class="insight-panel-title">Your Personalized CDT Prediction</h4>
+                                        <p><?php echo wp_kses_post($prediction_paragraph); ?></p>
+                                    </div>
+                                <?php endif; ?>
                             </div>
                             <div class="quiz-dashboard-actions">
                                 <?php if ($dependency_met): ?>
-                                    <a href="<?php echo esc_url($quiz_page_url); ?>" class="quiz-dashboard-button">
+                                    <a href="<?php echo esc_url($quiz_page_url); ?>" class="quiz-dashboard-button <?php if ($has_results) echo 'quiz-dashboard-button-secondary'; ?>">
                                         <?php echo $has_results ? 'View Results' : 'Start Quiz'; ?>
                                     </a>
                                 <?php else: ?>
@@ -262,13 +382,54 @@ class Micro_Coach_Core {
                 <div class="quiz-dashboard-lower-grid">
                     <div class="insight-panel">
                         <h3 class="panel-title">Latest Insight</h3>
-                        <p class="placeholder-text"><em>This area will dynamically show a key insight from your most recently completed assessment. Complete a quiz to see it in action!</em></p>
+                        <?php
+                        if ($latest_activity) {
+                            // Load data files needed for insights
+                            $mi_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/mi-quiz/mi-questions.php';
+                            if (file_exists($mi_questions_file)) { require_once $mi_questions_file; }
+                            $cdt_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/cdt-quiz/questions.php';
+                            if (file_exists($cdt_questions_file)) { require_once $cdt_questions_file; }
+
+                            switch ($latest_activity['quiz_id']) {
+                                case 'mi-quiz':
+                                    // The top sub-skill is the first item in the 'top5' array.
+                                    if (!empty($latest_activity['results']['top5'][0])) {
+                                        $top_sub_skill = $latest_activity['results']['top5'][0];
+                                        $age_group = $latest_activity['results']['age'] ?? 'adult';
+                                        
+                                        $sub_skill_name = $top_sub_skill['name'];
+                                        $parent_slug = $top_sub_skill['slug'];
+                                        
+                                        $leverage_tip = '';
+                                        if (isset($mi_leverage_tips[$age_group][$parent_slug][$sub_skill_name]) && is_array($mi_leverage_tips[$age_group][$parent_slug][$sub_skill_name])) {
+                                            $tips = $mi_leverage_tips[$age_group][$parent_slug][$sub_skill_name];
+                                            $leverage_tip = $tips[array_rand($tips)]; // Pick a random tip
+                                        }
+
+                                        $latest_insight_html = '<p>Your top MI strength is <strong>' . esc_html($sub_skill_name) . '</strong>. This is a key part of your ' . esc_html($top_sub_skill['parent']) . '.</p>';
+                                        if ($leverage_tip) {
+                                            $latest_insight_html .= '<p class="insight-leverage-tip"><strong>To leverage this:</strong> ' . esc_html($leverage_tip) . '</p>';
+                                        }
+                                    }
+                                    break;
+                                case 'cdt-quiz':
+                                    if (!empty($latest_activity['results']['sortedScores'][0]) && isset($cdt_categories)) {
+                                        $top_cdt_slug = $latest_activity['results']['sortedScores'][0][0];
+                                        $top_cdt_name = $cdt_categories[$top_cdt_slug] ?? 'Unknown';
+                                        $latest_insight_html = '<p>Your CDT Quiz results indicate a high capacity for <strong>' . esc_html($top_cdt_name) . '</strong>. This is a key skill for navigating complex challenges.</p>';
+                                    }
+                                    break;
+                            }
+                        }
+                        echo $latest_insight_html;
+                        ?>
                     </div>
                     <div class="activity-panel">
                         <h3 class="panel-title">Recent Activity</h3>
                         <ul class="activity-list">
-                            <li><span class="activity-date">Yesterday:</span> Completed the MI Quiz</li>
-                            <li><span class="activity-date">3 Days Ago:</span> Created your account</li>
+                            <?php foreach (array_slice($activity_feed, 0, 5) as $activity): ?>
+                                <li><span class="activity-date"><?php echo esc_html(human_time_diff($activity['timestamp'])); ?> ago:</span> <?php echo esc_html($activity['quiz_title']); ?></li>
+                            <?php endforeach; ?>
                         </ul>
                     </div>
                 </div>
@@ -281,7 +442,10 @@ class Micro_Coach_Core {
                 </div>
             </div>
  
-        <?php } else { // Logged-out user view ?>
+        <?php } else { // Logged-out user view
+            // Find the URL for the primary starting quiz.
+            $mi_quiz_url = $this->find_page_by_shortcode('mi_quiz');
+            ?>
             <style>
                 .quiz-dashboard-auth-prompt {
                     background: #fff;
@@ -292,66 +456,59 @@ class Micro_Coach_Core {
                     max-width: 500px;
                     margin: 2em auto;
                     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
                 }
                 .quiz-dashboard-auth-prompt h2 {
                     font-size: 1.5em;
                     margin-top: 0;
                     color: #1a202c;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
                 }
                 .quiz-dashboard-auth-prompt p {
                     font-size: 1em;
                     color: #4a5568;
                     margin-bottom: 1.5em;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
                 }
                 .quiz-dashboard-auth-actions {
                     display: flex;
                     gap: 12px;
                     justify-content: center;
                 }
-                .quiz-dashboard-button-secondary {
+                .quiz-dashboard-auth-prompt .quiz-dashboard-button-secondary {
                     background: #f1f3f4;
                     color: #2d3748;
-                    border-color: #e2e8f0;
+                    border: 1px solid #e2e8f0;
                 }
-                .quiz-dashboard-button-secondary:hover {
+                .quiz-dashboard-auth-prompt .quiz-dashboard-button-secondary:hover {
                     background: #e2e8f0;
                     color: #1a202c;
+                }
+                .quiz-dashboard-admin-notice {
+                    margin-top: 1.5em;
+                    padding: 0.75em;
+                    background-color: #fffbe6;
+                    border: 1px solid #fde68a;
+                    border-radius: 8px;
+                    font-size: 0.9em;
+                    text-align: left;
+                    color: #92400e;
                 }
             </style>
             <div class="quiz-dashboard-auth-prompt">
                 <h2>Welcome to Skill of Self-Discovery</h2>
                 <p>Explore guided assessments and AI-powered tools that help you understand your strengths, navigate challenges, and grow with intention. Please select an option below to start your journey or view your progress.</p>
                 <div class="quiz-dashboard-auth-actions">
-                    <button type="button" id="quiz-dashboard-new-user" class="quiz-dashboard-button">I'm a New User</button>
+                    <?php if ($mi_quiz_url): ?>
+                        <a href="<?php echo esc_url($mi_quiz_url); ?>" class="quiz-dashboard-button">Start Your Journey (Free)</a>
+                    <?php else: ?>
+                        <span class="quiz-dashboard-button is-disabled" title="The starting quiz has not been set up yet.">Start Your Journey (Free)</span>
+                    <?php endif; ?>
                     <a href="<?php echo esc_url(wp_login_url(get_permalink())); ?>" class="quiz-dashboard-button quiz-dashboard-button-secondary">Returning User? Log In</a>
                 </div>
-            </div>
-            <div id="quiz-dashboard-main-content" style="display:none;">
-                <div class="quiz-dashboard">
-                    <ul class="quiz-dashboard-list" style="margin-top:0;">
-                        <?php foreach ($quizzes as $id => $quiz):
-                            $quiz_page_url = $this->find_page_by_shortcode($quiz['shortcode']);
-                            if (!$quiz_page_url) continue;
-                            $description = !empty($saved_descriptions[$id]) ? $saved_descriptions[$id] : $quiz['description'];
-                        ?>
-                        <li class="quiz-dashboard-item">
-                            <div class="quiz-dashboard-item-header">
-                                <div class="quiz-dashboard-item-title-group">
-                                    <h3 class="quiz-dashboard-title"><?php echo esc_html($quiz['title']); ?></h3>
-                                </div>
-                                <div class="quiz-dashboard-actions">
-                                    <a href="<?php echo esc_url($quiz_page_url); ?>" class="quiz-dashboard-button">Start Quiz</a>
-                                </div>
-                            </div>
-                            <div class="quiz-dashboard-item-body">
-                                <p class="quiz-dashboard-description"><?php echo esc_html($description); ?></p>
-                            </div>
-                        </li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
+                <?php if ( ! $mi_quiz_url && current_user_can('manage_options') ): ?>
+                    <div class="quiz-dashboard-admin-notice">
+                        <strong>Admin Notice:</strong> The "Start Your Journey" button is disabled because no published page contains the <code>[mi_quiz]</code> shortcode. Please create a page for the MI Quiz and add its shortcode.
+                    </div>
+                <?php endif; ?>
             </div>
         <?php } ?>
  
@@ -418,10 +575,29 @@ class Micro_Coach_Core {
             .quiz-dashboard-button:hover { background: #dc2626; color: #fff; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
             .quiz-dashboard-button.is-disabled { background: #e2e8f0; color: #a0aec0; cursor: not-allowed; }
             .quiz-dashboard-button.is-disabled:hover { background: #e2e8f0; transform: none; box-shadow: none; }
+            .quiz-dashboard-button.quiz-dashboard-button-secondary {
+                background: #f1f3f4;
+                color: #2d3748;
+                border: 1px solid #e2e8f0;
+            }
+            .quiz-dashboard-button.quiz-dashboard-button-secondary:hover {
+                background: #e2e8f0;
+                color: #1a202c;
+                transform: none;
+                box-shadow: none;
+            }
+            .quiz-dashboard-insight-panel { background-color: #f7fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 8px; margin-top: 12px; }
+            .quiz-dashboard-insight-panel .insight-panel-title { font-weight: 600; margin: 0 0 8px 0; font-size: 0.9em; color: #2d3748; }
+            .quiz-dashboard-insight-panel p { font-size: 0.9em; color: #4a5568; line-height: 1.6; max-width: 70ch; margin: 0; }
+            .insight-panel-prediction { border-left: 4px solid #ef4444; }
+            .insight-panel-profile { border-left: 4px solid #4CAF50; }
+            .quiz-dashboard-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+            .chip { background-color: #e2e8f0; color: #2d3748; padding: 4px 12px; border-radius: 16px; font-size: 0.85em; font-weight: 500; }
  
             .quiz-dashboard-lower-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; align-items: start; }
             .panel-title { font-size: 1.1em; font-weight: 600; margin: 0 0 1em 0; color: #1a202c; }
             .insight-panel, .activity-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); transition: all 0.2s ease-in-out; }
+            .insight-leverage-tip { margin-top: 0.75em; padding-top: 0.75em; border-top: 1px dashed #e2e8f0; }
             .placeholder-text { color: #64748b; font-style: italic; }
             .activity-list { list-style: none; padding: 0; margin: 0; }
             .activity-list li { padding: 8px 0; border-bottom: 1px solid #f1f3f4; font-size: 0.9em; color: #4a5568; }
@@ -438,23 +614,6 @@ class Micro_Coach_Core {
                 .quiz-dashboard-lower-grid { grid-template-columns: 1fr; }
             }
         </style>
-        
-        <?php if ( ! $user_id ): // Script for logged-out prompt ?>
-            <script type="text/javascript">
-            document.addEventListener('DOMContentLoaded', function() {
-                var newUserBtn = document.getElementById('quiz-dashboard-new-user');
-                var authPrompt = document.querySelector('.quiz-dashboard-auth-prompt');
-                var mainContent = document.getElementById('quiz-dashboard-main-content');
-
-                if (newUserBtn && authPrompt && mainContent) {
-                    newUserBtn.addEventListener('click', function() {
-                        authPrompt.style.display = 'none';
-                        mainContent.style.display = 'block';
-                    });
-                }
-            });
-            </script>
-        <?php endif; ?>
         <?php
         return ob_get_clean();
     }

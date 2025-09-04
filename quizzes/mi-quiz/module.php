@@ -21,6 +21,7 @@ class MI_Quiz_Plugin_AI {
                 'results_meta_key' => 'miq_quiz_results',
                 'order'            => 10, // Controls the display order in the dashboard.
                 'description'      => 'Discover your unique blend of intelligences and unlock your full potential with a personalized action plan.',
+                'description_completed' => 'This assessment reveals your unique profile of intelligences, providing insights into your natural strengths and learning styles.',
             ]);
         }
 
@@ -286,6 +287,7 @@ class MI_Quiz_Plugin_AI {
 
         // Save the quiz results to the new user's meta.
         if (!empty($results_data) && is_array($results_data)) {
+            $results_data['completed_at'] = time(); // Add timestamp
             update_user_meta($user_id, 'miq_quiz_results', $results_data);
         }
 
@@ -302,31 +304,52 @@ class MI_Quiz_Plugin_AI {
         ));
 
         // Send a single, comprehensive welcome email with results and a password reset link.
-        if (!empty($results_html)) {
+        if (!empty($results_html)) { // Only proceed if there are results to show/send.
+            $pdf_attachment_path = $this->_generate_pdf_for_attachment($results_html);
+            $attachments = [];
+            if ($pdf_attachment_path) {
+                $attachments[] = $pdf_attachment_path;
+            }
+
             // Get user data to generate the password reset link.
             $user = get_userdata($user_id);
             $key = get_password_reset_key($user);
             $reset_url = network_site_url("wp-login.php?action=rp&key=$key&login=" . rawurlencode($user->user_login), 'login');
 
             // Build a more helpful email body for the user.
-            $user_email_body = '<html><body>';
-            $user_email_body .= sprintf('<h1>Welcome, %s!</h1>', esc_html($first_name));
-            $user_email_body .= '<p>Thank you for taking the Multiple Intelligences Quiz! Your account has been created, and you are now logged in on this device.</p>';
-            $user_email_body .= '<h2>Secure Your Account</h2>';
+            $user_email_body = '<!DOCTYPE html><html><body style="font-family: sans-serif; color: #333; background-color: #f4f4f4; padding: 20px;">';
+            $user_email_body .= '<div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">';
+            $user_email_body .= '<div style="background-color: #f7f7f7; padding: 20px; border-bottom: 1px solid #ddd;">';
+            $user_email_body .= sprintf('<h1 style="margin: 0; color: #1a202c; font-size: 24px;">Welcome, %s!</h1>', esc_html($first_name));
+            $user_email_body .= '</div>';
+            $user_email_body .= '<div style="padding: 20px;">';
+            $user_email_body .= '<p style="margin: 0 0 1em 0;">Thank you for taking the Multiple Intelligences Quiz! Your account has been created, and you are now logged in on this device.</p>';
+            $user_email_body .= '<h2 style="margin-top: 1.5em; color: #1a202c; font-size: 20px;">Secure Your Account</h2>';
             $user_email_body .= '<p>To access your account from other devices or to log in again later, you must set a password. Please click the secure link below to do so now:</p>';
             $user_email_body .= sprintf('<p style="text-align:center; margin: 2em 0;"><a href="%s" style="background-color:#ef4444;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;">Set Your Password</a></p>', esc_url($reset_url));
-            $user_email_body .= '<p>This link is valid for 24 hours. If it expires, you can use the "Lost your password?" link on the login page.</p>';
-            $user_email_body .= '<hr style="margin: 2em 0;">';
-            $user_email_body .= '<h2>Your Quiz Results</h2>';
-            $user_email_body .= $results_html;
-            $user_email_body .= '</body></html>';
+            $user_email_body .= '<p style="font-size: 0.9em; color: #666;">This link is valid for 24 hours. If it expires, you can use the "Lost your password?" link on the login page.</p>';
+            $user_email_body .= '</div>';
+            $user_email_body .= '<div style="padding: 20px; border-top: 1px solid #eee; background-color: #f7f7f7;">';
+            $user_email_body .= '<h2 style="margin-top: 0; color: #1a202c; font-size: 20px;">Your Quiz Results</h2>';
+            if ($pdf_attachment_path) {
+                $user_email_body .= '<p style="margin:0;">A PDF copy of your full results is attached to this email for your records. You can also view them on the platform at any time.</p>';
+            } else {
+                $user_email_body .= '<p style="margin:0;">You can view your full results on the platform at any time by logging into your new account.</p>';
+            }
+            $user_email_body .= '</div>';
+            $user_email_body .= '</div></body></html>';
 
             $subject_user = $this->maybe_antithread( 'Welcome! Your MI Quiz Results & Account Info' );
             $headers_user = [
                 'Content-Type: text/html; charset=UTF-8',
                 sprintf('Reply-To: "%s" <%s>', $first_name, $email),
             ];
-            wp_mail($email, $subject_user, $user_email_body, $headers_user);
+            wp_mail($email, $subject_user, $user_email_body, $headers_user, $attachments);
+
+            // Clean up the temporary PDF file
+            if ($pdf_attachment_path && file_exists($pdf_attachment_path)) {
+                unlink($pdf_attachment_path);
+            }
 
             // Send a separate, simpler email to the admin/BCC list.
             $admin_list_raw = array_filter(array_map('trim', explode(',', get_option(self::OPT_BCC, ''))));
@@ -338,7 +361,7 @@ class MI_Quiz_Plugin_AI {
                     sprintf('Reply-To: "%s" <%s>', $first_name, $email),
                     'Bcc: ' . implode(', ', $admin_list_raw),
                 ];
-                wp_mail($admin_list_raw[0], $subject_admin, $admin_body, $headers_admin);
+                wp_mail($admin_list_raw[0], $subject_admin, $admin_body, $headers_admin, $attachments);
             }
         }
 
@@ -527,29 +550,6 @@ class MI_Quiz_Plugin_AI {
                     <a href="<?php echo esc_url($dashboard_url); ?>" class="back-link">&larr; Return to Dashboard</a>
                 </div>
             <?php endif; ?>
-            <style>
-                .cdt-prompt-section {
-                    margin-top: 2.5em; /* Adds space above the "Next Step" section */
-                }
-                .cdt-prompt-section .mi-quiz-button-next-step {
-                    background-color: #2563eb; /* A prominent blue */
-                    color: #ffffff;
-                    padding: 12px 24px;
-                    font-size: 1.1em;
-                    border-radius: 8px;
-                    text-decoration: none;
-                    font-weight: bold;
-                    display: inline-block;
-                    transition: background-color 0.2s, transform 0.2s;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }
-                .cdt-prompt-section .mi-quiz-button-next-step:hover {
-                    background-color: #1d4ed8; /* Darker blue */
-                    color: #ffffff;
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-                }
-            </style>
             <div id="mi-quiz-container">
               <div id="mi-age-gate">
                 <div class="mi-quiz-card">
@@ -603,9 +603,52 @@ class MI_Quiz_Plugin_AI {
             wp_send_json_error('Invalid user ID or results data.');
         }
 
+        $results['completed_at'] = time(); // Add timestamp
         update_user_meta($userId, 'miq_quiz_results', $results);
 
         wp_send_json_success('Results saved to user profile.');
+    }
+
+    /**
+     * Generates a PDF from HTML content and saves it to a temporary file.
+     *
+     * @param string $results_html The HTML content of the results.
+     * @return string|null The full server path to the generated PDF, or null on failure.
+     */
+    private function _generate_pdf_for_attachment($results_html) {
+        if (!class_exists('Dompdf\Dompdf') || empty($results_html)) {
+            return null;
+        }
+
+        $full_html = '<!DOCTYPE html><html><head><meta charset="utf-8">';
+        $css_path = plugin_dir_path(__FILE__) . 'css/mi-quiz.css';
+        if (file_exists($css_path)) {
+            // Embed CSS directly for better compatibility
+            $full_html .= '<style>' . file_get_contents($css_path) . '</style>';
+        }
+        $full_html .= '</head><body style="padding: 1em;">' . $results_html . '</body></html>';
+
+        $options = new \Dompdf\Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('isHtml5ParserEnabled', true);
+        // Use a font that supports emojis and other special characters.
+        $options->set('defaultFont', 'DejaVu Sans');
+
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->loadHtml($full_html);
+        // Use a custom, very long page to prevent awkward page breaks.
+        $dompdf->setPaper([0, 0, 612, 8000]);
+        $dompdf->render();
+
+        $pdf_content = $dompdf->output();
+
+        // Save to a temporary file in the uploads directory
+        $upload_dir = wp_upload_dir();
+        $temp_dir = trailingslashit($upload_dir['basedir']) . 'mi-quiz-pdfs';
+        if (!file_exists($temp_dir)) { wp_mkdir_p($temp_dir); }
+
+        $filepath = trailingslashit($temp_dir) . 'mi-results-' . wp_generate_password(12, false) . '.pdf';
+        return file_put_contents($filepath, $pdf_content) ? $filepath : null;
     }
 
     public function ajax_generate_pdf() {
@@ -621,16 +664,22 @@ class MI_Quiz_Plugin_AI {
         }
 
         $full_html = '<!DOCTYPE html><html><head><meta charset="utf-8">';
-        $full_html .= '<link rel="stylesheet" type="text/css" href="' . esc_url(plugins_url('css/mi-quiz.css', __FILE__)) . '">';
-        $full_html .= '</head><body>' . $results_html . '</body></html>';
+        $css_path = plugin_dir_path(__FILE__) . 'css/mi-quiz.css';
+        if (file_exists($css_path)) {
+            $full_html .= '<style>' . file_get_contents($css_path) . '</style>';
+        }
+        $full_html .= '</head><body style="padding: 1em;">' . $results_html . '</body></html>';
 
         $options = new \Dompdf\Options();
         $options->set('isRemoteEnabled', true);
         $options->set('isHtml5ParserEnabled', true);
+        // Use a font that supports emojis and other special characters.
+        $options->set('defaultFont', 'DejaVu Sans');
 
         $dompdf = new \Dompdf\Dompdf($options);
         $dompdf->loadHtml($full_html);
-        $dompdf->setPaper('letter', 'portrait');
+        // Use a custom, very long page to prevent awkward page breaks.
+        $dompdf->setPaper([0, 0, 612, 8000]);
         $dompdf->render();
 
         $dompdf->stream(

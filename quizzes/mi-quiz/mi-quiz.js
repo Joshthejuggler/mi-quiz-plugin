@@ -227,10 +227,10 @@
     window.scrollTo(0,0)
   });
 
-  const bar = (score,max=15)=>{
+  const bar = (score, max=15, slug='default') => {
     const pct=Math.max(0,Math.min(100,(score/max)*100));
-    const col=pct>=75?'#4CAF50':(pct<40?'#f44336':'#ffc107');
-    return `<div class="bar-wrapper"><div class="bar-inner" style="width:${pct}%;background-color:${col};"></div></div>`;
+    const slugClass = slug ? `bar-${slug.replace('bodily-','').split('-')[0]}` : '';
+    return `<div class="bar-wrapper"><div class="bar-inner ${slugClass}" style="width:${pct}%;"></div></div>`;
   };
 
   function fallbackGrow(slug, sub){
@@ -282,61 +282,77 @@
   }
 
   function generateResultsHtml() {
+    const userFirstName = currentUser ? currentUser.firstName : 'Valued User';
     const titleHtml = `
-      <div class="pdf-title-page">
+      <div class="mi-results-header">
+        <div class="mi-results-header-icon">🧠</div>
         <h1>Your Multiple Intelligences Results</h1>
-        ${currentUser ? `<h2>For: ${currentUser.firstName}</h2>` : ''}
-        <p>Generated on: ${new Date().toLocaleDateString()}</p>
+        <h2>Results for ${userFirstName}</h2>
+        <p class="mi-results-metadata">Generated on: ${new Date().toLocaleDateString()}</p>
       </div>
     `;
 
     const names = top3.map(sl=>CATS[sl]||sl);
     const summary = names.length>=3 ? `Your detailed profile highlights a powerful combination of ${names[0]}, ${names[1]}, and ${names[2]}.` : 'Here is your detailed profile.';
 
-    let top5Html = `<div class="mi-results-section bg-tertiary">
-      <h2 class="mi-section-title">Your Top 5 Strengths</h2><ol>`;
+    let top5Html = `<div class="mi-results-section bg-secondary">
+      <h2 class="mi-section-title">✅ Your Top 5 Strengths</h2>
+      <div class="mi-strengths-grid">`;
     top5.forEach(it=>{
       const tips = (LEV?.[age]?.[it.slug]?.[it.name] || []);
-      top5Html += `<li><div><strong>${it.name}</strong> (${it.score} / 15) — <em>${it.parent}</em></div>${bar(it.score)}`;
-      if (tips.length){
-        top5Html += `<div><strong class="leverage-title">How to leverage:</strong>
-        <ul class="leverage-list">${tips.map(t=>`<li>${t}</li>`).join('')}</ul></div>`;
-      }
-      top5Html += `</li>`;
+      top5Html += `<div class="mi-strength-card">
+        <h4>${it.name}</h4>
+        <p><em>Part of ${it.parent}</em></p>
+        <strong class="leverage-title">To leverage this:</strong>
+        <ul class="leverage-list">${tips.map(t=>`<li>${t}</li>`).join('')}</ul>
+      </div>`;
     });
-    top5Html += `</ol></div>`;
+    top5Html += `</div></div>`;
 
-    let careerHtml = `<div class="mi-results-section bg-tertiary">
-      <h2 class="mi-section-title">Career & Hobby Suggestions</h2>`;
+    let careerHtml = `<div class="mi-results-section">
+      <h2 class="mi-section-title">🚀 Career & Hobby Suggestions</h2>
+      <div class="mi-career-grid">`;
     top3.forEach(sl=>{
       const s = CAREER?.[age]?.[sl]; if(!s) return;
-      careerHtml += `<div><h3 class="mi-subsection-title">For your ${CATS[sl]||sl}</h3>
-        <p class="career-item"><strong>Potential Careers:</strong> ${(s.careers||[]).join(', ')}</p>
-        <p class="hobby-item"><strong>Related Hobbies:</strong> ${(s.hobbies||[]).join(', ')}</p></div>`;
+      const slugClass = sl.replace('bodily-','').split('-')[0];
+      careerHtml += `<div class="mi-career-card">
+        <div class="mi-career-card-header" style="background-color: var(--mi-color-${slugClass});">
+          <h4>For your ${CATS[sl]||sl}</h4>
+        </div>
+        <div class="mi-career-card-body">
+          <p><strong>Potential Careers:</strong></p>
+          <ul>${(s.careers||[]).map(c=>`<li>${c}</li>`).join('')}</ul>
+          <p><strong>Related Hobbies:</strong></p>
+          <ul>${(s.hobbies||[]).map(h=>`<li>${h}</li>`).join('')}</ul>
+        </div>
+      </div>`;
     });
-    careerHtml += `</div>`;
+    careerHtml += `</div></div>`;
 
-    let growthHtml = `<div class="mi-results-section bg-tertiary">
-      <h2 class="mi-section-title">Your Areas for Growth</h2><ol>`;
+    let growthHtml = `<div class="mi-results-section bg-secondary">
+      <h2 class="mi-section-title">⚡️ Your Areas for Growth</h2>
+      <div class="mi-strengths-grid">`;
     bottom3.forEach(it=>{
       const tips = (GROW?.[age]?.[it.slug]?.[it.name]) || fallbackGrow(it.slug, it.name);
-      growthHtml += `<li>
-        <div><strong>${it.name}</strong> (${it.score} / 15) — <em>${it.parent}</em></div>${bar(it.score)}
-        <div><strong class="growth-title">How to grow:</strong>
-          <ul class="growth-list">${tips.map(t=>`<li>${t}</li>`).join('')}</ul>
-        </div>
-      </li>`;
+      growthHtml += `<div class="mi-strength-card">
+        <h4>${it.name}</h4>
+        <p><em>Part of ${it.parent}</em></p>
+        <strong class="growth-title">How to grow:</strong>
+        <ul class="growth-list">${tips.map(t=>`<li>${t}</li>`).join('')}</ul>
+      </div>`;
     });
-    growthHtml += `</ol></div>`;
+    growthHtml += `</div></div>`;
 
     // Simplified detailed results - no accordions
-    let detailedHtml = `<div class="mi-results-section bordered">
-      <h2 class="mi-section-title">Your Detailed Intelligence Profile</h2>
+    let detailedHtml = `<div class="mi-results-section">
+      <h2 class="mi-section-title">📊 Your Detailed Intelligence Profile</h2>
       <p class="summary">${summary}</p>`;
     top3.forEach(sl=>{
-      detailedHtml += `<h3 class="mi-subsection-title">${CATS[sl]||sl}</h3><div class="accordion-content-wrapper">`;
+      const slugClass = sl.replace('bodily-','').split('-')[0];
+      detailedHtml += `<h3 class="mi-subsection-title" style="border-left-color: var(--mi-color-${slugClass});">${CATS[sl]||sl}</h3>
+      <div class="mi-detailed-grid">`;
       Object.entries(detailed[sl]||{}).forEach(([sub,score])=>{
-        detailedHtml += `<div class="detailed-score"><strong>${sub}:</strong> ${score} / 15 ${bar(score)}</div>`;
+        detailedHtml += `<div class="detailed-score"><strong>${sub}:</strong> ${score} / 15 ${bar(score, 15, sl)}</div>`;
       });
       detailedHtml += `</div>`;
     });
@@ -346,9 +362,8 @@
   }
 
   function renderResults() {
-    const resultsContent = generateResultsHtml();
     resultsDiv.innerHTML = `
-        <div id="mi-results-content">${resultsContent}</div>
+        <div id="mi-results-content">${generateResultsHtml()}</div>
         <div id="mi-results-actions" class="results-actions-container"></div>
     `;
 
@@ -367,12 +382,16 @@
     // --- Create and Append Buttons ---
 
     // Download PDF Button
-    const downloadBtn = createActionButton('Download PDF', 'mi-quiz-button', (e) => {
+    const downloadBtn = createActionButton('⬇️ Download PDF', 'mi-quiz-button mi-quiz-button-primary', (e) => {
         const btn = e.currentTarget;
         btn.textContent = 'Generating...';
         btn.disabled = true;
-        const resultsHtml = $id('mi-results-content').innerHTML;
-        const body = new URLSearchParams({ action: 'miq_generate_pdf', _ajax_nonce: ajaxNonce, results_html: resultsHtml });
+
+        // Clone the results content and strip emojis for the PDF version to prevent rendering issues.
+        const emojiRegex = /[\u{1F9E0}\u{2705}\u{1F680}\u{26A1}\u{1F4CA}\u{1F9ED}\u{2B07}\u{1F504}\u{1F5D1}]\u{FE0F}?/gu;
+        const pdfHtml = $id('mi-results-content').innerHTML.replace(emojiRegex, '').trim();
+
+        const body = new URLSearchParams({ action: 'miq_generate_pdf', _ajax_nonce: ajaxNonce, results_html: pdfHtml });
         fetch(ajaxUrl, { method: 'POST', body })
             .then(response => response.ok ? response.blob() : Promise.reject('Network response was not ok.'))
             .then(blob => {
@@ -391,7 +410,7 @@
                 alert('Sorry, there was an error generating the PDF.');
             })
             .finally(() => {
-                btn.textContent = 'Download PDF';
+                btn.textContent = '⬇️ Download PDF';
                 btn.disabled = false;
             });
     });
@@ -400,7 +419,7 @@
     // --- Add Logged-In User Buttons ---
     if (isLoggedIn) {
         // Retake Quiz Button
-        const retakeBtn = createActionButton('Retake Quiz', 'mi-quiz-button', () => {
+        const retakeBtn = createActionButton('🔄 Retake Quiz', 'mi-quiz-button mi-quiz-button-secondary', () => {
             if (confirm('Are you sure? Your saved results will be overwritten when you complete the new quiz.')) {
                 resultsDiv.style.display = 'none';
                 resultsDiv.innerHTML = '';
@@ -411,7 +430,7 @@
         actionsContainer.appendChild(retakeBtn);
 
         // Delete Results Button
-        const deleteBtn = createActionButton('Delete My Results', 'mi-quiz-button mi-quiz-button-secondary', (e) => {
+        const deleteBtn = createActionButton('🗑️ Delete My Results', 'mi-quiz-button mi-quiz-button-danger', (e) => {
             if (!confirm('Are you sure you want to permanently delete your saved results? This cannot be undone.')) return;
             
             const btn = e.currentTarget;
@@ -432,7 +451,7 @@
                         window.scrollTo(0,0);
                     } else {
                         alert('Error: ' + (j.data || 'Could not delete results.'));
-                        btn.textContent = 'Delete My Results';
+                        btn.textContent = '🗑️ Delete My Results';
                         btn.disabled = false;
                     }
                 });
@@ -448,11 +467,11 @@
 
         if (promptData && promptData.prompt) {
             const cdtPromptHtml = `
-                <div class="mi-results-section cdt-prompt-section bg-secondary">
-                    <h2 class="mi-section-title">Your Next Step: The Skill of Self-Discovery</h2>
+                <div class="mi-results-section cdt-prompt-section">
+                    <h2 class="mi-section-title">🧭 Your Next Step: The Skill of Self-Discovery</h2>
                     <p>${promptData.prompt}</p>
-                    <div class="mi-results-actions" style="text-align: center; margin-top: 1.5em;">
-                        <a href="${cdtQuizUrl}" class="mi-quiz-button mi-quiz-button-next-step">Take the CDT Quiz Now</a>
+                    <div style="text-align: center; margin-top: 1.5em;">
+                        <a href="${cdtQuizUrl}" class="mi-quiz-button mi-quiz-button-primary mi-quiz-button-next-step">Take the CDT Quiz Now</a>
                     </div>
                 </div>
             `;

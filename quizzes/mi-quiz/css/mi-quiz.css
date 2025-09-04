@@ -6,6 +6,15 @@
   --mi-light-gray:#e5e7eb;
   --mi-medium-gray:#d1d5db;
   --mi-text-color:#374151;
+  /* New colors for each intelligence */
+  --mi-color-logical: #3b82f6;
+  --mi-color-linguistic: #ef4444;
+  --mi-color-spatial: #8b5cf6;
+  --mi-color-kinesthetic: #f97316;
+  --mi-color-musical: #ec4899;
+  --mi-color-interpersonal: #10b981;
+  --mi-color-intrapersonal: #6366f1;
+  --mi-color-naturalistic: #84cc16;
 }
 .quiz-wrapper {
     max-width: 860px;
@@ -37,18 +46,36 @@
   /* Border, padding, and shadow are now on the wrapper/container */
   text-align:center
 }
-.mi-quiz-button{
-  background:var(--mi-primary-color);color:#1C2A44;border:none;padding:10px 20px;
-  border-radius:8px;font-weight:700;cursor:pointer;transition:background .2s
+/* --- New Button Styles --- */
+.mi-quiz-button {
+    display: inline-block;
+    border: 1px solid transparent;
+    padding: 10px 20px;
+    border-radius: 9999px; /* Pill shape */
+    font-weight: 700;
+    cursor: pointer;
+    transition: all .2s;
+    text-decoration: none;
 }
-.mi-quiz-button:hover{background:var(--mi-primary-color-dark)}
-.mi-quiz-button-secondary {
-  background-color: #6c757d;
-  color: #fff;
+.mi-quiz-button:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+
+/* Primary Action Button (e.g., Download) */
+.mi-quiz-button.mi-quiz-button-primary { background-color: #2563eb; color: #fff; }
+.mi-quiz-button.mi-quiz-button-primary:hover { background-color: #1d4ed8; color: #fff; }
+
+/* Secondary Action Button (e.g., Retake) */
+.mi-quiz-button.mi-quiz-button-secondary { background-color: #f1f3f4; color: #2d3748; border-color: #e2e8f0; }
+.mi-quiz-button.mi-quiz-button-secondary:hover { background-color: #e2e8f0; color: #1a202c; transform: none; box-shadow: none; }
+
+/* Danger Action Button (e.g., Delete) */
+.mi-quiz-button.mi-quiz-button-danger { background-color: transparent; color: #dc2626; border-color: #fecaca; }
+.mi-quiz-button.mi-quiz-button-danger:hover { background-color: #fef2f2; color: #b91c1c; transform: none; box-shadow: none; }
+
+.mi-quiz-button:disabled {
+    background-color: #e2e8f0 !important; color: #a0aec0 !important; cursor: not-allowed !important;
+    transform: none !important; box-shadow: none !important;
 }
-.mi-quiz-button-secondary:hover {
-  background-color: #5a6268;
-}
+
 .mi-quiz-button-small {
   margin-left: 10px;
   padding: 5px 10px;
@@ -77,6 +104,10 @@
   .mi-quiz-likert-options{flex-direction:column;gap:8px}
   .mi-quiz-option-wrapper{flex-basis:auto;flex-grow:0;width:100%}
   .mi-quiz-likert-options label{flex-direction:row;align-items:center;justify-content:center;padding:12px 15px;min-height:0;text-align:center}
+  .results-actions-container {
+    flex-direction: column;
+    align-items: stretch; /* Make buttons full width for a cleaner mobile look */
+  }
 }
 
 .mi-quiz-footer {
@@ -116,6 +147,24 @@
 }
 
 /* --- New Styles from Refactoring --- */
+
+/* Results Header */
+.mi-results-header {
+    text-align: center;
+    padding: 1em 1em 0;
+}
+.mi-results-header-icon {
+    font-size: 2.5em;
+    line-height: 1;
+    margin-bottom: 0.25em;
+}
+.mi-results-header h1 { margin: 0 0 0.1em 0; font-size: 2em; }
+.mi-results-header h2 { margin: 0; font-size: 1.2em; font-weight: 500; color: #4a5568; }
+.mi-results-metadata {
+    font-size: 0.8em;
+    color: #9ca3af;
+    margin-top: 0.5em;
+}
 
 /* General & Layout */
 .mi-section-title {
@@ -172,10 +221,14 @@
 
 /* Results Sections */
 .mi-results-section {
-  padding: 1.5em;
+  padding: 2em;
   border-radius: 8px;
-  margin-bottom: 1.5em;
+  margin-top: 2em;
+  margin-bottom: 2em; /* Add bottom margin for spacing in PDF and on screen */
   page-break-inside: avoid; /* Try to prevent sections from splitting across pages */
+}
+.mi-results-section:first-of-type {
+    margin-top: 1em;
 }
 .mi-results-section.bg-secondary {
   background: var(--mi-secondary-bg);
@@ -186,10 +239,11 @@
 .mi-results-section.bordered {
   border: 1px solid #eee;
 }
-.mi-results-section .mi-subsection-title {
-  margin-top: 1.5em;
+.mi-results-section > .mi-section-title {
+  margin-top: 0;
+  padding-bottom: 0.5em;
+  border-bottom: 1px solid #e2e8f0;
 }
-.mi-results-section .mi-subsection-title:first-child {
   margin-top: 0;
 }
 .mi-results-section p.summary {
@@ -225,10 +279,47 @@
 .mi-results-section .hobby-item {
   margin-bottom: 1.25em;
 }
-.mi-results-section .detailed-score {
-  margin-left: 1em;
-  margin-bottom: 1em;
+.mi-detailed-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5em;
 }
+.mi-subsection-title {
+    margin-top: 1.5em;
+    margin-bottom: 0.75em;
+    padding-left: 0.75em;
+    border-left: 4px solid #ccc;
+}
+.detailed-score {
+    font-size: 0.9em;
+}
+.mi-strengths-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1em;
+}
+.mi-strength-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1em;
+    margin-bottom: 1em; /* Add margin for reliable PDF spacing */
+}
+.mi-strength-card h4 { margin: 0 0 0.25em 0; }
+.mi-strength-card p { margin: 0 0 0.5em 0; font-size: 0.9em; }
+.mi-career-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1em;
+}
+.mi-career-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 1.5em; }
+.mi-career-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.mi-career-card-header { padding: 0.75em 1em; color: #fff; }
+.mi-career-card-header h4 { margin: 0; font-size: 1.1em; }
+.mi-career-card-body { padding: 1em; }
+.mi-career-card-body p { font-size: 0.9em; margin: 0 0 0.5em 0; }
+.mi-career-card-body ul { margin: 0 0 1em 1.2em; padding: 0; font-size: 0.9em; }
+.mi-career-card-body li { margin-bottom: 0.25em; }
 .accordion-content-wrapper {
   padding: 1em 0;
 }
@@ -251,13 +342,24 @@
 .pdf-title-page {
   /* Let the content define the height. min-height can cause issues. */
   text-align: center;
+  padding: 2em 0; /* Adjust padding for continuous flow */
+  /* page-break-after: always; */ /* REMOVED to create a single continuous document */
   padding: 2in 0; /* Add padding to center it vertically on the page */
   page-break-after: always; /* Force a page break after the title page */
 }
 
 /* Progress Bar in Results */
-.bar-wrapper { height:8px; background:#e0e0e0; border-radius:4px; margin-top:4px; overflow:hidden; }
-.bar-inner { height:100%; }
+.bar-wrapper { height:12px; background:#e0e0e0; border-radius:6px; margin-top:6px; overflow:hidden; }
+.bar-inner { height:100%; transition: width 0.5s ease-in-out; }
+/* Color-coded bars */
+.bar-inner.bar-logical { background-color: var(--mi-color-logical); }
+.bar-inner.bar-linguistic { background-color: var(--mi-color-linguistic); }
+.bar-inner.bar-spatial { background-color: var(--mi-color-spatial); }
+.bar-inner.bar-kinesthetic { background-color: var(--mi-color-kinesthetic); }
+.bar-inner.bar-musical { background-color: var(--mi-color-musical); }
+.bar-inner.bar-interpersonal { background-color: var(--mi-color-interpersonal); }
+.bar-inner.bar-intrapersonal { background-color: var(--mi-color-intrapersonal); }
+.bar-inner.bar-naturalistic { background-color: var(--mi-color-naturalistic); }
 
 /* Admin */
 .miq-subs-checkbox-col { width: 28px; }
