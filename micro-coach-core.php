@@ -624,8 +624,8 @@ class Micro_Coach_Core {
  
             .quiz-dashboard-description { font-size: 0.9em; color: #4a5568; line-height: 1.5; margin: 0; }
  
-            .quiz-dashboard-button { text-decoration: none; background: #ef4444; color: #fff; padding: 8px 16px; border-radius: 9999px; font-weight: 600; font-size: 0.9em; transition: all 0.2s; white-space: nowrap; display: inline-block; border: 1px solid transparent; }
-            .quiz-dashboard-button:hover { background: #dc2626; color: #fff; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+            .quiz-dashboard-button { text-decoration: none; background: #1e40af; color: #fff; padding: 8px 16px; border-radius: 9999px; font-weight: 600; font-size: 0.9em; transition: all 0.2s; white-space: nowrap; display: inline-block; border: 1px solid transparent; }
+            .quiz-dashboard-button:hover { background: #1c358a; color: #fff; transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
             .quiz-dashboard-button.is-disabled { background: #e2e8f0; color: #a0aec0; cursor: not-allowed; }
             .quiz-dashboard-button.is-disabled:hover { background: #e2e8f0; transform: none; box-shadow: none; }
             .quiz-dashboard-button.quiz-dashboard-button-secondary {
@@ -642,7 +642,7 @@ class Micro_Coach_Core {
             .quiz-dashboard-insight-panel { background-color: #f7fafc; border: 1px solid #e2e8f0; padding: 12px 16px; border-radius: 8px; margin-top: 12px; }
             .quiz-dashboard-insight-panel .insight-panel-title { font-weight: 600; margin: 0 0 8px 0; font-size: 0.9em; color: #2d3748; }
             .quiz-dashboard-insight-panel p { font-size: 0.9em; color: #4a5568; line-height: 1.6; max-width: 70ch; margin: 0; }
-            .insight-panel-prediction { border-left: 4px solid #ef4444; }
+            .insight-panel-prediction { border-left: 4px solid #1e40af; }
             .insight-panel-profile { border-left: 4px solid #4CAF50; }
             .quiz-dashboard-chips { display: flex; flex-wrap: wrap; gap: 8px; }
             .chip { background-color: #e2e8f0; color: #2d3748; padding: 4px 12px; border-radius: 16px; font-size: 0.85em; font-weight: 500; }

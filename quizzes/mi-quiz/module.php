@@ -335,7 +335,7 @@ class MI_Quiz_Plugin_AI {
             $user_email_body .= '<p style="margin: 0 0 1em 0;">Thank you for taking the Multiple Intelligences Quiz! Your account has been created, and you are now logged in on this device.</p>';
             $user_email_body .= '<h2 style="margin-top: 1.5em; color: #1a202c; font-size: 20px;">Secure Your Account</h2>';
             $user_email_body .= '<p>To access your account from other devices or to log in again later, you must set a password. Please click the secure link below to do so now:</p>';
-            $user_email_body .= sprintf('<p style="text-align:center; margin: 2em 0;"><a href="%s" style="background-color:#ef4444;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;">Set Your Password</a></p>', esc_url($reset_url));
+            $user_email_body .= sprintf('<p style="text-align:center; margin: 2em 0;"><a href="%s" style="background-color:#1e40af;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:bold;">Set Your Password</a></p>', esc_url($reset_url));
             $user_email_body .= '<p style="font-size: 0.9em; color: #666;">This link is valid for 24 hours. If it expires, you can use the "Lost your password?" link on the login page.</p>';
             $user_email_body .= '</div>';
             $user_email_body .= '<div style="padding: 20px; border-top: 1px solid #eee; background-color: #f7f7f7;">';

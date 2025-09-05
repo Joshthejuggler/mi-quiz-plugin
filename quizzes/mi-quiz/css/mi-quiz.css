@@ -1,6 +1,6 @@
 :root{
-  --mi-primary-color:#ef4444;
-  --mi-primary-color-dark:#dc2626;
+  --mi-primary-color:#1e40af;
+  --mi-primary-color-dark:#1c358a;
   --mi-secondary-bg: #f0f4f8;
   --mi-tertiary-bg: #f9f9f9;
   --mi-light-gray:#e5e7eb;
@@ -8,7 +8,7 @@
   --mi-text-color:#374151;
   /* New colors for each intelligence */
   --mi-color-logical: #3b82f6;
-  --mi-color-linguistic: #ef4444;
+  --mi-color-linguistic: #14b8a6; /* Changed from red to teal */
   --mi-color-spatial: #8b5cf6;
   --mi-color-kinesthetic: #f97316;
   --mi-color-musical: #ec4899;
@@ -61,8 +61,8 @@
 .mi-quiz-button:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
 
 /* Primary Action Button (e.g., Download) */
-.mi-quiz-button.mi-quiz-button-primary { background-color: #2563eb; color: #fff; }
-.mi-quiz-button.mi-quiz-button-primary:hover { background-color: #1d4ed8; color: #fff; }
+.mi-quiz-button.mi-quiz-button-primary { background-color: #1e40af; color: #fff; }
+.mi-quiz-button.mi-quiz-button-primary:hover { background-color: #1c358a; color: #fff; }
 
 /* Secondary Action Button (e.g., Retake) */
 .mi-quiz-button.mi-quiz-button-secondary { background-color: #f1f3f4; color: #2d3748; border-color: #e2e8f0; }

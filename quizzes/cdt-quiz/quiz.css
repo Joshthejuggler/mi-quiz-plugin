@@ -1,7 +1,7 @@
 /* Base styles - adapted from mi-quiz.css */
 :root{
-  --cdt-primary-color:#ef4444;
-  --cdt-primary-color-dark:#dc2626;
+  --cdt-primary-color:#1e40af;
+  --cdt-primary-color-dark:#1c358a;
   --cdt-light-gray:#e5e7eb;
   --cdt-medium-gray:#d1d5db;
   --cdt-text-color:#374151;
@@ -50,8 +50,8 @@
 }
 .cdt-quiz-button:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
 
-.cdt-quiz-button.cdt-quiz-button-primary { background-color: #2563eb; color: #fff; }
-.cdt-quiz-button.cdt-quiz-button-primary:hover { background-color: #1d4ed8; color: #fff; }
+.cdt-quiz-button.cdt-quiz-button-primary { background-color: #1e40af; color: #fff; }
+.cdt-quiz-button.cdt-quiz-button-primary:hover { background-color: #1c358a; color: #fff; }
 
 .cdt-quiz-button.cdt-quiz-button-secondary { background-color: #f1f3f4; color: #2d3748; border-color: #e2e8f0; }
 .cdt-quiz-button.cdt-quiz-button-secondary:hover { background-color: #e2e8f0; color: #1a202c; transform: none; box-shadow: none; }
