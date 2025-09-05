@@ -244,8 +244,6 @@
   padding-bottom: 0.5em;
   border-bottom: 1px solid #e2e8f0;
 }
-  margin-top: 0;
-}
 .mi-results-section p.summary {
   font-size: 1.1em;
   text-align: center;
@@ -313,7 +311,6 @@
     gap: 1em;
 }
 .mi-career-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 1.5em; }
-.mi-career-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
 .mi-career-card-header { padding: 0.75em 1em; color: #fff; }
 .mi-career-card-header h4 { margin: 0; font-size: 1.1em; }
 .mi-career-card-body { padding: 1em; }
@@ -340,12 +337,9 @@
   background: #fff;
 }
 .pdf-title-page {
-  /* Let the content define the height. min-height can cause issues. */
   text-align: center;
   padding: 2em 0; /* Adjust padding for continuous flow */
   /* page-break-after: always; */ /* REMOVED to create a single continuous document */
-  padding: 2in 0; /* Add padding to center it vertically on the page */
-  page-break-after: always; /* Force a page break after the title page */
 }
 
 /* Progress Bar in Results */

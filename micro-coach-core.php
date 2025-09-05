@@ -389,6 +389,8 @@ class Micro_Coach_Core {
                             if (file_exists($mi_questions_file)) { require_once $mi_questions_file; }
                             $cdt_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/cdt-quiz/questions.php';
                             if (file_exists($cdt_questions_file)) { require_once $cdt_questions_file; }
+                            $cdt_details_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/cdt-quiz/details.php';
+                            if (file_exists($cdt_details_file)) { require_once $cdt_details_file; }
 
                             switch ($latest_activity['quiz_id']) {
                                 case 'mi-quiz':
@@ -410,6 +412,23 @@ class Micro_Coach_Core {
                                         if ($leverage_tip) {
                                             $latest_insight_html .= '<p class="insight-leverage-tip"><strong>To leverage this:</strong> ' . esc_html($leverage_tip) . '</p>';
                                         }
+
+                                        // Add growth area
+                                        if (!empty($latest_activity['results']['bottom3'][0])) {
+                                            $lowest_sub_skill = $latest_activity['results']['bottom3'][0];
+                                            $sub_skill_name = $lowest_sub_skill['name'];
+                                            $parent_slug = $lowest_sub_skill['slug'];
+
+                                            $growth_tip = '';
+                                            if (isset($mi_growth_tips[$age_group][$parent_slug][$sub_skill_name]) && is_array($mi_growth_tips[$age_group][$parent_slug][$sub_skill_name])) {
+                                                $tips = $mi_growth_tips[$age_group][$parent_slug][$sub_skill_name];
+                                                $growth_tip = $tips[array_rand($tips)];
+                                            }
+
+                                            if ($growth_tip) {
+                                                $latest_insight_html .= '<p class="insight-growth-tip"><strong>An area for growth:</strong> In ' . esc_html($sub_skill_name) . ', try to ' . esc_html(lcfirst($growth_tip)) . '</p>';
+                                            }
+                                        }
                                     }
                                     break;
                                 case 'cdt-quiz':
@@ -417,6 +436,24 @@ class Micro_Coach_Core {
                                         $top_cdt_slug = $latest_activity['results']['sortedScores'][0][0];
                                         $top_cdt_name = $cdt_categories[$top_cdt_slug] ?? 'Unknown';
                                         $latest_insight_html = '<p>Your CDT Quiz results indicate a high capacity for <strong>' . esc_html($top_cdt_name) . '</strong>. This is a key skill for navigating complex challenges.</p>';
+
+                                        // Add growth area
+                                        $sorted_scores = $latest_activity['results']['sortedScores'];
+                                        if (!empty($sorted_scores) && isset($cdt_dimension_details)) {
+                                            $lowest_cdt_slug = end($sorted_scores)[0];
+                                            $age_group = $latest_activity['results']['ageGroup'] ?? 'adult';
+                                            
+                                            if (isset($cdt_dimension_details[$lowest_cdt_slug])) {
+                                                $details = $cdt_dimension_details[$lowest_cdt_slug];
+                                                $age_details = $details[$age_group] ?? $details['adult'];
+                                                
+                                                if (!empty($age_details['growth']) && is_array($age_details['growth'])) {
+                                                    $growth_tip = $age_details['growth'][array_rand($age_details['growth'])];
+                                                    $lowest_cdt_name = $details['title'] ?? $cdt_categories[$lowest_cdt_slug] ?? 'Unknown';
+                                                    $latest_insight_html .= '<p class="insight-growth-tip"><strong>An area for growth:</strong> In ' . esc_html($lowest_cdt_name) . ', try to ' . esc_html(lcfirst($growth_tip)) . '</p>';
+                                                }
+                                            }
+                                        }
                                     }
                                     break;
                             }
@@ -598,6 +635,7 @@ class Micro_Coach_Core {
             .panel-title { font-size: 1.1em; font-weight: 600; margin: 0 0 1em 0; color: #1a202c; }
             .insight-panel, .activity-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05); transition: all 0.2s ease-in-out; }
             .insight-leverage-tip { margin-top: 0.75em; padding-top: 0.75em; border-top: 1px dashed #e2e8f0; }
+            .insight-growth-tip { margin-top: 0.75em; padding-top: 0.75em; border-top: 1px dashed #f59e0b; }
             .placeholder-text { color: #64748b; font-style: italic; }
             .activity-list { list-style: none; padding: 0; margin: 0; }
             .activity-list li { padding: 8px 0; border-bottom: 1px solid #f1f3f4; font-size: 0.9em; color: #4a5568; }

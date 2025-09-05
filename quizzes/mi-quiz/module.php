@@ -637,7 +637,7 @@ class MI_Quiz_Plugin_AI {
         $dompdf = new \Dompdf\Dompdf($options);
         $dompdf->loadHtml($full_html);
         // Use a custom, very long page to prevent awkward page breaks.
-        $dompdf->setPaper([0, 0, 612, 8000]);
+        $dompdf->setPaper([0, 0, 612, 2200]);
         $dompdf->render();
 
         $pdf_content = $dompdf->output();
@@ -679,7 +679,7 @@ class MI_Quiz_Plugin_AI {
         $dompdf = new \Dompdf\Dompdf($options);
         $dompdf->loadHtml($full_html);
         // Use a custom, very long page to prevent awkward page breaks.
-        $dompdf->setPaper([0, 0, 612, 8000]);
+        $dompdf->setPaper([0, 0, 612, 2200]);
         $dompdf->render();
 
         $dompdf->stream(

@@ -33,6 +33,9 @@ class CDT_Quiz_Plugin {
 
         // 5. Add an AJAX endpoint to delete results for testing.
         add_action('wp_ajax_cdt_delete_user_results', [ $this, 'ajax_delete_user_results' ]);
+
+        // 6. Add an AJAX endpoint for PDF generation.
+        add_action('wp_ajax_cdt_generate_pdf', [ $this, 'ajax_generate_pdf' ]);
     }
 
     public static function activate() {
@@ -50,12 +53,14 @@ class CDT_Quiz_Plugin {
 
         // Load this quiz's questions.
         require __DIR__ . '/questions.php';
+        require __DIR__ . '/details.php';
 
         $user_data = null;
         if (is_user_logged_in()) {
             $user = wp_get_current_user();
             $user_data = [
                 'id'           => $user->ID,
+                'firstName'    => $user->first_name,
                 'savedResults' => get_user_meta($user->ID, self::META_KEY, true) ?: null,
             ];
         }
@@ -70,6 +75,7 @@ class CDT_Quiz_Plugin {
                 'cats'      => $cdt_categories ?? [],
                 'questions' => $cdt_questions ?? [],
                 'likert'    => [1=>'Not at all like me', 2=>'Not really like me', 3=>'Somewhat like me', 4=>'Mostly like me', 5=>'Very much like me'],
+                'dimensionDetails' => $cdt_dimension_details ?? [],
             ],
         ]);
         wp_enqueue_script('cdt-quiz-js');
@@ -85,6 +91,10 @@ class CDT_Quiz_Plugin {
                     <a href="<?php echo esc_url($dashboard_url); ?>" class="back-link">&larr; Return to Dashboard</a>
                 </div>
             <?php endif; ?>
+        <div id="cdt-dev-tools" style="display:none; padding: 0 2em 1em; text-align: right; margin-top: 1em;">
+            <strong>Dev tools:</strong>
+            <button type="button" id="cdt-autofill-run" class="cdt-quiz-button cdt-quiz-button-small">Auto-Fill</button>
+        </div>
             <div id="cdt-quiz-container"><div class="cdt-quiz-card"><p>Loading Quiz...</p></div></div>
         </div>
         <?php
@@ -114,6 +124,40 @@ class CDT_Quiz_Plugin {
         }
 
         update_user_meta($user_id, self::META_KEY, $sanitized_results);
+
+        // Send email with PDF attachment if HTML is provided.
+        if (!empty($results_html)) {
+            $user = get_userdata($user_id);
+            $pdf_attachment_path = $this->_generate_pdf_for_attachment($results_html);
+            $attachments = $pdf_attachment_path ? [$pdf_attachment_path] : [];
+
+            // Email to user
+            $user_subject = $this->maybe_antithread('Your CDT Quiz Results');
+            $user_body = '<html><body>';
+            $user_body .= sprintf('<h1>Hi %s,</h1>', esc_html($user->first_name));
+            $user_body .= '<p>Thank you for completing the Cognitive Dissonance Tolerance quiz. A PDF of your results is attached for your records.</p>';
+            $user_body .= '<p>You can always view your results on your dashboard.</p>';
+            $user_body .= '</body></html>';
+            $user_headers = [ 'Content-Type: text/html; charset=UTF-8' ];
+            wp_mail($user->user_email, $user_subject, $user_body, $user_headers, $attachments);
+
+            // Email to admin
+            $admin_list_raw = array_filter(array_map('trim', explode(',', get_option('miq_bcc_emails', ''))));
+            if (!empty($admin_list_raw)) {
+                $admin_subject = $this->maybe_antithread(sprintf('[CDT Quiz] Results for %s', $user->display_name));
+                $admin_body = '<html><body><h1>CDT Quiz results for ' . esc_html($user->display_name) . ' (' . esc_html($user->user_email) . ')</h1>' . $results_html . '</body></html>';
+                $admin_headers = [
+                    'Content-Type: text/html; charset=UTF-8',
+                    'Bcc: ' . implode(', ', $admin_list_raw),
+                ];
+                wp_mail($admin_list_raw[0], $admin_subject, $admin_body, $admin_headers, $attachments);
+            }
+
+            // Cleanup
+            if ($pdf_attachment_path && file_exists($pdf_attachment_path)) {
+                unlink($pdf_attachment_path);
+            }
+        }
         wp_send_json_success('Results saved.');
     }
 
@@ -162,6 +206,44 @@ class CDT_Quiz_Plugin {
         return $subject . str_repeat($zw, wp_rand(1,3));
     }
 
+    public function ajax_generate_pdf() {
+        check_ajax_referer('cdt_nonce');
+
+        if (!class_exists('Dompdf\Dompdf')) {
+            wp_send_json_error('PDF library is not available.');
+        }
+
+        $results_html = isset($_POST['results_html']) ? wp_kses_post(wp_unslash($_POST['results_html'])) : '';
+        if (empty($results_html)) {
+            wp_send_json_error('No results data provided.');
+        }
+
+        $full_html = '<!DOCTYPE html><html><head><meta charset="utf-8">';
+        $css_path = plugin_dir_path(__FILE__) . 'quiz.css';
+        if (file_exists($css_path)) {
+            $full_html .= '<style>' . file_get_contents($css_path) . '</style>';
+        }
+        $full_html .= '</head><body style="padding: 1em;">' . $results_html . '</body></html>';
+
+        $options = new \Dompdf\Options();
+        $options->set('isRemoteEnabled', true);
+        $options->set('isHtml5ParserEnabled', true);
+        // Use a font that supports emojis and other special characters.
+        $options->set('defaultFont', 'DejaVu Sans');
+
+        $dompdf = new \Dompdf\Dompdf($options);
+        $dompdf->loadHtml($full_html);
+        // Use a custom, very long page to prevent awkward page breaks.
+        $dompdf->setPaper([0, 0, 612, 1600]);
+        $dompdf->render();
+
+        $dompdf->stream(
+            'cdt-quiz-results-' . date('Y-m-d') . '.pdf',
+            ['Attachment' => true]
+        );
+        exit;
+    }
+
     /**
      * Generates a PDF from HTML content and saves it to a temporary file.
      *
@@ -183,10 +265,13 @@ class CDT_Quiz_Plugin {
         $options = new \Dompdf\Options();
         $options->set('isRemoteEnabled', true);
         $options->set('isHtml5ParserEnabled', true);
+        // Use a font that supports emojis and other special characters.
+        $options->set('defaultFont', 'DejaVu Sans');
 
         $dompdf = new \Dompdf\Dompdf($options);
         $dompdf->loadHtml($full_html);
-        $dompdf->setPaper('letter', 'portrait');
+        // Use a custom, very long page to prevent awkward page breaks.
+        $dompdf->setPaper([0, 0, 612, 1600]);
         $dompdf->render();
 
         $pdf_content = $dompdf->output();
