@@ -132,12 +132,23 @@ class CDT_Quiz_Plugin {
             $attachments = $pdf_attachment_path ? [$pdf_attachment_path] : [];
 
             // Email to user
+            $branding_html = '<div style="text-align:center; padding: 20px 0; border-bottom: 1px solid #ddd;">
+                <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
+                    <tbody><tr>
+                        <td style="vertical-align:middle;"><img src="https://skillofselfdiscovery.com/wp-content/uploads/2025/09/Untitled-design-4.png" alt="Logo" style="height: 45px; width: auto; border:0;" height="45"></td>
+                        <td style="vertical-align:middle; padding-left:15px;"><span style="font-size: 1.3em; font-weight: 600; color: #1a202c; line-height: 1.2;">Skill of Self-Discovery</span></td>
+                    </tr></tbody>
+                </table></div>';
+
             $user_subject = $this->maybe_antithread('Your CDT Quiz Results');
-            $user_body = '<html><body>';
-            $user_body .= sprintf('<h1>Hi %s,</h1>', esc_html($user->first_name));
-            $user_body .= '<p>Thank you for completing the Cognitive Dissonance Tolerance quiz. A PDF of your results is attached for your records.</p>';
-            $user_body .= '<p>You can always view your results on your dashboard.</p>';
-            $user_body .= '</body></html>';
+            $user_body = '<!DOCTYPE html><html><body style="font-family: sans-serif; color: #333; background-color: #f4f4f4; padding: 20px;">
+                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">'
+                . $branding_html .
+                '<div style="padding: 20px;">' .
+                sprintf('<h1 style="margin: 0 0 1em 0; color: #1a202c; font-size: 24px;">Hi %s,</h1>', esc_html($user->first_name)) .
+                '<p>Thank you for completing the Cognitive Dissonance Tolerance quiz. A PDF of your results is attached for your records.</p>
+                <p>You can always view your results on your dashboard.</p>
+                </div></div></body></html>';
             $user_headers = [ 'Content-Type: text/html; charset=UTF-8' ];
             wp_mail($user->user_email, $user_subject, $user_body, $user_headers, $attachments);
 
@@ -145,7 +156,8 @@ class CDT_Quiz_Plugin {
             $admin_list_raw = array_filter(array_map('trim', explode(',', get_option('miq_bcc_emails', ''))));
             if (!empty($admin_list_raw)) {
                 $admin_subject = $this->maybe_antithread(sprintf('[CDT Quiz] Results for %s', $user->display_name));
-                $admin_body = '<html><body><h1>CDT Quiz results for ' . esc_html($user->display_name) . ' (' . esc_html($user->user_email) . ')</h1>' . $results_html . '</body></html>';
+                $admin_body = '<html><body style="font-family: sans-serif;">' . $branding_html;
+                $admin_body .= '<h1>CDT Quiz results for ' . esc_html($user->display_name) . ' (' . esc_html($user->user_email) . ')</h1>' . $results_html . '</body></html>';
                 $admin_headers = [
                     'Content-Type: text/html; charset=UTF-8',
                     'Bcc: ' . implode(', ', $admin_list_raw),
@@ -234,7 +246,7 @@ class CDT_Quiz_Plugin {
         $dompdf = new \Dompdf\Dompdf($options);
         $dompdf->loadHtml($full_html);
         // Use a custom, very long page to prevent awkward page breaks.
-        $dompdf->setPaper([0, 0, 612, 1600]);
+        $dompdf->setPaper([0, 0, 612, 2400]);
         $dompdf->render();
 
         $dompdf->stream(
@@ -271,7 +283,7 @@ class CDT_Quiz_Plugin {
         $dompdf = new \Dompdf\Dompdf($options);
         $dompdf->loadHtml($full_html);
         // Use a custom, very long page to prevent awkward page breaks.
-        $dompdf->setPaper([0, 0, 612, 1600]);
+        $dompdf->setPaper([0, 0, 612, 2400]);
         $dompdf->render();
 
         $pdf_content = $dompdf->output();

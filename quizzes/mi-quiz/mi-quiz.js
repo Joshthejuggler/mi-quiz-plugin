@@ -284,8 +284,13 @@
   function generateResultsHtml() {
     const userFirstName = currentUser ? currentUser.firstName : 'Valued User';
     const titleHtml = `
+      <div class="results-main-header">
+          <div class="site-branding">
+              <img src="https://skillofselfdiscovery.com/wp-content/uploads/2025/09/Untitled-design-4.png" alt="Logo" class="site-logo">
+              <span class="site-title">Skill of Self-Discovery</span>
+          </div>
+      </div>
       <div class="mi-results-header">
-        <div class="mi-results-header-icon">🧠</div>
         <h1>Your Multiple Intelligences Results</h1>
         <h2>Results for ${userFirstName}</h2>
         <p class="mi-results-metadata">Generated on: ${new Date().toLocaleDateString()}</p>
@@ -387,9 +392,17 @@
         btn.textContent = 'Generating...';
         btn.disabled = true;
 
-        // Clone the results content and strip emojis for the PDF version to prevent rendering issues.
+        // Clone the results content to modify it for the PDF without affecting the screen.
+        const resultsClone = $id('mi-results-content').cloneNode(true);
+        const logoInClone = resultsClone.querySelector('.site-logo');
+        if (logoInClone) {
+            logoInClone.style.height = '60px';
+            logoInClone.style.width = 'auto';
+        }
+        
+        // Strip emojis for the PDF version to prevent rendering issues.
         const emojiRegex = /[\u{1F9E0}\u{2705}\u{1F680}\u{26A1}\u{1F4CA}\u{1F9ED}\u{2B07}\u{1F504}\u{1F5D1}]\u{FE0F}?/gu;
-        const pdfHtml = $id('mi-results-content').innerHTML.replace(emojiRegex, '').trim();
+        const pdfHtml = resultsClone.innerHTML.replace(emojiRegex, '').trim();
 
         const body = new URLSearchParams({ action: 'miq_generate_pdf', _ajax_nonce: ajaxNonce, results_html: pdfHtml });
         fetch(ajaxUrl, { method: 'POST', body })

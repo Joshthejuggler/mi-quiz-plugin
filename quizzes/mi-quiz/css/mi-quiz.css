@@ -23,6 +23,7 @@
     border-radius: 12px;
     box-shadow: 0 4px 6px -1px rgba(0,0,0,.1),0 2px 4px -2px rgba(0,0,0,.1);
     overflow: hidden; /* Ensures child corners don't poke out */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
 }
 .back-bar {
   background: #fafbfc;
@@ -147,16 +148,21 @@
 }
 
 /* --- New Styles from Refactoring --- */
+.results-main-header {
+    padding: 0 0 1.5em 0;
+    margin-bottom: 1.5em;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: center; /* Center the branding */
+}
+/* Make it inline-flex to allow centering */
+.site-branding { display: inline-flex; align-items: center; gap: 20px; }
+.site-logo { max-height: 100px; width: auto; height: auto; max-width: 100%; }
+.site-title { font-size: 1.8em; font-weight: 600; color: #1a202c; line-height: 1.2; }
 
 /* Results Header */
 .mi-results-header {
     text-align: center;
     padding: 1em 1em 0;
-}
-.mi-results-header-icon {
-    font-size: 2.5em;
-    line-height: 1;
-    margin-bottom: 0.25em;
 }
 .mi-results-header h1 { margin: 0 0 0.1em 0; font-size: 2em; }
 .mi-results-header h2 { margin: 0; font-size: 1.2em; font-weight: 500; color: #4a5568; }

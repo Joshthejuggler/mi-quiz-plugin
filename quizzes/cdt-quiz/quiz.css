@@ -114,8 +114,18 @@
 }
 
 /* --- New Results Page Styles --- */
+.results-main-header {
+    padding: 0 0 1.5em 0;
+    margin-bottom: 1.5em;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: center; /* Center the branding */
+}
+/* Make it inline-flex to allow centering */
+.site-branding { display: inline-flex; align-items: center; gap: 20px; }
+.site-logo { max-height: 100px; width: auto; height: auto; max-width: 100%; }
+.site-title { font-size: 2em; font-weight: 600; color: #1a202c; line-height: 1.2; }
+
 .cdt-results-header { text-align: center; padding: 1em 1em 0; }
-.cdt-results-header-icon { font-size: 2.5em; line-height: 1; margin-bottom: 0.25em; }
 .cdt-results-header h1 { margin: 0 0 0.1em 0; font-size: 2em; }
 .cdt-results-header h2 { margin: 0; font-size: 1.2em; font-weight: 500; color: #4a5568; }
 .cdt-results-metadata { font-size: 0.8em; color: #9ca3af; margin-top: 0.5em; }

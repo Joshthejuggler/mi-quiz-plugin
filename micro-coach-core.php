@@ -241,6 +241,13 @@ class Micro_Coach_Core {
             }
             ?>
             <div class="quiz-dashboard-container">
+                <div class="dashboard-header">
+                    <div class="site-branding">
+                        <img src="https://skillofselfdiscovery.com/wp-content/uploads/2025/09/Untitled-design-4.png" alt="Logo" class="site-logo">
+                        <span class="site-title">Skill of Self-Discovery</span>
+                    </div>
+                    <!-- User menu can be added here -->
+                </div>
                 <!-- Hero / Greeting Row -->
                 <div class="quiz-dashboard-hero">
                     <div class="quiz-dashboard-hero-greeting">
@@ -551,6 +558,15 @@ class Micro_Coach_Core {
  
         <style>
             .quiz-dashboard-container { max-width: 900px; margin: 2em auto; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; }
+            .dashboard-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 1.5em; margin-bottom: 1.5em; border-bottom: 1px solid #e2e8f0; }
+            .site-branding {
+                display: flex;
+                align-items: center;
+                gap: 20px;
+                text-decoration: none;
+            }
+            .site-logo { max-height: 100px; width: auto; height: auto; max-width: 100%; }
+            .site-title { font-size: 1.8em; font-weight: 600; color: #1a202c; line-height: 1.2; }
             .quiz-dashboard-hero { display: flex; align-items: stretch; gap: 24px; margin-bottom: 2em; }
             .quiz-dashboard-hero-greeting { flex-grow: 1; }
             .greeting-title { font-size: 1.8em; font-weight: 600; color: #1a202c; margin: 0 0 0.25em 0; }

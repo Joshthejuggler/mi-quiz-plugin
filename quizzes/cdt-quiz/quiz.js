@@ -251,8 +251,13 @@
 
         // --- Build HTML Sections ---
         const headerHtml = `
+            <div class="results-main-header">
+                <div class="site-branding">
+                    <img src="https://skillofselfdiscovery.com/wp-content/uploads/2025/09/Untitled-design-4.png" alt="Logo" class="site-logo">
+                    <span class="site-title">Skill of Self-Discovery</span>
+                </div>
+            </div>
             <div class="cdt-results-header">
-                <div class="cdt-results-header-icon">⚖️</div>
                 <h1>Your Cognitive Dissonance Tolerance Results</h1>
                 <h2>Results for ${userFirstName}</h2>
                 <p class="cdt-results-metadata">Generated on: ${new Date().toLocaleDateString()}</p>
@@ -316,6 +321,14 @@
         function getPdfHtml() {
             // Clone the results content to modify it for the PDF without affecting the screen.
             const resultsClone = $id('cdt-results-content').cloneNode(true);
+
+            // Make logo bigger for PDF
+            const logoInClone = resultsClone.querySelector('.site-logo');
+            if (logoInClone) {
+                logoInClone.style.height = '60px';
+                logoInClone.style.width = 'auto';
+            }
+
             // Remove the "Next Steps" section from the clone.
             const nextStepsSection = resultsClone.querySelector('.cdt-next-steps-section');
             if (nextStepsSection) {
