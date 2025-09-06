@@ -7,7 +7,7 @@ $cdt_categories = [
     'value-conflict-navigation'   => 'Value Conflict Navigation',
     'self-confrontation-capacity' => 'Self-Confrontation Capacity',
     'discomfort-regulation'       => 'Discomfort Regulation',
-    'growth-orientation'          => 'Growth Orientation',
+    'conflict-resolution-tolerance' => 'Conflict Resolution Tolerance',
 ];
 
 // Since questions are the same for all age groups, we define them once.
@@ -61,7 +61,7 @@ $cdt_questions_base = [
         ['text' => 'I can disagree without needing to win or be right.', 'reverse' => false],
         ['text' => 'I don’t panic when people expect different things from me.', 'reverse' => false],
     ],
-    'growth-orientation' => [
+    'conflict-resolution-tolerance' => [
         ['text' => 'I see inner tension as a sign that I’m learning.', 'reverse' => false],
         ['text' => 'I seek out ideas that challenge my assumptions.', 'reverse' => false],
         ['text' => 'I view cognitive dissonance as a sign to pay attention—not shut down.', 'reverse' => false],

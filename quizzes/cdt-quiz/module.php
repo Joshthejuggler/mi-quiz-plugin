@@ -65,12 +65,45 @@ class CDT_Quiz_Plugin {
             ];
         }
 
+        $prediction_data = [];
+        if (is_user_logged_in()) {
+            $user_id = get_current_user_id();
+            $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
+            $cdt_results = get_user_meta($user_id, self::META_KEY, true);
+
+            // Only try to predict if both previous quizzes are done.
+            if (!empty($mi_results) && !empty($cdt_results)) {
+                $bartle_predictions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/bartle-quiz/predictions.php';
+                $mi_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/mi-quiz/mi-questions.php';
+                $cdt_questions_file = __DIR__ . '/questions.php'; // Path to this quiz's questions
+                
+                if (file_exists($bartle_predictions_file) && file_exists($mi_questions_file) && file_exists($cdt_questions_file)) {
+                    require_once $bartle_predictions_file;
+                    require_once $mi_questions_file;
+                    // Note: We use require_once to be safe, even though it might be loaded above.
+                    require_once $cdt_questions_file;
+
+                    $prediction_data = [
+                        'miResults' => $mi_results,
+                        'cdtResults' => $cdt_results,
+                        'templates' => $player_type_templates ?? [],
+                        'miCategories' => $mi_categories ?? [],
+                        'cdtCategories' => $cdt_categories ?? [],
+                    ];
+                }
+            }
+        }
+
+        $bartle_quiz_url = $this->_find_page_by_shortcode('bartle_quiz');
+
         // Pass data to our JavaScript file.
         wp_localize_script('cdt-quiz-js', 'cdt_quiz_data', [
             'currentUser' => $user_data,
             'ajaxUrl'     => admin_url('admin-ajax.php'),
             'ajaxNonce'   => wp_create_nonce('cdt_nonce'),
             'loginUrl'    => wp_login_url(get_permalink()),
+            'bartleQuizUrl' => $bartle_quiz_url,
+            'predictionData' => $prediction_data,
             'data'        => [
                 'cats'      => $cdt_categories ?? [],
                 'questions' => $cdt_questions ?? [],

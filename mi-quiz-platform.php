@@ -27,6 +27,7 @@ if (file_exists(MC_QUIZ_PLATFORM_PATH . 'vendor/autoload.php')) {
 require_once MC_QUIZ_PLATFORM_PATH . 'micro-coach-core.php';
 require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/mi-quiz/module.php';
 require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/cdt-quiz/module.php';
+require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/bartle-quiz/module.php';
 
 /**
  * The main function to initialize the entire quiz platform.
@@ -39,6 +40,7 @@ function mc_quiz_platform_init() {
     // Instantiate each quiz module.
     new MI_Quiz_Plugin_AI();
     new CDT_Quiz_Plugin();
+    new Bartle_Quiz_Plugin();
 }
 add_action('plugins_loaded', 'mc_quiz_platform_init');
 
@@ -52,6 +54,9 @@ function mc_quiz_platform_activate() {
     }
     if (method_exists('CDT_Quiz_Plugin', 'activate')) {
         CDT_Quiz_Plugin::activate();
+    }
+    if (method_exists('Bartle_Quiz_Plugin', 'activate')) {
+        Bartle_Quiz_Plugin::activate();
     }
 }
 register_activation_hook(__FILE__, 'mc_quiz_platform_activate');
@@ -70,7 +75,8 @@ function mc_force_render_quiz_shortcodes_in_elementor($widget_content, $widget) 
     if ('shortcode' === $widget->get_name()) {
         $has_quiz_shortcode = has_shortcode($widget_content, 'quiz_dashboard') 
             || has_shortcode($widget_content, 'mi_quiz') || has_shortcode($widget_content, 'mi-quiz') 
-            || has_shortcode($widget_content, 'cdt_quiz') || has_shortcode($widget_content, 'cdt-quiz');
+            || has_shortcode($widget_content, 'cdt_quiz') || has_shortcode($widget_content, 'cdt-quiz')
+            || has_shortcode($widget_content, 'bartle_quiz') || has_shortcode($widget_content, 'bartle-quiz');
 
         if ($has_quiz_shortcode) {
             return do_shortcode($widget_content);

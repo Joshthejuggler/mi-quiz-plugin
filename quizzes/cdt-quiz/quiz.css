@@ -204,6 +204,13 @@
     background-color: #fffbe6;
     border-color: #fde68a;
 }
+.cdt-prediction-section {
+    background-color: #eef2ff; /* A light blue/indigo to match the navy theme */
+    border-color: #c7d2fe;
+}
+.cdt-prediction-section .cdt-section-title {
+    color: #1e40af;
+}
 .cdt-bar-wrapper { 
     height:12px; 
     background:#e0e0e0; 

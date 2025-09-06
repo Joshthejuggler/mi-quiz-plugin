@@ -277,7 +277,6 @@ class Micro_Coach_Core {
                     foreach ($quizzes as $id => $quiz):
                         $has_results = $completion_status[$id] ?? false;
                         $quiz_page_url = $this->find_page_by_shortcode($quiz['shortcode']);
-                        if (!$quiz_page_url) continue;
  
                         $dependency_met = true;
                         $dependency_title = '';
@@ -323,6 +322,74 @@ class Micro_Coach_Core {
                             }
                         }
 
+                        $bartle_prediction_paragraph = '';
+                        if ($id === 'bartle-quiz' && ($completion_status['mi-quiz'] ?? false) && ($completion_status['cdt-quiz'] ?? false)) {
+                            $bartle_predictions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/bartle-quiz/predictions.php';
+                            if (file_exists($bartle_predictions_file)) {
+                                require $bartle_predictions_file;
+
+                                // Load the category names needed for the prediction strings.
+                                $mi_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/mi-quiz/mi-questions.php';
+                                if (file_exists($mi_questions_file)) { require_once $mi_questions_file; }
+                                $cdt_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/cdt-quiz/questions.php';
+                                if (file_exists($cdt_questions_file)) { require_once $cdt_questions_file; }
+
+                                $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
+                                $cdt_results = get_user_meta($user_id, 'cdt_quiz_results', true);
+
+                                if (is_array($mi_results) && is_array($cdt_results) && isset($player_type_templates)) {
+                                    $bartle_scores = ['explorer' => 0, 'achiever' => 0, 'socializer' => 0, 'strategist' => 0];
+                                    $mi_map = [
+                                        'logical-mathematical' => ['achiever', 'strategist'], 'linguistic' => ['socializer'],
+                                        'spatial' => ['explorer'], 'bodily-kinesthetic' => ['achiever'],
+                                        'musical' => ['explorer', 'socializer'], 'interpersonal' => ['socializer', 'strategist'],
+                                        'intrapersonal' => ['explorer'], 'naturalistic' => ['explorer'],
+                                    ];
+                                    $cdt_map = [
+                                        'ambiguity-tolerance' => ['explorer'], 'value-conflict-navigation' => ['socializer'],
+                                        'self-confrontation-capacity' => ['achiever'], 'discomfort-regulation' => ['achiever', 'strategist'],
+                                        'conflict-resolution-tolerance' => ['strategist'],
+                                    ];
+
+                                    if (!empty($mi_results['top3'])) {
+                                        $points = 3;
+                                        foreach ($mi_results['top3'] as $mi_slug) {
+                                            if (isset($mi_map[$mi_slug])) {
+                                                foreach ($mi_map[$mi_slug] as $bartle_type) { $bartle_scores[$bartle_type] += $points; }
+                                            }
+                                            $points--;
+                                        }
+                                    }
+
+                                    if (!empty($cdt_results['sortedScores'][0])) {
+                                        $cdt_slug = $cdt_results['sortedScores'][0][0];
+                                        if (isset($cdt_map[$cdt_slug])) {
+                                            foreach ($cdt_map[$cdt_slug] as $bartle_type) { $bartle_scores[$bartle_type] += 3; }
+                                        }
+                                    }
+
+                                    arsort($bartle_scores);
+                                    $predicted_type = key($bartle_scores);
+
+                                    if (isset($player_type_templates[$predicted_type])) {
+                                        $template = $player_type_templates[$predicted_type][array_rand($player_type_templates[$predicted_type])];
+                                        
+                                        $mi_names = array_map(function($slug) use ($mi_categories) { return $mi_categories[$slug] ?? ''; }, $mi_results['top3']);
+                                        $mi_strengths_str = 'a combination of ' . implode(', ', array_filter($mi_names));
+
+                                        $cdt_slug = $cdt_results['sortedScores'][0][0];
+                                        $cdt_strengths_str = 'a high capacity for ' . ($cdt_categories[$cdt_slug] ?? 'navigating challenges');
+
+                                        $bartle_prediction_paragraph = str_replace(
+                                            ['{mi_strengths}', '{cdt_strengths}'],
+                                            [$mi_strengths_str, $cdt_strengths_str],
+                                            $template
+                                        );
+                                    }
+                                }
+                            }
+                        }
+
                         $mi_profile_content = '';
                         if ($has_results && $id === 'mi-quiz') {
                             $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
@@ -334,6 +401,22 @@ class Micro_Coach_Core {
                                         return $mi_categories[$slug] ?? ucfirst(str_replace('-', ' ', $slug));
                                     }, $mi_results['top3']);
                                     $mi_profile_content = $top3_names;
+                                }
+                            }
+                        }
+
+                        // Prepare Bartle profile content if applicable
+                        $bartle_profile_content = '';
+                        $bartle_profile_description = '';
+                        if ($has_results && $id === 'bartle-quiz') {
+                            $bartle_results = get_user_meta($user_id, 'bartle_quiz_results', true);
+                            $bartle_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/bartle-quiz/questions.php';
+                            if (file_exists($bartle_questions_file)) {
+                                require_once $bartle_questions_file; // defines $bartle_categories and $bartle_descriptions
+                                if (!empty($bartle_results['sortedScores'][0]) && isset($bartle_categories) && isset($bartle_descriptions)) {
+                                    $top_slug = $bartle_results['sortedScores'][0][0];
+                                    $bartle_profile_content = $bartle_categories[$top_slug] ?? ucfirst(str_replace('-', ' ', $top_slug));
+                                    $bartle_profile_description = $bartle_descriptions[$top_slug] ?? '';
                                 }
                             }
                         }
@@ -362,6 +445,23 @@ class Micro_Coach_Core {
                                         </div>
                                     </div>
                                 <?php endif; ?>
+                                <?php if (!empty($bartle_profile_content)): ?>
+                                    <div class="quiz-dashboard-insight-panel insight-panel-profile">
+                                        <h4 class="insight-panel-title">Your Primary Player Type</h4>
+                                        <div class="quiz-dashboard-chips">
+                                            <span class="chip"><?php echo esc_html($bartle_profile_content); ?></span>
+                                        </div>
+                                        <?php if (!empty($bartle_profile_description)): ?>
+                                            <p style="margin-top: 8px;"><?php echo esc_html($bartle_profile_description); ?></p>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+                                <?php if (!empty($bartle_prediction_paragraph)): ?>
+                                    <div class="quiz-dashboard-insight-panel insight-panel-prediction">
+                                        <h4 class="insight-panel-title">Your Personalized Bartle Prediction</h4>
+                                        <p><?php echo wp_kses_post($bartle_prediction_paragraph); ?></p>
+                                    </div>
+                                <?php endif; ?>
                                 <?php if (!empty($prediction_paragraph)): ?>
                                     <div class="quiz-dashboard-insight-panel insight-panel-prediction">
                                         <h4 class="insight-panel-title">Your Personalized CDT Prediction</h4>
@@ -371,9 +471,15 @@ class Micro_Coach_Core {
                             </div>
                             <div class="quiz-dashboard-actions">
                                 <?php if ($dependency_met): ?>
-                                    <a href="<?php echo esc_url($quiz_page_url); ?>" class="quiz-dashboard-button <?php if ($has_results) echo 'quiz-dashboard-button-secondary'; ?>">
-                                        <?php echo $has_results ? 'View Results' : 'Start Quiz'; ?>
-                                    </a>
+                                    <?php if ($quiz_page_url): ?>
+                                        <a href="<?php echo esc_url($quiz_page_url); ?>" class="quiz-dashboard-button <?php if ($has_results) echo 'quiz-dashboard-button-secondary'; ?>">
+                                            <?php echo $has_results ? 'View Results' : 'Start Quiz'; ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <span class="quiz-dashboard-button is-disabled" title="<?php printf(esc_attr__('Admin: Please create a page with the shortcode [%s] for this quiz.'), esc_attr($quiz['shortcode'])); ?>">
+                                            <?php _e('Not Linked'); ?>
+                                        </span>
+                                    <?php endif; ?>
                                 <?php else: ?>
                                     <span class="quiz-dashboard-button is-disabled" title="<?php printf(esc_attr__('Please complete "%s" first.'), esc_attr($dependency_title)); ?>">
                                         <?php _e('Locked'); ?>
@@ -525,6 +631,12 @@ class Micro_Coach_Core {
                 .quiz-dashboard-auth-prompt .quiz-dashboard-button-secondary:hover {
                     background: #e2e8f0;
                     color: #1a202c;
+                }
+                @media (max-width: 600px) {
+                    .quiz-dashboard-auth-actions {
+                        flex-direction: column;
+                        align-items: stretch;
+                    }
                 }
                 .quiz-dashboard-admin-notice {
                     margin-top: 1.5em;

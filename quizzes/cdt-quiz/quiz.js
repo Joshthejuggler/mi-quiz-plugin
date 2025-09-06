@@ -1,7 +1,11 @@
 (function() {
+    // --- Debugging: Log the raw data received from PHP ---
+    console.log('CDT Quiz Data Received:', typeof cdt_quiz_data !== 'undefined' ? cdt_quiz_data : 'Error: cdt_quiz_data is not defined.');
+    if (typeof cdt_quiz_data === 'undefined') { return; }
+
     // --- Setup ---
-    const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data } = cdt_quiz_data;
-    const { cats: CATS, questions: QUESTIONS, likert: LIKERT, dimensionDetails: DIMENSION_DETAILS } = data;
+    const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, bartleQuizUrl, predictionData } = cdt_quiz_data;
+    const { cats: CATS, questions: QUESTIONS, likert: LIKERT, dimensionDetails: DIMENSION_DETAILS } = data || {};
     const isLoggedIn = !!currentUser;
     const container = document.getElementById('cdt-quiz-container');
     if (!container) return;
@@ -219,16 +223,20 @@
             const details = ALL_DIMENSION_DETAILS[slug];
             if (!details) return '';
 
-            const ageGroupDetails = details[quizState.ageGroup] || details['adult']; // Fallback to adult
+            const ageGroupKey = quizState.ageGroup === 'graduate' ? 'graduate' : (quizState.ageGroup === 'teen' ? 'teen' : 'adult');
+            const ageGroupDetails = details[ageGroupKey] || details['adult']; // Fallback to adult
             if (!ageGroupDetails) return '';
 
             const scoreData = sortedScores.find(s => s[0] === slug);
             const score = scoreData ? scoreData[1] : 0;
             const isHighScorer = score >= (maxScore * 0.6); // Consider scores >= 60% as high
+            
             const title = (type === 'high') 
                 ? `Your Greatest Strength: ${details.title}` 
                 : `Your Greatest Opportunity for Growth: ${details.title}`;
-            const watchOutText = ageGroupDetails.watchOut || (isHighScorer ? ageGroupDetails.watchOutHigh : ageGroupDetails.watchOutLow);
+            
+            const watchOutText = isHighScorer ? ageGroupDetails.watchOutHigh : ageGroupDetails.watchOutLow;
+            const growthTipsHtml = `<h4>Areas for Growth:</h4><ul>${ageGroupDetails.growth.map(g => `<li>${g}</li>`).join('')}</ul>`;
 
             return `
                 <div class="cdt-dimension-card">
@@ -239,11 +247,11 @@
                     </div>
                     ${bar(score, maxScore)}
                     <div class="cdt-detail-section">
+                        <h4>Why this matters:</h4>
                         <p>${details.helps}</p>
-                        <h4>Watch out for:</h4>
-                        <p>${watchOutText}</p>
-                        <h4>Areas for Growth:</h4>
-                        <ul>${ageGroupDetails.growth.map(g => `<li>${g}</li>`).join('')}</ul>
+                        <h4>${isHighScorer ? 'The Pitfall of this Strength:' : 'The Challenge of this Area:'}</h4>
+                        <p>${watchOutText || ''}</p>
+                        ${!isHighScorer ? growthTipsHtml : ''}
                     </div>
                 </div>
             `;
@@ -288,20 +296,73 @@
                 ${createDetailCard(bottomDimensionSlug, 'low')}
             </div>`;
 
-        const nextStepsHtml = `
-            <div class="cdt-results-section cdt-next-steps-section">
-                <h3 class="cdt-section-title">What These Results Mean for Your Journey</h3>
-                <p>These results are just the beginning. The Skill of Self-Discovery platform includes tools, prompts, and assessments to help you grow in resilience and authenticity.</p>
-                <div class="cdt-results-actions">
-                    <button type="button" class="cdt-quiz-button cdt-quiz-button-primary">📘 Guided Journal Prompts</button>
-                </div>
-            </div>`;
+        let nextStepsHtml = '';
+        if (bartleQuizUrl) {
+            nextStepsHtml = `
+                <div class="cdt-results-section cdt-next-steps-section">
+                    <h3 class="cdt-section-title">Your Next Step: Discover Your Player Type</h3>
+                    <p>You've explored how you handle inner conflict. Now, discover what truly motivates you. The Bartle Player Type quiz reveals your primary drivers in challenges, learning, and collaboration.</p>
+                    <div class="cdt-results-actions">
+                        <a href="${bartleQuizUrl}" class="cdt-quiz-button cdt-quiz-button-primary">Take the Bartle Quiz Now</a>
+                    </div>
+                </div>`;
+        }
+
+        let predictionHtml = '';
+        if (predictionData && predictionData.templates && predictionData.miResults && predictionData.cdtResults) {
+            const { miResults, cdtResults, templates, miCategories, cdtCategories } = predictionData;
+            
+            const bartleScores = { explorer: 0, achiever: 0, socializer: 0, strategist: 0 };
+            const miMap = {
+                'logical-mathematical': ['achiever', 'strategist'], 'linguistic': ['socializer'],
+                'spatial': ['explorer'], 'bodily-kinesthetic': ['achiever'],
+                'musical': ['explorer', 'socializer'], 'interpersonal': ['socializer', 'strategist'],
+                'intrapersonal': ['explorer'], 'naturalistic': ['explorer'],
+            };
+            const cdtMap = {
+                'ambiguity-tolerance': ['explorer'], 'value-conflict-navigation': ['socializer'],
+                'self-confrontation-capacity': ['achiever'], 'discomfort-regulation': ['achiever', 'strategist'],
+                'conflict-resolution-tolerance': ['strategist'],
+            };
+
+            if (miResults.top3 && miResults.top3.length) {
+                let points = 3;
+                miResults.top3.forEach(miSlug => {
+                    if (miMap[miSlug]) {
+                        miMap[miSlug].forEach(bartleType => { bartleScores[bartleType] += points; });
+                    }
+                    points--;
+                });
+            }
+
+            if (cdtResults.sortedScores && cdtResults.sortedScores.length) {
+                const cdtSlug = cdtResults.sortedScores[0][0];
+                if (cdtMap[cdtSlug]) {
+                    cdtMap[cdtSlug].forEach(bartleType => { bartleScores[bartleType] += 3; });
+                }
+            }
+
+            const sortedBartle = Object.entries(bartleScores).sort((a, b) => b[1] - a[1]);
+            const predictedType = sortedBartle.length ? sortedBartle[0][0] : null;
+
+            if (predictedType && templates[predictedType]) {
+                const template = templates[predictedType][Math.floor(Math.random() * templates[predictedType].length)];
+                const miNames = miResults.top3.map(slug => miCategories[slug] || '');
+                const miStrengthsStr = 'a combination of ' + miNames.filter(n => n).join(', ');
+                const cdtSlug = cdtResults.sortedScores[0][0];
+                const cdtStrengthsStr = 'a high capacity for ' + (cdtCategories[cdtSlug] || 'navigating challenges');
+                const predictionParagraph = template.replace('{mi_strengths}', miStrengthsStr).replace('{cdt_strengths}', cdtStrengthsStr);
+
+                predictionHtml = `<div class="cdt-results-section cdt-prediction-section"><h3 class="cdt-section-title">Your Personalized Bartle Prediction</h3><p>${predictionParagraph}</p></div>`;
+            }
+        }
 
         let resultsHtml = `
             <div id="cdt-results-content">
                 ${headerHtml}
                 ${overviewHtml}
                 ${dimensionsHtml}
+                ${predictionHtml}
                 ${nextStepsHtml}
             </div>
             <div id="cdt-results-actions" class="cdt-results-actions"></div>`;
@@ -447,15 +508,22 @@
 
     // --- Initial Load ---
     function init() {
-        if (autoBtn) {
-            autoBtn.addEventListener('click', autoFill);
-        }
+        try {
+            if (autoBtn) {
+                autoBtn.addEventListener('click', autoFill);
+            }
 
-        if (isLoggedIn && currentUser.savedResults && currentUser.savedResults.sortedScores) {
-            quizState = currentUser.savedResults;
-            renderResults();
-        } else {
-            renderAgeGate();
+            if (isLoggedIn && currentUser.savedResults && currentUser.savedResults.sortedScores) {
+                quizState = currentUser.savedResults;
+                renderResults();
+            } else {
+                renderAgeGate();
+            }
+        } catch (e) {
+            console.error("An error occurred during CDT quiz initialization:", e);
+            if (container) {
+                container.innerHTML = `<div class="cdt-quiz-card"><p style="color:red;"><strong>Error:</strong> The quiz could not be loaded. Please check the browser console for details.</p></div>`;
+            }
         }
     }
 

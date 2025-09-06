@@ -28,11 +28,13 @@ $cdt_dimension_details = [
             'growth' => ['Write out your top five values, then rank them. Which ones guide you when two collide?', 'When facing conflict, name the values on both sides — yours and others’.', 'Learn to choose one guiding value for the moment, while still honoring the one set aside.'],
         ],
         'teen' => [
-            'watchOut' => 'When your values clash (like honesty vs. loyalty to a friend), it can feel like you can’t win either way. Ignoring the tension can lead to choices you regret later.',
+            'watchOutHigh' => 'Because you can see the complexity in value conflicts, you might hesitate to take a stand. Remember that sometimes, leadership means choosing a path even when it\'s tough.',
+            'watchOutLow' => 'When your values clash (like honesty vs. loyalty to a friend), it can feel like you can’t win either way. Ignoring the tension can lead to choices you regret later.',
             'growth' => ['Write down your top three values and use them to guide tough choices.', 'When facing a dilemma, ask, “Which value matters most in this situation?”', 'Talk through value conflicts with someone you trust instead of keeping them inside.'],
         ],
         'graduate' => [
-            'watchOut' => 'When freedom, responsibility, relationships, or academics pull in different directions, it’s easy to rationalize choices or get stuck. Avoiding value conflicts can erode your integrity over time.',
+            'watchOutHigh' => 'Your ability to navigate competing values is a sign of maturity. The risk is becoming a \'chameleon,\' adapting so much to different values that you lose a clear sense of your own core principles.',
+            'watchOutLow' => 'When freedom, responsibility, relationships, or academics pull in different directions, it’s easy to rationalize choices or get stuck. Avoiding value conflicts can erode your integrity over time.',
             'growth' => ['Identify which values are clashing before making a decision.', 'Rank your top five values and check choices against them.', 'When values conflict, choose one guiding value for the moment while still respecting the other.'],
         ],
     ],
@@ -45,11 +47,13 @@ $cdt_dimension_details = [
             'growth' => ['Write down one belief and one behavior that don’t match — reflect on why.', 'Ask a trusted friend or mentor for feedback in an area where you might be blind.', 'Celebrate even small steps of growth, not just your failures.'],
         ],
         'teen' => [
-            'watchOut' => 'When self-confrontation is challenging, the tendency is to defend, deny, or rationalize your actions. This can stall growth, as you can’t fix what you don’t acknowledge.',
+            'watchOutHigh' => 'Your ability to admit when you\'re wrong is rare and valuable. Just be careful not to be too hard on yourself. Balance self-honesty with self-compassion.',
+            'watchOutLow' => 'When self-confrontation is challenging, the tendency is to defend, deny, or rationalize your actions. This can stall growth, as you can’t fix what you don’t acknowledge.',
             'growth' => ['Write down one belief and one behavior that don’t match — reflect on why.', 'Ask a trusted friend or mentor for feedback in an area where you might be blind.', 'Celebrate even small steps of growth, not just your failures.'],
         ],
         'graduate' => [
-            'watchOut' => 'When self-confrontation is difficult, you may explain away your choices, justify unhealthy patterns, or pretend everything is fine. This keeps you from making real change.',
+            'watchOutHigh' => 'Your capacity for self-confrontation is a strength. The only pitfall is becoming overly self-critical, which can lead to \'analysis paralysis\' instead of action. Growth requires both honesty and encouragement.',
+            'watchOutLow' => 'When self-confrontation is difficult, you may explain away your choices, justify unhealthy patterns, or pretend everything is fine. This keeps you from making real change.',
             'growth' => ['At the end of each week, write down one mistake you made and one lesson you learned.', 'Invite feedback from a peer or mentor about where your actions don’t match your intentions.', 'Balance honesty with encouragement — notice progress, not just problems.'],
         ],
     ],
@@ -62,15 +66,17 @@ $cdt_dimension_details = [
             'growth' => ['Learn to name emotions (“I feel anxious because this doesn’t fit”).', 'Use grounding practices (breathing, walking, journaling) when tension spikes.', 'Share your feelings with someone you trust instead of pushing them down.'],
         ],
         'teen' => [
-            'watchOut' => 'When you feel conflicted inside, you may overreact, shut down, or hide your feelings. This can make situations harder instead of easier.',
+            'watchOutHigh' => 'Because you stay calm under pressure, others might not realize when you\'re actually upset or need support. Make sure you\'re not just bottling up your feelings.',
+            'watchOutLow' => 'When you feel conflicted inside, you may overreact, shut down, or hide your feelings. This can make situations harder instead of easier.',
             'growth' => ['Learn to name your emotions: “I feel anxious,” “I feel frustrated.”', 'Try calming practices — deep breathing, journaling, or going for a walk.', 'Share what you feel with someone you trust instead of keeping it bottled up.'],
         ],
         'graduate' => [
-            'watchOut' => 'College life brings contradictions — freedom vs. responsibility, fun vs. deadlines. If you can’t regulate your emotions, stress can overwhelm you or push you into avoidance. If you over-regulate, you may look fine while actually struggling.',
+            'watchOutHigh' => 'Your ability to regulate your emotions is a huge advantage. The only risk is over-regulating—appearing so calm and collected that you disconnect from your own feelings or from the emotional needs of others.',
+            'watchOutLow' => 'College life brings contradictions — freedom vs. responsibility, fun vs. deadlines. If you can’t regulate your emotions, stress can overwhelm you or push you into avoidance. If you over-regulate, you may look fine while actually struggling.',
             'growth' => ['Acknowledge your feelings instead of ignoring them.', 'Use grounding habits when stress spikes — mindfulness, exercise, reflection.', 'Practice sharing your emotions with a friend or mentor instead of carrying them alone.'],
         ],
     ],
-    'growth-orientation' => [
+    'conflict-resolution-tolerance' => [
         'title' => 'Conflict Resolution Tolerance',
         'helps' => 'Conflict is a normal part of being human — whenever values, goals, or personalities collide, sparks fly. Your level of conflict resolution tolerance reveals how well you stay present in these moments. When you can tolerate conflict, you keep relationships intact while addressing the issues beneath the surface. This strength allows you to navigate hard conversations, find common ground, and keep communication flowing.',
         'adult' => [
@@ -79,11 +85,13 @@ $cdt_dimension_details = [
             'growth' => ['Practice assertive honesty: share your perspective clearly, but without hostility.', 'Use reflective listening: “What I hear you saying is…” before responding.', 'Notice your instincts — do you avoid conflict or dive in aggressively? Work on balancing these tendencies.'],
         ],
         'teen' => [
-            'watchOut' => 'If you avoid conflict, small problems with friends, classmates, or family can grow into bigger issues. On the other hand, diving in too aggressively, you risk damaging trust.',
+            'watchOutHigh' => 'Because you handle conflict well, friends might always expect you to be the peacemaker. Make sure your own needs and feelings aren\'t getting lost in the process.',
+            'watchOutLow' => 'If you avoid conflict, small problems with friends, classmates, or family can grow into bigger issues. On the other hand, diving in too aggressively, you risk damaging trust.',
             'growth' => ['Practice saying, “This bothered me, can we talk about it?” instead of ignoring problems.', 'Try listening first — repeat back what the other person said before giving your view.', 'Notice your instinct: do you shut down or fight back? Work on finding the middle ground.'],
         ],
         'graduate' => [
-            'watchOut' => 'If you always avoid conflict, group projects, roommate situations, or relationships can suffer. If you always push too hard, people may see you as confrontational instead of constructive.',
+            'watchOutHigh' => 'Your ability to handle conflict is a great asset in group projects. Just ensure you\'re not just tolerating tension, but actively guiding the group to a constructive solution that respects everyone, including you.',
+            'watchOutLow' => 'If you always avoid conflict, group projects, roommate situations, or relationships can suffer. If you always push too hard, people may see you as confrontational instead of constructive.',
             'growth' => ['Be honest about your perspective in group work, even if it feels risky.', 'Use reflective listening: “What I hear you saying is…” before adding your point.', 'In disagreements, aim to find common ground rather than “winning.”'],
         ],
     ],
