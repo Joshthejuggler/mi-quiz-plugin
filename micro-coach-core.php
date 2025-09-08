@@ -10,6 +10,8 @@ class Micro_Coach_Core {
     private static $registered_quizzes = [];
     const OPT_GROUP = 'mc_quiz_platform_settings';
     const OPT_DESCRIPTIONS = 'mc_quiz_descriptions';
+    // Stores the OpenAI (or compatible) API key for AI features
+    const OPT_OPENAI_API_KEY = 'mc_openai_api_key';
 
     public function __construct() {
         // Add the new shortcode for the quiz dashboard.
@@ -22,6 +24,10 @@ class Micro_Coach_Core {
         }
 
         add_action('save_post', [$this, 'clear_shortcode_page_transients']);
+
+        // AJAX: AI Coach idea generation
+        add_action('wp_ajax_mc_ai_generate_mves', [$this, 'ajax_ai_generate_mves']);
+        add_action('wp_ajax_mc_ai_test_key', [$this, 'ajax_ai_test_key']);
     }
 
     /**
@@ -78,6 +84,7 @@ class Micro_Coach_Core {
      * Registers settings for the quiz platform, like descriptions.
      */
     public function register_settings() {
+        // Main platform settings
         register_setting(self::OPT_GROUP, self::OPT_DESCRIPTIONS, [$this, 'sanitize_descriptions']);
         add_settings_section('mc_quiz_descriptions_section', 'Quiz Descriptions', null, 'quiz-platform-settings');
 
@@ -101,6 +108,33 @@ class Micro_Coach_Core {
                 'mc_quiz_descriptions_section'
             );
         }
+
+        // AI Integration section (OpenAI API key)
+        add_settings_section(
+            'mc_quiz_ai_section',
+            'AI Integration',
+            function () {
+                echo '<p>Configure credentials used to generate Minimum Viable Experiences (MVEs) and other AI-assisted features. Keys are stored as WordPress options.</p>';
+            },
+            'quiz-platform-settings'
+        );
+
+        // Register and render the OpenAI API key field
+        register_setting(self::OPT_GROUP, self::OPT_OPENAI_API_KEY, function ($v) {
+            // Keep it lean; accept plain text and trim
+            return trim(sanitize_text_field($v));
+        });
+        add_settings_field(
+            self::OPT_OPENAI_API_KEY,
+            'OpenAI API Key',
+            function () {
+                $val = esc_attr(get_option(self::OPT_OPENAI_API_KEY, ''));
+                echo '<input type="password" name="' . esc_attr(self::OPT_OPENAI_API_KEY) . '" value="' . $val . '" style="width: 480px;" placeholder="sk-..." autocomplete="new-password">';
+                echo '<p class="description">Paste a server-side key (e.g., <code>sk-XXXX</code>). This key is never sent to the browser by this setting alone.</p>';
+            },
+            'quiz-platform-settings',
+            'mc_quiz_ai_section'
+        );
     }
 
     public function sanitize_descriptions($input) {
@@ -119,7 +153,79 @@ class Micro_Coach_Core {
             settings_fields(self::OPT_GROUP);
             do_settings_sections('quiz-platform-settings');
             submit_button();
-        ?></form></div><?php
+        ?></form>
+        <hr>
+        <h2>AI Integration – Test Connection</h2>
+        <p>Verify your API key by sending a quick test to the AI endpoint.</p>
+        <p>
+            <button class="button button-primary" id="mc-ai-test-btn">Test AI</button>
+            <span id="mc-ai-test-status" style="margin-left: 8px;"></span>
+        </p>
+        <script>
+        (function(){
+            const btn   = document.getElementById('mc-ai-test-btn');
+            const label = document.getElementById('mc-ai-test-status');
+            if (!btn) return;
+            btn.addEventListener('click', function(e){
+                e.preventDefault();
+                btn.disabled = true; label.textContent = 'Testing…';
+                fetch('<?php echo esc_url_raw(admin_url('admin-ajax.php')); ?>', { method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({action:'mc_ai_test_key'}) })
+                    .then(r=>r.json())
+                    .then(j=>{
+                        if (j && j.success) { label.textContent = 'OK: ' + (j.data.model||'connected'); }
+                        else { label.textContent = 'Failed: ' + (j?.data?.message || 'unknown'); }
+                    })
+                    .catch(err=>{ label.textContent = 'Error: ' + (err?.message||'network'); })
+                    .finally(()=>{ btn.disabled = false; });
+            });
+        })();
+        </script>
+        </div><?php
+    }
+
+    /**
+     * Admin AJAX: simple connectivity test for the AI key.
+     */
+    public function ajax_ai_test_key() {
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message'=>'Insufficient permissions'], 403);
+        }
+        $api_key = self::get_openai_api_key();
+        if (empty($api_key)) {
+            wp_send_json_error(['message'=>'No API key configured']);
+        }
+        $system = 'You are a healthcheck. Reply with a JSON object {"ok":true} only.';
+        $resp = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+            'timeout' => 15,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type'  => 'application/json',
+            ],
+            'body' => wp_json_encode([
+                'model' => 'gpt-4o-mini',
+                'messages' => [ ['role'=>'system','content'=>$system], ['role'=>'user','content'=>'ping'] ],
+                'temperature' => 0,
+            ]),
+        ]);
+        if (is_wp_error($resp)) {
+            wp_send_json_error(['message'=>'WP Error: '.$resp->get_error_message()]);
+        }
+        $code = wp_remote_retrieve_response_code($resp);
+        $body = json_decode(wp_remote_retrieve_body($resp), true);
+        if ($code >= 200 && $code < 300) {
+            $model = $body['model'] ?? ($body['choices'][0]['model'] ?? 'connected');
+            wp_send_json_success(['model'=>$model]);
+        }
+        wp_send_json_error(['message'=>'HTTP '.$code.' — '.substr(wp_remote_retrieve_body($resp),0,200)]);
+    }
+
+    /**
+     * Returns the configured OpenAI-compatible API key (if set).
+     * Consumers should call this to authenticate server-side requests.
+     */
+    public static function get_openai_api_key() {
+        $key = get_option(self::OPT_OPENAI_API_KEY, '');
+        return is_string($key) ? trim($key) : '';
     }
 
     /**
@@ -334,6 +440,7 @@ class Micro_Coach_Core {
                     <div class="dashboard-tabs">
                         <button class="tab-link active" data-tab="tab-composite">🧩 Your Self-Discovery Profile</button>
                         <button class="tab-link" data-tab="tab-path">📊 Detailed Results</button>
+                        <button class="tab-link" data-tab="tab-ai">🤖 AI Coach</button>
                     </div>
                     <div class="tab-content-wrapper">
                         <div id="tab-composite" class="tab-content active">
@@ -644,6 +751,109 @@ class Micro_Coach_Core {
                                     </div>
                                 </div>
                                 <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <!-- AI Coach Tab -->
+                        <div id="tab-ai" class="tab-content">
+                            <?php $api_key_set = !empty(Micro_Coach_Core::get_openai_api_key()); ?>
+                            <?php if (!$api_key_set): ?>
+                                <div class="ai-alert">
+                                    <strong>Heads up:</strong> The AI key isn’t configured. Go to Quiz Platform → Settings → AI Integration to add your API key.
+                                </div>
+                            <?php endif; ?>
+                            <div id="ai-banner" class="ai-banner" style="display:none;"></div>
+                            <div class="ai-filters">
+                                <div class="ai-fheader">
+                                    <span class="f-icn">🧩</span>
+                                    <div>
+                                        <h3 class="ai-title">Choose your filters</h3>
+                                        <p class="ai-sub">to shape your filters to shape experiments you’ll see next.</p>
+                                    </div>
+                                </div>
+                                <div class="ai-filter">
+                                    <div class="ai-filter-row"><span class="f-icn">💰</span><div class="f-title">Cost</div><div class="f-right" id="ai-cost-label">Free</div></div>
+                                    <div class="f-sub">How much are you willing to spend?</div>
+                                    <input type="range" min="0" max="4" step="1" value="0" id="ai-cost">
+                                </div>
+                                <div class="ai-filter">
+                                    <div class="ai-filter-row"><span class="f-icn">⏳</span><div class="f-title">Time</div><div class="f-right" id="ai-time-label">15–30m</div></div>
+                                    <div class="f-sub">How much time can you commit?</div>
+                                    <input type="range" min="0" max="4" step="1" value="1" id="ai-time">
+                                </div>
+                                <div class="ai-filter">
+                                    <div class="ai-filter-row"><span class="f-icn">⚡️</span><div class="f-title">Energy</div><div class="f-right" id="ai-energy-label">Low‑focus</div></div>
+                                    <div class="f-sub">How much effort do you want to put in?</div>
+                                    <input type="range" min="0" max="4" step="1" value="1" id="ai-energy">
+                                </div>
+                                <div class="ai-filter">
+                                    <div class="ai-filter-row"><span class="f-icn">🎲</span><div class="f-title">Variety</div><div class="f-right" id="ai-variety-label">Near routine</div></div>
+                                    <div class="f-sub">How different from your routine should it be?</div>
+                                    <input type="range" min="0" max="4" step="1" value="2" id="ai-variety">
+                                </div>
+                                <div class="ai-lenses">
+                                    <label><input type="checkbox" id="lens-curiosity" checked> Curiosity</label>
+                                    <label><input type="checkbox" id="lens-rolemodels" checked> Role Models</label>
+                                    <label><input type="checkbox" id="lens-opposites" checked> Opposites</label>
+                                    <label><input type="checkbox" id="lens-adjacency" checked> Adjacency</label>
+                                </div>
+                                <div class="ai-actions">
+                                    <button class="quiz-dashboard-button" id="ai-apply">Show experiments that fit my settings</button>
+                                    <button class="linklike" id="ai-reset" type="button">Reset</button>
+                                </div>
+                            </div>
+                            <div class="ai-results">
+                                <h4 class="ai-section">Shortlist</h4>
+                                <div class="ai-results-grid" id="ai-shortlist">
+                                    <!-- Populated by AI → placeholder cards -->
+                                    <div class="ai-card skeleton"></div>
+                                    <div class="ai-card skeleton"></div>
+                                    <div class="ai-card skeleton"></div>
+                                    <div class="ai-card skeleton"></div>
+                                    <div class="ai-card skeleton"></div>
+                                    <div class="ai-card skeleton"></div>
+                                </div>
+                                <h4 class="ai-section">More options</h4>
+                                <div class="ai-results-grid" id="ai-more"></div>
+                            </div>
+
+                            <!-- Drawer for idea details -->
+                            <div id="ai-drawer" class="ai-drawer" aria-hidden="true">
+                                <div class="ai-drawer-backdrop" id="ai-drawer-backdrop" tabindex="-1" aria-hidden="true"></div>
+                                <aside class="ai-drawer-panel" role="dialog" aria-labelledby="ai-drawer-title">
+                                    <button type="button" class="ai-drawer-close" id="ai-drawer-close" aria-label="Close">×</button>
+                                    <header class="ai-drawer-header">
+                                        <h3 id="ai-drawer-title" class="ai-drawer-title">Idea</h3>
+                                        <span id="ai-drawer-lens" class="ai-drawer-lens"></span>
+                                    </header>
+                                    <p id="ai-drawer-micro" class="ai-drawer-micro"></p>
+                                    <section class="ai-drawer-section">
+                                        <h4>Why this fits you</h4>
+                                        <p id="ai-drawer-why"></p>
+                                    </section>
+                                    <section class="ai-drawer-section">
+                                        <h4>Prompt to start</h4>
+                                        <p id="ai-drawer-prompt" class="ai-drawer-prompt"></p>
+                                    </section>
+                                    <section class="ai-drawer-section">
+                                        <h4>Steps</h4>
+                                        <ul id="ai-drawer-steps" class="ai-drawer-steps"></ul>
+                                    </section>
+                                    <section class="ai-drawer-section">
+                                        <h4>What to watch for</h4>
+                                        <p id="ai-drawer-signal"></p>
+                                    </section>
+                                    <section class="ai-drawer-section">
+                                        <h4>Reflection</h4>
+                                        <ul id="ai-drawer-reflect" class="ai-drawer-reflect"></ul>
+                                    </section>
+                                    <section class="ai-drawer-section" id="ai-drawer-safety-wrap" style="display:none;">
+                                        <h4>Safety notes</h4>
+                                        <p id="ai-drawer-safety"></p>
+                                    </section>
+                                    <footer class="ai-drawer-footer">
+                                        <div id="ai-drawer-chips" class="ai-drawer-chips"></div>
+                                    </footer>
+                                </aside>
                             </div>
                         </div>
                     </div>
@@ -1286,6 +1496,47 @@ class Micro_Coach_Core {
             .composite-title { margin: 0 0 4px 0; font-size: 1.35em; font-weight: 700; color:#111826; }
             .composite-subtitle { margin: 0; font-size: .95em; color:#51607a; }
             .composite-cta { margin-top: 12px; color:#51607a; font-size: .95em; }
+            /* === AI Coach tab styles === */
+            .ai-alert{ background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
+            .ai-filters{ background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow: 0 6px 14px rgba(15,23,42,.06); }
+            .ai-banner{ background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
+            .ai-fheader{ display:flex; gap:10px; align-items:flex-start; margin-bottom:6px; }
+            .ai-title{ margin:0 0 2px; font-size:1.1em; font-weight:800; }
+            .ai-sub{ margin:0 0 10px; color:#64748b; }
+            .ai-filter{ padding:10px 0; border-top:1px solid #e8eef5; }
+            .ai-filter:first-of-type{ border-top:0; }
+            .ai-filter-row{ display:grid; grid-template-columns: 24px 1fr auto; align-items:center; gap:8px; }
+            .f-icn{ font-size:18px; }
+            .f-title{ font-weight:700; color:#0f172a; }
+            .f-right{ font-size:12px; color:#64748b; }
+            .f-sub{ color:#64748b; font-size:12px; margin:2px 0 6px; }
+            .ai-filter input[type=range]{ width:100%; accent-color:#1e40af; }
+            .ai-lenses{ display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; }
+            .ai-actions{ display:flex; gap:12px; align-items:center; margin-top:12px; }
+            .ai-actions .linklike{ background:none; border:none; color:#1e40af; cursor:pointer; padding:0; }
+            .ai-section{ margin: 12px 0 8px; font-weight:700; }
+            .ai-results-grid{ display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; }
+            @media (max-width: 768px){ .ai-results-grid{ grid-template-columns: 1fr; } .ai-sliders{ grid-template-columns: 1fr 1fr; } }
+            .ai-card{ background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px; min-height:120px; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
+            .ai-card.skeleton{ background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
+            @keyframes shimmer { 0% { background-position: -400px 0;} 100%{ background-position: 400px 0; } }
+
+            /* Drawer styles */
+            .ai-drawer{ position: fixed; inset: 0; z-index: 1000; display:none; }
+            .ai-drawer.open{ display:block; }
+            .ai-drawer-backdrop{ position: absolute; inset: 0; background: rgba(15,23,42,0.35); }
+            .ai-drawer-panel{ position: absolute; top: 0; right: 0; width: min(480px, 96vw); height: 100%; overflow:auto; background:#fff; border-left:1px solid #e2e8f0; box-shadow:-6px 0 16px rgba(0,0,0,0.08); padding: 18px; }
+            .ai-drawer-close{ position: absolute; top: 10px; right: 12px; border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
+            .ai-drawer-title{ margin:0 0 4px; }
+            .ai-drawer-lens{ display:inline-block; background:#eef2f7; border-radius:999px; padding:2px 10px; font-size:12px; color:#334155; }
+            .ai-drawer-micro{ color:#475569; }
+            .ai-drawer-section{ margin-top: 12px; }
+            .ai-drawer-section h4{ margin:0 0 6px; font-size: 0.95em; }
+            .ai-drawer-steps{ padding-left: 16px; }
+            .ai-drawer-reflect{ padding-left: 16px; }
+            .ai-drawer-prompt{ background:#eef2ff; border:1px solid #c7d2fe; color:#1e3a8a; padding:8px 10px; border-radius:8px; }
+            .ai-drawer-footer{ margin-top: 12px; }
+            .ai-drawer-chips .chip{ margin-right:6px; background:#eef2f7; border-radius:999px; padding:2px 8px; font-size:12px; display:inline-block; }
             .bars-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
             .badge-icn { margin-right: 6px; }
             .mi-badges { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -1445,6 +1696,150 @@ class Micro_Coach_Core {
                 }
             }
         </style>
+        <script>
+        document.addEventListener('DOMContentLoaded', function(){
+            const tabContainer = document.querySelector('.dashboard-tabs');
+            if (!tabContainer) return;
+            const tabLinks = tabContainer.querySelectorAll('.tab-link');
+            const tabContents = document.querySelectorAll('.tab-content-wrapper .tab-content');
+            tabLinks.forEach(link => {
+                link.addEventListener('click', function(e){
+                    e.preventDefault();
+                    const tabId = this.dataset.tab;
+                    tabLinks.forEach(l => l.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('active'));
+                    this.classList.add('active');
+                    const activeContent = document.getElementById(tabId);
+                    if (activeContent) activeContent.classList.add('active');
+                });
+            });
+
+            // AI Coach handlers
+            const ajaxUrl = '<?php echo esc_url_raw(admin_url('admin-ajax.php')); ?>';
+            // Dynamic labels for filters
+            const labelMaps = {
+                cost: ['Free','Low','Medium','Higher','High'],
+                time: ['15–30m','1–2h','Half‑day','Full day','Multi‑week'],
+                energy: ['Low‑focus','Moderate','Focused','High‑effort','Very high'],
+                variety: ['Near routine','Somewhat new','New context','Very new','Totally different']
+            };
+            function bindSlider(id, labelId, map){
+                const s=document.getElementById(id), l=document.getElementById(labelId);
+                if (!s||!l) return; const upd=()=>{ const v=parseInt(s.value||0,10); l.textContent = map[Math.max(0,Math.min(4,v))]||'';};
+                s.addEventListener('input',upd); upd();
+            }
+            bindSlider('ai-cost','ai-cost-label', labelMaps.cost);
+            bindSlider('ai-time','ai-time-label', labelMaps.time);
+            bindSlider('ai-energy','ai-energy-label', labelMaps.energy);
+            bindSlider('ai-variety','ai-variety-label', labelMaps.variety);
+            const applyBtn = document.getElementById('ai-apply');
+            const resetBtn = document.getElementById('ai-reset');
+            const shortlistEl = document.getElementById('ai-shortlist');
+            const moreEl = document.getElementById('ai-more');
+
+            function renderSkeleton(el, n=6){ if (!el) return; el.innerHTML=''; for (let i=0;i<n;i++){ const d=document.createElement('div'); d.className='ai-card skeleton'; el.appendChild(d);} }
+            function chip(label, val){ const s=document.createElement('span'); s.className='chip'; s.textContent=label+': '+val; s.style.marginRight='6px'; s.style.fontSize='12px'; s.style.background='#eef2f7'; s.style.borderRadius='999px'; s.style.padding='2px 8px'; return s; }
+            let aiDefaults = { cost:0, time:1, energy:1, variety:2 };
+            function toInt01(v, def){ const n = Number(v); const ok = Number.isFinite(n); const clamped = Math.max(0, Math.min(4, ok?n:def)); return clamped; }
+            function renderIdeas(el, ideas){
+                if (!el) return; el.innerHTML='';
+                const drawer = document.getElementById('ai-drawer');
+                const closeBtn = document.getElementById('ai-drawer-close');
+                const backdrop = document.getElementById('ai-drawer-backdrop');
+                const set = (id, v)=>{ const n=document.getElementById(id); if (n) n.textContent = v || ''; };
+                const setList = (id, arr)=>{ const n=document.getElementById(id); if (!n) return; n.innerHTML=''; (arr||[]).forEach(x=>{ const li=document.createElement('li'); li.textContent = x; n.appendChild(li); }); };
+                const setChips = (id, tags)=>{ const n=document.getElementById(id); if (!n) return; n.innerHTML=''; (tags||[]).forEach(t=>{ const s=document.createElement('span'); s.className='chip'; s.textContent=t; n.appendChild(s); }); };
+                function openDrawer(item){ if (!drawer) return; drawer.classList.add('open');
+                    set('ai-drawer-title', item.title||'Idea');
+                    set('ai-drawer-lens', item.lens||'');
+                    set('ai-drawer-micro', item.micro_description||'');
+                    set('ai-drawer-why', item.why_this_fits_you||'');
+                    set('ai-drawer-prompt', item.prompt_to_start||'');
+                    setList('ai-drawer-steps', item.steps||[]);
+                    set('ai-drawer-signal', item.signal_to_watch_for||'');
+                    setList('ai-drawer-reflect', item.reflection_questions||[]);
+                    const safetyWrap = document.getElementById('ai-drawer-safety-wrap');
+                    if (safetyWrap) safetyWrap.style.display = item.safety_notes ? 'block' : 'none';
+                    set('ai-drawer-safety', item.safety_notes||'');
+                    setChips('ai-drawer-chips', item.tags||[]);
+                }
+                function closeDrawer(){ if (drawer) drawer.classList.remove('open'); }
+                if (closeBtn) closeBtn.onclick = closeDrawer; if (backdrop) backdrop.onclick = closeDrawer; window.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeDrawer(); });
+
+                ideas.forEach(item=>{
+                    const c=document.createElement('div'); c.className='ai-card';
+                    c.tabIndex=0; c.style.cursor='pointer';
+                    const h=document.createElement('h5'); h.textContent=item.title||'Idea'; h.style.margin='0 0 6px';
+                    const b=document.createElement('div'); b.style.margin='0 0 8px';
+                    const lensTxt = item.lens ? ('• '+item.lens+' • ') : ''; b.textContent = lensTxt + (item.micro_description||'');
+                    const chips=document.createElement('div');
+                    const ec = toInt01(item.estimated_cost, aiDefaults.cost); const et = toInt01(item.estimated_time, aiDefaults.time);
+                    const ee = toInt01(item.estimated_energy, aiDefaults.energy); const ev = toInt01(item.estimated_variety, aiDefaults.variety);
+                    chips.appendChild(chip('C', ec)); chips.appendChild(chip('T', et)); chips.appendChild(chip('E', ee)); chips.appendChild(chip('V', ev));
+                    c.appendChild(h); c.appendChild(b); c.appendChild(chips);
+                    c.addEventListener('click', ()=> openDrawer(item));
+                    c.addEventListener('keypress', (e)=>{ if (e.key==='Enter' || e.key===' ') { e.preventDefault(); openDrawer(item);} });
+                    el.appendChild(c);
+                });
+            }
+
+            if (applyBtn){
+                applyBtn.addEventListener('click', function(e){
+                    e.preventDefault();
+                    renderSkeleton(shortlistEl, 6); renderSkeleton(moreEl, 6);
+                    applyBtn.disabled = true; applyBtn.textContent = 'Generating…';
+                    aiDefaults = {
+                        cost: parseInt(document.getElementById('ai-cost')?.value||0,10),
+                        time: parseInt(document.getElementById('ai-time')?.value||1,10),
+                        energy: parseInt(document.getElementById('ai-energy')?.value||1,10),
+                        variety: parseInt(document.getElementById('ai-variety')?.value||2,10),
+                    };
+                    const body = new URLSearchParams({
+                        action: 'mc_ai_generate_mves',
+                        cost: aiDefaults.cost,
+                        time: aiDefaults.time,
+                        energy: aiDefaults.energy,
+                        variety: aiDefaults.variety,
+                        quantity: 12,
+                        lens_curiosity: document.getElementById('lens-curiosity')?.checked?1:0,
+                        lens_rolemodels: document.getElementById('lens-rolemodels')?.checked?1:0,
+                        lens_opposites: document.getElementById('lens-opposites')?.checked?1:0,
+                        lens_adjacency: document.getElementById('lens-adjacency')?.checked?1:0,
+                    });
+                    fetch(ajaxUrl, { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body })
+                        .then(r=>r.json())
+                        .then(j=>{
+                            const banner = document.getElementById('ai-banner');
+                            if (j && j.success && j.data){
+                                renderIdeas(shortlistEl, j.data.shortlist||[]); renderIdeas(moreEl, j.data.more||[]);
+                                if (banner) {
+                                    if (j.data.used_fallback) {
+                                        banner.style.display='block';
+                                        const reason = j.data.fallback_reason || 'unknown';
+                                        banner.textContent = 'Using placeholders — ' + reason.replace(/_/g,' ');
+                                    } else { banner.style.display='none'; banner.textContent=''; }
+                                }
+                            }
+                            else {
+                                if (shortlistEl) shortlistEl.innerHTML = '<div class="ai-card">We could not generate ideas just now.</div>';
+                                if (moreEl) moreEl.innerHTML = '';
+                                if (banner) { banner.style.display='block'; banner.textContent='Request failed — please try again.'; }
+                            }
+                        })
+                        .catch(()=>{ shortlistEl.innerHTML = '<div class="ai-card">Network error. Please try again.</div>'; moreEl.innerHTML=''; })
+                        .finally(()=>{ applyBtn.disabled = false; applyBtn.textContent = 'Show experiments that fit my settings'; });
+                });
+            }
+
+            if (resetBtn){
+                resetBtn.addEventListener('click', function(){
+                    const set = (id,val)=>{ const el=document.getElementById(id); if (el) el.value=val; };
+                    set('ai-cost',0); set('ai-time',1); set('ai-energy',1); set('ai-variety',2);
+                    ['lens-curiosity','lens-rolemodels','lens-opposites','lens-adjacency'].forEach(id=>{ const el=document.getElementById(id); if (el) el.checked=true; });
+                });
+            }
+        });
+        </script>
         <?php
         return ob_get_clean();
     }
@@ -1475,5 +1870,265 @@ class Micro_Coach_Core {
         foreach ($quizzes as $quiz) {
             if (!empty($quiz['shortcode'])) delete_transient('page_url_for_' . $quiz['shortcode']);
         }
+    }
+
+    /**
+     * AJAX: Generate MVEs (Minimum Viable Experiences) based on profile + filters.
+     * Returns JSON with two arrays: shortlist and more (placeholders if API not configured).
+     */
+    public function ajax_ai_generate_mves() {
+        if (!is_user_logged_in()) {
+            wp_send_json_error(['message' => 'Please sign in to use the AI coach.'], 401);
+        }
+
+        $user_id = get_current_user_id();
+
+        // Gather filters (0..4)
+        $cost    = max(0, min(4, intval($_POST['cost'] ?? 0)));
+        $time    = max(0, min(4, intval($_POST['time'] ?? 1)));
+        $energy  = max(0, min(4, intval($_POST['energy'] ?? 1)));
+        $variety = max(0, min(4, intval($_POST['variety'] ?? 2)));
+        $qty     = max(4, min(24, intval($_POST['quantity'] ?? 12)));
+
+        $lenses = [
+            'Curiosity'   => !empty($_POST['lens_curiosity']),
+            'Role Models' => !empty($_POST['lens_rolemodels']),
+            'Opposites'   => !empty($_POST['lens_opposites']),
+            'Adjacency'   => !empty($_POST['lens_adjacency']),
+        ];
+
+        // Build profile snapshot (no PII)
+        $mi_results  = get_user_meta($user_id, 'miq_quiz_results', true) ?: [];
+        $cdt_results = get_user_meta($user_id, 'cdt_quiz_results', true) ?: [];
+        $pt_results  = get_user_meta($user_id, 'bartle_quiz_results', true) ?: [];
+
+        // MI top3 with 0..100 scores
+        $mi_part1  = $mi_results['part1Scores'] ?? [];
+        $mi_top3   = $mi_results['top3'] ?? [];
+        $mi_profile = [];
+        foreach ((array)$mi_top3 as $slug) {
+            $score = isset($mi_part1[$slug]) ? round(($mi_part1[$slug] / 40) * 100) : 0;
+            $mi_profile[] = ['slug' => $slug, 'score' => $score];
+        }
+
+        // CDT five subscales 0..100
+        $cdt_sorted = $cdt_results['sortedScores'] ?? [];
+        $cdt_scores = [];
+        foreach ((array)$cdt_sorted as $pair) {
+            if (!is_array($pair) || count($pair) < 2) continue;
+            $cdt_scores[$pair[0]] = round(($pair[1] / 50) * 100);
+        }
+        $cdt_top = $cdt_sorted[0][0] ?? null;
+        $cdt_bottom = end($cdt_sorted)[0] ?? null;
+
+        // Player Type
+        $pt_sorted = $pt_results['sortedScores'] ?? [];
+        $primary_pt   = $pt_sorted[0][0] ?? '';
+        $primary_pt_p = isset($pt_sorted[0][1]) ? round(($pt_sorted[0][1] / 50) * 100) : 0;
+        $secondary_pt = $pt_sorted[1][0] ?? '';
+        $secondary_pt_p = isset($pt_sorted[1][1]) ? round(($pt_sorted[1][1] / 50) * 100) : 0;
+
+        // Try to use OpenAI if configured; else produce a few placeholder ideas
+        $ideas = [];
+        $used_fallback = false; $fallback_reason = '';
+        $api_key = self::get_openai_api_key();
+        if (!empty($api_key)) {
+            // Construct a compact payload for the model
+            $payload = [
+                'user' => [
+                    'id' => (string)$user_id,
+                    'mi_top3' => $mi_profile,
+                    'cdt' => $cdt_scores,
+                    'cdt_top' => $cdt_top,
+                    'cdt_edge' => $cdt_bottom,
+                    'player_type' => [ 'primary' => [$primary_pt, $primary_pt_p], 'secondary' => [$secondary_pt, $secondary_pt_p] ],
+                ],
+                'filters' => [
+                    'cost' => $cost, 'time' => $time, 'energy' => $energy, 'variety' => $variety,
+                    'lenses' => array_keys(array_filter($lenses)), 'quantity' => $qty,
+                ],
+            ];
+
+            // JSON-mode prompt: require a single JSON object {"ideas": [...]} only.
+            $system = 'You are an AI coach that turns assessment profiles into safe, low‑stakes Minimum Viable Experiences (MVEs). '
+                    .'Always and only return a single JSON object with this top-level shape: {"ideas": [...]}. '
+                    .'Do not include prose, markdown, or backticks. Each idea must be runnable within 7 days.';
+            $user = 'Profile+filters JSON (no PII): ' . wp_json_encode($payload) . "\n\n" .
+                    'Each ideas[] item must have: '
+                    .'title (<=60), lens (Curiosity|Role Models|Opposites|Adjacency), micro_description (<=140), '
+                    .'why_this_fits_you, estimated_cost/time/energy/variety (ints 0..4), prompt_to_start, '
+                    .'steps (3-5 strings), safety_notes (string), signal_to_watch_for (string), '
+                    .'reflection_questions (2-3 strings), tags (array of short tokens). '
+                    .'Return: {"ideas": [...]}';
+
+            $http_args = [
+                'timeout' => 45, // increase timeout to reduce curl 28 timeouts
+                'redirection' => 3,
+                'httpversion' => '1.1',
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $api_key,
+                    'Content-Type'  => 'application/json',
+                    'Accept'        => 'application/json',
+                ],
+                'body' => wp_json_encode([
+                    'model' => 'gpt-4o-mini',
+                    'messages' => [
+                        ['role' => 'system', 'content' => $system],
+                        ['role' => 'user',   'content' => $user],
+                    ],
+                    'temperature' => 0.7,
+                    'response_format' => [ 'type' => 'json_object' ],
+                ]),
+            ];
+
+            // First attempt
+            $resp = wp_remote_post('https://api.openai.com/v1/chat/completions', $http_args);
+            // Simple retry on timeout or 5xx
+            if (
+                (is_wp_error($resp) && false !== stripos($resp->get_error_message(), 'timed out')) ||
+                (!is_wp_error($resp) && (int)wp_remote_retrieve_response_code($resp) >= 500)
+            ) {
+                error_log('MC AI: retry after timeout/5xx');
+                // bump timeout a bit for the retry
+                $http_args['timeout'] = 60;
+                $resp = wp_remote_post('https://api.openai.com/v1/chat/completions', $http_args);
+            }
+
+            if (!is_wp_error($resp) && ($code = wp_remote_retrieve_response_code($resp)) >= 200 && $code < 300) {
+                $body = json_decode(wp_remote_retrieve_body($resp), true);
+                $content = $body['choices'][0]['message']['content'] ?? '';
+                // Primary parse
+                $parsed = json_decode($content, true);
+                // Secondary: try trimming to nearest JSON braces if needed
+                if (!is_array($parsed)) {
+                    $start = strpos($content, '{'); $end = strrpos($content, '}');
+                    if ($start !== false && $end !== false && $end > $start) {
+                        $content2 = substr($content, $start, $end - $start + 1);
+                        $parsed = json_decode($content2, true);
+                    }
+                }
+                if (is_array($parsed)) {
+                    if (isset($parsed['ideas']) && is_array($parsed['ideas'])) {
+                        $ideas = $parsed['ideas'];
+                    } elseif (isset($parsed[0]) && is_array($parsed[0])) {
+                        // Model returned a bare array; accept it
+                        $ideas = $parsed;
+                    } else {
+                        $used_fallback = true; $fallback_reason = 'json_object_missing_ideas';
+                        error_log('MC AI: json_object_missing_ideas — first 400 chars: ' . substr($content, 0, 400));
+                    }
+                } else {
+                    $used_fallback = true; $fallback_reason = 'parse_error';
+                    error_log('MC AI: parse_error — first 400 chars: ' . substr($content, 0, 400));
+                }
+            } else {
+                $used_fallback = true; $fallback_reason = is_wp_error($resp) ? ('wp_error: ' . $resp->get_error_message()) : ('http_' . wp_remote_retrieve_response_code($resp));
+                $snippet = is_wp_error($resp) ? '' : substr(wp_remote_retrieve_body($resp), 0, 400);
+                error_log('MC AI: API error — ' . $fallback_reason . ' body: ' . $snippet);
+            }
+        }
+
+        // Fallback proof‑of‑concept generator (heuristic ideas tied to profile)
+        if (empty($ideas)) {
+            if (!$used_fallback) { $used_fallback = true; $fallback_reason = empty($api_key) ? 'no_api_key' : 'poc_generated'; }
+
+            // Friendly names
+            $mi_names = [
+                'linguistic' => 'Linguistic', 'logical-mathematical' => 'Logical–Mathematical', 'spatial'=>'Spatial',
+                'bodily-kinesthetic'=>'Bodily–Kinesthetic', 'musical'=>'Musical', 'interpersonal'=>'Interpersonal',
+                'intrapersonal'=>'Intrapersonal', 'naturalistic'=>'Naturalistic'
+            ];
+            $cdt_names = [
+                'ambiguity-tolerance'=>'Ambiguity Tolerance','value-conflict-navigation'=>'Value Conflict Navigation',
+                'self-confrontation-capacity'=>'Self‑Confrontation Capacity','discomfort-regulation'=>'Discomfort Regulation',
+                'conflict-resolution-tolerance'=>'Conflict Resolution Tolerance'
+            ];
+            $pt_primary_name = $primary_pt ? ucfirst($primary_pt) : '';
+            $mi_top1 = $mi_profile[0]['slug'] ?? ''; $mi_top1_name = $mi_names[$mi_top1] ?? ($mi_top1 ?: 'Strength');
+            $mi_top2 = $mi_profile[1]['slug'] ?? ''; $mi_top2_name = $mi_names[$mi_top2] ?? ($mi_top2 ?: 'Skill');
+            $cdt_top_name = $cdt_names[$cdt_top] ?? ($cdt_top ?: 'CDT Strength');
+            $cdt_edge_name = $cdt_names[$cdt_bottom] ?? ($cdt_bottom ?: 'Growth Edge');
+
+            $selected_lenses = array_keys(array_filter($lenses)) ?: ['Curiosity','Role Models','Opposites','Adjacency'];
+
+            // Helper: clamp est within ±1 of filters for a comfortable fit
+            $est = function($target){ return max(0, min(4, $target)); };
+
+            // Templates per lens
+            $make = function($lens, $idx) use ($mi_top1_name,$mi_top2_name,$pt_primary_name,$cdt_top_name,$cdt_edge_name,$est,$cost,$time,$energy,$variety){
+                $title = $lens.' – ';
+                $desc = '';
+                $why  = '';
+                $tags = ['learning'];
+                switch($lens){
+                    case 'Curiosity':
+                        $title .= 'Micro‑scout in '.$mi_top1_name;
+                        $desc = 'Explore one tiny corner of '.$mi_top1_name.'—20 minutes, one focused question.';
+                        $why  = 'Builds on your '.$mi_top1_name.' strength while keeping stakes low ('.$cdt_top_name.').';
+                        $tags = ['learning','solo'];
+                        break;
+                    case 'Role Models':
+                        $title .= 'Shadow a mini role model';
+                        $desc = 'Observe someone skilled for one session; debrief for 10 minutes after.';
+                        $why  = 'Fits your '.$pt_primary_name.' motivation and reinforces '.$mi_top2_name.'.';
+                        $tags = ['social','leadership'];
+                        break;
+                    case 'Opposites':
+                        $title .= 'Opposite‑day in '.$mi_top1_name;
+                        $desc = 'Try the reverse of your usual approach once; capture one insight.';
+                        $why  = 'Gentle stretch toward '.$cdt_edge_name.' without heavy risk.';
+                        $tags = ['creative'];
+                        break;
+                    case 'Adjacency':
+                    default:
+                        $title .= 'Adjacent step near '.$mi_top2_name;
+                        $desc = 'Add a tiny adjacent skill next to '.$mi_top2_name.' for one session.';
+                        $why  = 'Stays near strengths while opening new options ('.$cdt_top_name.').';
+                        $tags = ['learning','experimentation'];
+                        break;
+                }
+                return [
+                    'title' => $title,
+                    'lens'  => $lens,
+                    'micro_description' => $desc,
+                    'why_this_fits_you' => $why,
+                    'estimated_cost' => $est($cost), 'estimated_time' => $est($time), 'estimated_energy' => $est($energy), 'estimated_variety' => $est($variety),
+                    'prompt_to_start' => 'Block 20 minutes on your calendar and set a phone reminder.',
+                    'steps' => ['Choose one target','Prepare 10 minutes','Run for 15–30 minutes','Capture one learning'],
+                    'safety_notes' => '',
+                    'signal_to_watch_for' => 'Did it energize you? What would you repeat?',
+                    'reflection_questions' => ['What surprised you?','What would you tweak next time?'],
+                    'tags' => $tags,
+                ];
+            };
+
+            // Generate ideas rotating lenses
+            $pool = [];
+            for ($i=0; $i<$qty; $i++){
+                $lens = $selected_lenses[$i % count($selected_lenses)];
+                $pool[] = $make($lens, $i);
+            }
+
+            // Deterministic fit scoring
+            $w = ['time'=>0.35,'energy'=>0.35,'cost'=>0.2,'variety'=>0.1];
+            foreach ($pool as &$it){
+                $dist = abs($it['estimated_time']-$time)*$w['time'] + abs($it['estimated_energy']-$energy)*$w['energy'] + abs($it['estimated_cost']-$cost)*$w['cost'] + abs($it['estimated_variety']-$variety)*$w['variety'];
+                $it['fit_score'] = max(0, round(100 - 25*$dist));
+            }
+            unset($it);
+            usort($pool, function($a,$b){ return ($b['fit_score'] ?? 0) <=> ($a['fit_score'] ?? 0); });
+
+            $ideas = $pool;
+        }
+
+        // Simple partition: shortlist 6, more next 6
+        $shortlist = array_slice($ideas, 0, 6);
+        $more      = array_slice($ideas, 6, 12);
+        wp_send_json_success([
+            'shortlist' => $shortlist,
+            'more'      => $more,
+            'used_fallback' => $used_fallback,
+            'fallback_reason' => $fallback_reason,
+        ]);
     }
 }
