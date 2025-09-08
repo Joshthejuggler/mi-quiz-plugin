@@ -12,6 +12,10 @@ class Micro_Coach_Core {
     const OPT_DESCRIPTIONS = 'mc_quiz_descriptions';
     // Stores the OpenAI (or compatible) API key for AI features
     const OPT_OPENAI_API_KEY = 'mc_openai_api_key';
+    // Toggle legacy prompt mode (pre-asset inline system prompt)
+    const OPT_AI_LEGACY_PROMPT = 'mc_ai_legacy_prompt_mode';
+    // Stores the versioned system prompt asset for AI calls
+    const OPT_AI_SYSTEM_PROMPT = 'mc_ai_system_prompt_asset';
 
     public function __construct() {
         // Add the new shortcode for the quiz dashboard.
@@ -135,6 +139,50 @@ class Micro_Coach_Core {
             'quiz-platform-settings',
             'mc_quiz_ai_section'
         );
+
+        // System Prompt Asset (MVE_GENERATOR_V1)
+        register_setting(self::OPT_GROUP, self::OPT_AI_SYSTEM_PROMPT, [$this, 'sanitize_system_prompt_asset']);
+        register_setting(self::OPT_GROUP, self::OPT_AI_LEGACY_PROMPT, function($v){ return (int)!!$v; });
+        add_settings_field(
+            self::OPT_AI_SYSTEM_PROMPT,
+            'Global System Prompt (MVE_GENERATOR_V1)',
+            function () {
+                $asset = get_option(self::OPT_AI_SYSTEM_PROMPT, []);
+                $defaults = [
+                    'prompt_id'   => 'MVE_GENERATOR_V1',
+                    'version'     => '1',
+                    'owner'       => wp_get_current_user()->user_login ?? 'admin',
+                    'last_updated'=> date('Y-m-d'),
+                    'content'     => self::get_default_system_prompt_content(),
+                ];
+                $asset = wp_parse_args(is_array($asset)?$asset:[], $defaults);
+                echo '<div style="max-width:780px">';
+                echo '<p class="description">Stored in the database and injected as the system prompt for AI calls. Runtime read-only; edit here during a "prompt release".</p>';
+                echo '<p><label>Prompt ID<br><input type="text" name="' . esc_attr(self::OPT_AI_SYSTEM_PROMPT) . '[prompt_id]" value="' . esc_attr($asset['prompt_id']) . '" style="width: 320px;"></label></p>';
+                echo '<p style="display:flex; gap:16px; align-items:flex-end;">'
+                    . '<label>Version<br><input type="text" name="' . esc_attr(self::OPT_AI_SYSTEM_PROMPT) . '[version]" value="' . esc_attr($asset['version']) . '" style="width: 120px;"></label>'
+                    . '<label>Owner<br><input type="text" name="' . esc_attr(self::OPT_AI_SYSTEM_PROMPT) . '[owner]" value="' . esc_attr($asset['owner']) . '" style="width: 220px;"></label>'
+                    . '<label>Last Updated<br><input type="date" name="' . esc_attr(self::OPT_AI_SYSTEM_PROMPT) . '[last_updated]" value="' . esc_attr($asset['last_updated']) . '" style="width: 180px;"></label>'
+                    . '</p>';
+                echo '<p><label>Content (system prompt)<br>';
+                echo '<textarea name="' . esc_attr(self::OPT_AI_SYSTEM_PROMPT) . '[content]" rows="12" style="width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;">' . esc_textarea($asset['content']) . '</textarea></label></p>';
+                echo '</div>';
+            },
+            'quiz-platform-settings',
+            'mc_quiz_ai_section'
+        );
+
+        // Legacy prompt mode toggle
+        add_settings_field(
+            self::OPT_AI_LEGACY_PROMPT,
+            'Use Legacy Prompt Flow',
+            function () {
+                $on = (int)get_option(self::OPT_AI_LEGACY_PROMPT, 0);
+                echo '<label><input type="checkbox" name="' . esc_attr(self::OPT_AI_LEGACY_PROMPT) . '" value="1" ' . checked(1, $on, false) . '> Revert to simpler, built-in system prompt for AI ideas (useful for debugging parse issues).</label>';
+            },
+            'quiz-platform-settings',
+            'mc_quiz_ai_section'
+        );
     }
 
     public function sanitize_descriptions($input) {
@@ -145,6 +193,29 @@ class Micro_Coach_Core {
             }
         }
         return $sanitized;
+    }
+
+    public function sanitize_system_prompt_asset($input){
+        $out = [
+            'prompt_id' => 'MVE_GENERATOR_V1',
+            'version' => '1',
+            'owner' => 'admin',
+            'last_updated' => date('Y-m-d'),
+            'content' => self::get_default_system_prompt_content(),
+        ];
+        if (!is_array($input)) return $out;
+        $out['prompt_id'] = sanitize_text_field($input['prompt_id'] ?? 'MVE_GENERATOR_V1');
+        $out['version'] = sanitize_text_field($input['version'] ?? '1');
+        $out['owner'] = sanitize_text_field($input['owner'] ?? 'admin');
+        $last = sanitize_text_field($input['last_updated'] ?? date('Y-m-d'));
+        $out['last_updated'] = preg_match('/^\d{4}-\d{2}-\d{2}$/', $last) ? $last : date('Y-m-d');
+        $content = isset($input['content']) ? (string)$input['content'] : '';
+        $out['content'] = trim($content) !== '' ? wp_kses_post($content) : self::get_default_system_prompt_content();
+        return $out;
+    }
+
+    private static function get_default_system_prompt_content(){
+        return "Role: You generate personalized “minimum viable experiments” (MVEs) for self-discovery.\nInputs you will receive: A JSON payload with: MI top 3 (with scores), CDT subscale scores (plus strongest & growth edge), Bartle player type (primary and optional secondary), optional interests/context; and user-selected filters (cost, time, energy, variety), the brainstorming lenses to use (Curiosity, Role Models, Opposites, Adjacency), and a quantity target.\nTask: Produce a diverse set of safe, low-stakes MVEs that the user can try within 7 days. Respect filters; tie each idea back to MI/CDT/Bartle.\nFrameworks: Use TTCT (fluency/flexibility/originality/elaboration) for ideation; Fogg (Motivation × Ability × Prompt) for actionability; consider Gretchen Rubin’s Tendencies and Attachment/Interpersonal style for adherence & social fit.\nConstraints:\n– Specific, runnable steps (3–5), not generic advice.\n– Calibrate cost/time/energy/variety to sliders; don’t exceed ±1 unless you add a tradeoff note.\n– All ideas must be safe, legal, age-appropriate, and low-risk.\n– Keep language warm, concrete, and non-judgmental.\nOutput format: Return strict JSON array of objects with fields:\ntitle (≤60 chars), lens (Curiosity|Role Models|Opposites|Adjacency), micro_description (≤140 chars), why_this_fits_you (explicitly cite at least 1 MI and 1 CDT; include Bartle when relevant), estimated_cost (0–4), estimated_time (0–4), estimated_energy (0–4), estimated_variety (0–4), prompt_to_start (clear trigger), steps (3–5 strings), safety_notes (optional), signal_to_watch_for, reflection_questions (2–3 strings), tags (array).\nReranking (if requested): When given a prior list plus filters, return the top K with a fit_score (0–100) and a one-line tradeoff_note.";
     }
 
     public function render_settings_page() {
@@ -762,19 +833,56 @@ class Micro_Coach_Core {
                                 </div>
                             <?php endif; ?>
                             <div id="ai-banner" class="ai-banner" style="display:none;"></div>
-                            <div class="ai-filters">
-                                <div class="ai-fheader">
-                                    <span class="f-icn">🧩</span>
-                                    <div>
-                                        <h3 class="ai-title">Choose your filters</h3>
-                                        <p class="ai-sub">to shape your filters to shape experiments you’ll see next.</p>
+                            <details id="ai-devtools" class="ai-devtools" style="display:none;">
+                                <summary>Dev tools</summary>
+                                <div class="ai-devgrid">
+                                    <div><strong>Model:</strong> <span id="ai-dev-model">—</span></div>
+                                    <div><strong>Prompt tokens:</strong> <span id="ai-dev-ptok">—</span></div>
+                                    <div><strong>Completion tokens:</strong> <span id="ai-dev-ctok">—</span></div>
+                                    <div><strong>Total tokens:</strong> <span id="ai-dev-ttok">—</span></div>
+                                    <div><strong>Est. cost (USD):</strong> <span id="ai-dev-cost">—</span></div>
+                                    <div><strong>Attempts:</strong> <span id="ai-dev-attempts">—</span></div>
+                                    <div><strong>Retry note:</strong> <span id="ai-dev-retry">—</span></div>
+                                    <div><strong>Supplement:</strong> <span id="ai-dev-supp">—</span></div>
+                                    <div><strong>Repair:</strong> <span id="ai-dev-repair">—</span></div>
+                                </div>
+                                <div class="ai-devpayload-wrap">
+                                    <div class="ai-devpayload-head">Payload sent</div>
+                                    <pre id="ai-dev-payload" class="ai-devpayload"></pre>
+                                </div>
+                                <div class="ai-devpayload-wrap" id="ai-devpreview-wrap" style="display:none;">
+                                    <div class="ai-devpayload-head">Raw preview (first 400 chars after cleanup)</div>
+                                    <pre id="ai-dev-preview" class="ai-devpayload"></pre>
+                                </div>
+                                <div class="ai-devpayload-wrap" id="ai-devtail-wrap" style="display:none;">
+                                    <div class="ai-devpayload-head">Raw tail (last 400 chars)</div>
+                                    <pre id="ai-dev-tail" class="ai-devpayload"></pre>
+                                </div>
+                                <div class="ai-devpayload-wrap" id="ai-devparse-wrap" style="display:none;">
+                                    <div class="ai-devpayload-head">Parse debug</div>
+                                    <pre id="ai-dev-parse" class="ai-devpayload"></pre>
+                                </div>
+                            </details>
+                                <div class="ai-filters">
+                                    <div class="ai-fheader">
+                                        <span class="f-icn">🧩</span>
+                                        <div>
+                                            <h3 class="ai-title">Choose your filters</h3>
+                                            <p class="ai-sub">to shape your filters to shape experiments you’ll see next.</p>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="ai-filter">
-                                    <div class="ai-filter-row"><span class="f-icn">💰</span><div class="f-title">Cost</div><div class="f-right" id="ai-cost-label">Free</div></div>
-                                    <div class="f-sub">How much are you willing to spend?</div>
-                                    <input type="range" min="0" max="4" step="1" value="0" id="ai-cost">
-                                </div>
+                                    <div class="ai-filter">
+                                        <div class="ai-filter-row"><span class="f-icn">🤖</span><div class="f-title">Model</div><div class="f-right" id="ai-model-label">4o-mini</div></div>
+                                        <div class="ai-lenses" role="radiogroup" aria-label="Model">
+                                            <label><input type="radio" name="ai-model" id="ai-model-4o-mini" value="gpt-4o-mini" checked> 4o-mini</label>
+                                            <label><input type="radio" name="ai-model" id="ai-model-4o" value="gpt-4o"> 4o</label>
+                                        </div>
+                                    </div>
+                                    <div class="ai-filter">
+                                        <div class="ai-filter-row"><span class="f-icn">💰</span><div class="f-title">Cost</div><div class="f-right" id="ai-cost-label">Free</div></div>
+                                        <div class="f-sub">How much are you willing to spend?</div>
+                                        <input type="range" min="0" max="4" step="1" value="0" id="ai-cost">
+                                    </div>
                                 <div class="ai-filter">
                                     <div class="ai-filter-row"><span class="f-icn">⏳</span><div class="f-title">Time</div><div class="f-right" id="ai-time-label">15–30m</div></div>
                                     <div class="f-sub">How much time can you commit?</div>
@@ -812,8 +920,8 @@ class Micro_Coach_Core {
                                     <div class="ai-card skeleton"></div>
                                     <div class="ai-card skeleton"></div>
                                 </div>
-                                <h4 class="ai-section">More options</h4>
-                                <div class="ai-results-grid" id="ai-more"></div>
+                                <h4 class="ai-section" id="ai-more-title" style="display:none;">More options</h4>
+                                <div class="ai-results-grid" id="ai-more" style="display:none;"></div>
                             </div>
 
                             <!-- Drawer for idea details -->
@@ -1500,6 +1608,11 @@ class Micro_Coach_Core {
             .ai-alert{ background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
             .ai-filters{ background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow: 0 6px 14px rgba(15,23,42,.06); }
             .ai-banner{ background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
+            .ai-devtools{ background:#f8fafc; border:1px dashed #cbd5e1; color:#334155; border-radius:8px; padding:10px 12px; margin-bottom:12px; }
+            .ai-devgrid{ display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:8px; margin-bottom:8px; }
+            .ai-devpayload-wrap{ background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; }
+            .ai-devpayload-head{ padding:6px 10px; background:#f1f5f9; border-bottom:1px solid #e2e8f0; font-size:12px; color:#475569; }
+            .ai-devpayload{ margin:0; padding:10px; max-height:220px; overflow:auto; font-size:12px; }
             .ai-fheader{ display:flex; gap:10px; align-items:flex-start; margin-bottom:6px; }
             .ai-title{ margin:0 0 2px; font-size:1.1em; font-weight:800; }
             .ai-sub{ margin:0 0 10px; color:#64748b; }
@@ -1519,14 +1632,21 @@ class Micro_Coach_Core {
             @media (max-width: 768px){ .ai-results-grid{ grid-template-columns: 1fr; } .ai-sliders{ grid-template-columns: 1fr 1fr; } }
             .ai-card{ background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px; min-height:120px; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
             .ai-card.skeleton{ background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
+            /* Expand affordance on cards */
+            .ai-card{ position: relative; }
+            .ai-card .ai-card-arrow{ position: absolute; bottom: 10px; right: 10px; color:#64748b; font-size:16px; line-height:1; }
+            .ai-card:hover .ai-card-arrow{ color:#334155; transform: translate(2px, -2px); transition: transform .15s ease, color .15s ease; }
             @keyframes shimmer { 0% { background-position: -400px 0;} 100%{ background-position: 400px 0; } }
 
-            /* Drawer styles */
+            /* Modal styles (centered) replacing previous drawer */
             .ai-drawer{ position: fixed; inset: 0; z-index: 1000; display:none; }
             .ai-drawer.open{ display:block; }
-            .ai-drawer-backdrop{ position: absolute; inset: 0; background: rgba(15,23,42,0.35); }
-            .ai-drawer-panel{ position: absolute; top: 0; right: 0; width: min(480px, 96vw); height: 100%; overflow:auto; background:#fff; border-left:1px solid #e2e8f0; box-shadow:-6px 0 16px rgba(0,0,0,0.08); padding: 18px; }
+            .ai-drawer-backdrop{ position: absolute; inset: 0; background: rgba(15,23,42,0.45); }
+            .ai-drawer-panel{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                width: min(760px, 96vw); max-height: 85vh; overflow:auto; background:#fff; border:1px solid #e2e8f0; border-radius: 12px;
+                box-shadow: 0 22px 60px rgba(2,6,23,0.25), 0 10px 20px rgba(2,6,23,0.15); padding: 18px 20px; }
             .ai-drawer-close{ position: absolute; top: 10px; right: 12px; border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
+            @media (max-width: 560px){ .ai-drawer-panel{ width: 94vw; max-height: 88vh; } }
             .ai-drawer-title{ margin:0 0 4px; }
             .ai-drawer-lens{ display:inline-block; background:#eef2f7; border-radius:999px; padding:2px 10px; font-size:12px; color:#334155; }
             .ai-drawer-micro{ color:#475569; }
@@ -1716,6 +1836,7 @@ class Micro_Coach_Core {
 
             // AI Coach handlers
             const ajaxUrl = '<?php echo esc_url_raw(admin_url('admin-ajax.php')); ?>';
+            const isAdmin = <?php echo current_user_can('manage_options') ? 'true' : 'false'; ?>;
             // Dynamic labels for filters
             const labelMaps = {
                 cost: ['Free','Low','Medium','Higher','High'],
@@ -1736,9 +1857,26 @@ class Micro_Coach_Core {
             const resetBtn = document.getElementById('ai-reset');
             const shortlistEl = document.getElementById('ai-shortlist');
             const moreEl = document.getElementById('ai-more');
+            const moreTitle = document.getElementById('ai-more-title');
+            const modelLabel = document.getElementById('ai-model-label');
+            function getSelectedModel(){
+                const el = document.querySelector('input[name="ai-model"]:checked');
+                return el && el.value ? el.value : 'gpt-4o-mini';
+            }
+            // Reflect model in right-side label
+            document.querySelectorAll('input[name="ai-model"]').forEach(r => {
+                r.addEventListener('change', ()=>{ if (modelLabel){ modelLabel.textContent = r.value === 'gpt-4o' ? '4o' : '4o-mini'; } });
+            });
 
             function renderSkeleton(el, n=6){ if (!el) return; el.innerHTML=''; for (let i=0;i<n;i++){ const d=document.createElement('div'); d.className='ai-card skeleton'; el.appendChild(d);} }
-            function chip(label, val){ const s=document.createElement('span'); s.className='chip'; s.textContent=label+': '+val; s.style.marginRight='6px'; s.style.fontSize='12px'; s.style.background='#eef2f7'; s.style.borderRadius='999px'; s.style.padding='2px 8px'; return s; }
+            function chip(icon, ariaLabel, val){
+                const s=document.createElement('span');
+                s.className='chip';
+                s.textContent = (icon?icon+' ':'') + val;
+                s.style.marginRight='6px'; s.style.fontSize='12px'; s.style.background='#eef2f7'; s.style.borderRadius='999px'; s.style.padding='2px 8px';
+                if (ariaLabel){ s.setAttribute('title', ariaLabel+': '+val); s.setAttribute('aria-label', ariaLabel+': '+val); }
+                return s;
+            }
             let aiDefaults = { cost:0, time:1, energy:1, variety:2 };
             function toInt01(v, def){ const n = Number(v); const ok = Number.isFinite(n); const clamped = Math.max(0, Math.min(4, ok?n:def)); return clamped; }
             function renderIdeas(el, ideas){
@@ -1773,10 +1911,16 @@ class Micro_Coach_Core {
                     const b=document.createElement('div'); b.style.margin='0 0 8px';
                     const lensTxt = item.lens ? ('• '+item.lens+' • ') : ''; b.textContent = lensTxt + (item.micro_description||'');
                     const chips=document.createElement('div');
-                    const ec = toInt01(item.estimated_cost, aiDefaults.cost); const et = toInt01(item.estimated_time, aiDefaults.time);
-                    const ee = toInt01(item.estimated_energy, aiDefaults.energy); const ev = toInt01(item.estimated_variety, aiDefaults.variety);
-                    chips.appendChild(chip('C', ec)); chips.appendChild(chip('T', et)); chips.appendChild(chip('E', ee)); chips.appendChild(chip('V', ev));
+                    const ec = toInt01(item.estimated_cost, aiDefaults.cost);
+                    const et = toInt01(item.estimated_time, aiDefaults.time);
+                    const ee = toInt01(item.estimated_energy, aiDefaults.energy);
+                    const ev = toInt01(item.estimated_variety, aiDefaults.variety);
+                    chips.appendChild(chip('💰','Cost', ec));
+                    chips.appendChild(chip('⏳','Time', et));
+                    chips.appendChild(chip('⚡️','Energy', ee));
+                    chips.appendChild(chip('🎲','Variety', ev));
                     c.appendChild(h); c.appendChild(b); c.appendChild(chips);
+                    const arr=document.createElement('span'); arr.className='ai-card-arrow'; arr.setAttribute('aria-hidden','true'); arr.textContent='↗'; c.appendChild(arr);
                     c.addEventListener('click', ()=> openDrawer(item));
                     c.addEventListener('keypress', (e)=>{ if (e.key==='Enter' || e.key===' ') { e.preventDefault(); openDrawer(item);} });
                     el.appendChild(c);
@@ -1786,7 +1930,9 @@ class Micro_Coach_Core {
             if (applyBtn){
                 applyBtn.addEventListener('click', function(e){
                     e.preventDefault();
-                    renderSkeleton(shortlistEl, 6); renderSkeleton(moreEl, 6);
+                    renderSkeleton(shortlistEl, 6);
+                    if (moreTitle) moreTitle.style.display='none';
+                    if (moreEl) { moreEl.innerHTML=''; moreEl.style.display='none'; }
                     applyBtn.disabled = true; applyBtn.textContent = 'Generating…';
                     aiDefaults = {
                         cost: parseInt(document.getElementById('ai-cost')?.value||0,10),
@@ -1796,6 +1942,7 @@ class Micro_Coach_Core {
                     };
                     const body = new URLSearchParams({
                         action: 'mc_ai_generate_mves',
+                        model: getSelectedModel(),
                         cost: aiDefaults.cost,
                         time: aiDefaults.time,
                         energy: aiDefaults.energy,
@@ -1811,7 +1958,15 @@ class Micro_Coach_Core {
                         .then(j=>{
                             const banner = document.getElementById('ai-banner');
                             if (j && j.success && j.data){
-                                renderIdeas(shortlistEl, j.data.shortlist||[]); renderIdeas(moreEl, j.data.more||[]);
+                                const more = Array.isArray(j.data.more) ? j.data.more : [];
+                                renderIdeas(shortlistEl, j.data.shortlist||[]);
+                                if (more.length > 0){
+                                    if (moreTitle) moreTitle.style.display='block';
+                                    if (moreEl) { moreEl.style.display='grid'; renderIdeas(moreEl, more); }
+                                } else {
+                                    if (moreTitle) moreTitle.style.display='none';
+                                    if (moreEl) { moreEl.style.display='none'; moreEl.innerHTML=''; }
+                                }
                                 if (banner) {
                                     if (j.data.used_fallback) {
                                         banner.style.display='block';
@@ -1819,14 +1974,92 @@ class Micro_Coach_Core {
                                         banner.textContent = 'Using placeholders — ' + reason.replace(/_/g,' ');
                                     } else { banner.style.display='none'; banner.textContent=''; }
                                 }
+
+                                // Dev Tools population
+                                const devTools = document.getElementById('ai-devtools');
+                                const dev = j?.data?.debug || null;
+                                if (devTools && (dev || j.data.used_fallback)) {
+                                    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = (val === null || val === undefined || val === '') ? '—' : String(val); };
+                                    const model = dev?.model || (j.data.used_fallback ? 'poc_fallback' : 'unknown');
+                                    const ptok  = (typeof dev?.prompt_tokens === 'number') ? dev.prompt_tokens : null;
+                                    const ctok  = (typeof dev?.completion_tokens === 'number') ? dev.completion_tokens : null;
+                                    const ttok  = (typeof dev?.total_tokens === 'number') ? dev.total_tokens : (ptok!==null && ctok!==null ? ptok+ctok : null);
+                                    let cost = dev?.estimated_cost_usd; if (typeof cost === 'number') { try { cost = cost.toFixed(6); } catch(e){} }
+                                    setText('ai-dev-model', model);
+                                    setText('ai-dev-ptok', ptok);
+                                    setText('ai-dev-ctok', ctok);
+                                    setText('ai-dev-ttok', ttok);
+                                    setText('ai-dev-cost', (cost!==undefined && cost!==null) ? ('$'+cost) : '—');
+                                    setText('ai-dev-attempts', dev?.attempts);
+                                    setText('ai-dev-retry', dev?.retry_note);
+                                    const suppTxt = (dev?.supplement_attempted ? `added ${dev?.supplement_added||0}` : '—');
+                                    setText('ai-dev-supp', suppTxt);
+                                    const repairTxt = (dev?.repair_attempted ? (dev?.repair_ok ? 'ok' : (dev?.repair_note||'failed')) : '—');
+                                    setText('ai-dev-repair', repairTxt);
+                                    const payloadEl = document.getElementById('ai-dev-payload');
+                                    if (payloadEl) {
+                                        try { payloadEl.textContent = dev?.payload ? JSON.stringify(dev.payload, null, 2) : ''; }
+                                        catch(e){ payloadEl.textContent = ''; }
+                                    }
+                                    const previewWrap = document.getElementById('ai-devpreview-wrap');
+                                    const previewEl = document.getElementById('ai-dev-preview');
+                                    if (previewWrap && previewEl) {
+                                        if (dev?.raw_preview) { previewWrap.style.display='block'; previewEl.textContent = dev.raw_preview; }
+                                        else { previewWrap.style.display='none'; previewEl.textContent=''; }
+                                    }
+                                    const tailWrap = document.getElementById('ai-devtail-wrap');
+                                    const tailEl = document.getElementById('ai-dev-tail');
+                                    if (tailWrap && tailEl) {
+                                        if (dev?.raw_tail) { tailWrap.style.display='block'; tailEl.textContent = dev.raw_tail; }
+                                        else { tailWrap.style.display='none'; tailEl.textContent=''; }
+                                    }
+                                    const parseWrap = document.getElementById('ai-devparse-wrap');
+                                    const parseEl = document.getElementById('ai-dev-parse');
+                                    if (parseWrap && parseEl) {
+                                        if (dev?.parse) { parseWrap.style.display='block'; try { parseEl.textContent = JSON.stringify(dev.parse, null, 2); } catch(e){ parseEl.textContent = String(dev.parse); } }
+                                        else { parseWrap.style.display='none'; parseEl.textContent=''; }
+                                    }
+                                    devTools.style.display = 'block';
+                                    if (isAdmin || j.data.used_fallback || dev?.prompt_tokens !== undefined) {
+                                        devTools.setAttribute('open','open');
+                                    }
+                                }
                             }
                             else {
                                 if (shortlistEl) shortlistEl.innerHTML = '<div class="ai-card">We could not generate ideas just now.</div>';
                                 if (moreEl) moreEl.innerHTML = '';
                                 if (banner) { banner.style.display='block'; banner.textContent='Request failed — please try again.'; }
+                                // Show Dev Tools even on failure with client-known context
+                                const devTools = document.getElementById('ai-devtools');
+                                if (devTools) {
+                                    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = (val === null || val === undefined || val === '') ? '—' : String(val); };
+                                    const model = getSelectedModel();
+                                    setText('ai-dev-model', model);
+                                    setText('ai-dev-ptok', null); setText('ai-dev-ctok', null); setText('ai-dev-ttok', null); setText('ai-dev-cost','—');
+                                    setText('ai-dev-attempts', 0); setText('ai-dev-retry', 'client: request failed'); setText('ai-dev-supp','—'); setText('ai-dev-repair','—');
+                                    const payloadEl = document.getElementById('ai-dev-payload');
+                                    if (payloadEl) {
+                                        try {
+                                            const payload = { filters: { cost: aiDefaults.cost, time: aiDefaults.time, energy: aiDefaults.energy, variety: aiDefaults.variety, lenses: ['Curiosity','Role Models','Opposites','Adjacency'].filter((n,i)=>{
+                                                const map=['lens-curiosity','lens-rolemodels','lens-opposites','lens-adjacency']; const el=document.getElementById(map[i]); return el && el.checked; }), quantity: 12 } };
+                                            payloadEl.textContent = JSON.stringify(payload, null, 2);
+                                        } catch(e){ payloadEl.textContent=''; }
+                                    }
+                                    devTools.style.display='block'; devTools.setAttribute('open','open');
+                                }
                             }
                         })
-                        .catch(()=>{ shortlistEl.innerHTML = '<div class="ai-card">Network error. Please try again.</div>'; moreEl.innerHTML=''; })
+                        .catch(()=>{ 
+                            shortlistEl.innerHTML = '<div class="ai-card">Network error. Please try again.</div>'; moreEl.innerHTML='';
+                            const devTools = document.getElementById('ai-devtools');
+                            if (devTools) {
+                                const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = (val === null || val === undefined || val === '') ? '—' : String(val); };
+                                setText('ai-dev-model', getSelectedModel());
+                                setText('ai-dev-attempts', 0); setText('ai-dev-retry', 'client: network error'); setText('ai-dev-supp','—'); setText('ai-dev-repair','—');
+                                const payloadEl = document.getElementById('ai-dev-payload'); if (payloadEl) { try { const payload = { filters: { cost: aiDefaults.cost, time: aiDefaults.time, energy: aiDefaults.energy, variety: aiDefaults.variety } }; payloadEl.textContent = JSON.stringify(payload, null, 2);} catch(e){ payloadEl.textContent=''; } }
+                                devTools.style.display='block'; devTools.setAttribute('open','open');
+                            }
+                        })
                         .finally(()=>{ applyBtn.disabled = false; applyBtn.textContent = 'Show experiments that fit my settings'; });
                 });
             }
@@ -1928,11 +2161,48 @@ class Micro_Coach_Core {
         $secondary_pt = $pt_sorted[1][0] ?? '';
         $secondary_pt_p = isset($pt_sorted[1][1]) ? round(($pt_sorted[1][1] / 50) * 100) : 0;
 
+        // Common debug payload we can echo back to the client devtools
+        $debug_payload = [
+            'user' => [
+                'id' => (string)$user_id,
+                'mi_top3' => $mi_profile,
+                'cdt' => $cdt_scores,
+                'cdt_top' => $cdt_top,
+                'cdt_edge' => $cdt_bottom,
+                'player_type' => [ 'primary' => [$primary_pt, $primary_pt_p], 'secondary' => [$secondary_pt, $secondary_pt_p] ],
+            ],
+            'filters' => [
+                'cost' => $cost, 'time' => $time, 'energy' => $energy, 'variety' => $variety,
+                'lenses' => array_keys(array_filter($lenses)), 'quantity' => $qty,
+            ],
+        ];
+
         // Try to use OpenAI if configured; else produce a few placeholder ideas
         $ideas = [];
         $used_fallback = false; $fallback_reason = '';
         $api_key = self::get_openai_api_key();
         if (!empty($api_key)) {
+            // Model selection (allow only specific models)
+            $selected_model = 'gpt-4o-mini';
+            if (!empty($_POST['model'])) {
+                $m = sanitize_text_field(wp_unslash($_POST['model']));
+                if (in_array($m, ['gpt-4o-mini','gpt-4o'], true)) { $selected_model = $m; }
+            }
+            // Load system prompt asset (runtime read-only)
+            $use_legacy = (int)get_option(self::OPT_AI_LEGACY_PROMPT, 0) === 1;
+            $asset = get_option(self::OPT_AI_SYSTEM_PROMPT, []);
+            $system_prompt = is_array($asset) && !empty($asset['content']) ? (string)$asset['content'] : self::get_default_system_prompt_content();
+            $sp_meta = [
+                'prompt_id' => is_array($asset) && !empty($asset['prompt_id']) ? (string)$asset['prompt_id'] : 'MVE_GENERATOR_V1',
+                'version' => is_array($asset) && !empty($asset['version']) ? (string)$asset['version'] : '1',
+                'last_updated' => is_array($asset) && !empty($asset['last_updated']) ? (string)$asset['last_updated'] : '',
+                'content_sha256' => hash('sha256', $system_prompt),
+                'length' => strlen($system_prompt),
+            ];
+
+            // Request a smaller batch first to reduce truncation; we'll top-up if needed
+            $req_qty = min(6, (int)$qty);
+
             // Construct a compact payload for the model
             $payload = [
                 'user' => [
@@ -1945,21 +2215,21 @@ class Micro_Coach_Core {
                 ],
                 'filters' => [
                     'cost' => $cost, 'time' => $time, 'energy' => $energy, 'variety' => $variety,
-                    'lenses' => array_keys(array_filter($lenses)), 'quantity' => $qty,
+                    'lenses' => array_keys(array_filter($lenses)), 'quantity' => $req_qty,
                 ],
             ];
 
-            // JSON-mode prompt: require a single JSON object {"ideas": [...]} only.
-            $system = 'You are an AI coach that turns assessment profiles into safe, low‑stakes Minimum Viable Experiences (MVEs). '
-                    .'Always and only return a single JSON object with this top-level shape: {"ideas": [...]}. '
-                    .'Do not include prose, markdown, or backticks. Each idea must be runnable within 7 days.';
-            $user = 'Profile+filters JSON (no PII): ' . wp_json_encode($payload) . "\n\n" .
-                    'Each ideas[] item must have: '
-                    .'title (<=60), lens (Curiosity|Role Models|Opposites|Adjacency), micro_description (<=140), '
-                    .'why_this_fits_you, estimated_cost/time/energy/variety (ints 0..4), prompt_to_start, '
-                    .'steps (3-5 strings), safety_notes (string), signal_to_watch_for (string), '
-                    .'reflection_questions (2-3 strings), tags (array of short tokens). '
-                    .'Return: {"ideas": [...]}';
+            // Prompt mode selection
+            if ($use_legacy) {
+                $system_prompt_runtime = 'You are an AI coach that converts profile+filters into MVEs (Minimum Viable Experiments) that are safe and runnable within 7 days. Return only JSON: {"ideas":[...]}, no prose, no backticks.';
+                $user = 'Profile+filters JSON (no PII): ' . wp_json_encode($payload) . "\n\nEach ideas[] item: title (<=60), lens (Curiosity|Role Models|Opposites|Adjacency), micro_description (<=140), why_this_fits_you, estimated_cost/time/energy/variety (0..4), prompt_to_start, steps (3 only), signal_to_watch_for, reflection_questions (2), tags (array). Return {\"ideas\": [...]}.";
+            } else {
+                // Asset-driven: only pass the JSON payload; the system prompt asset carries instructions
+                $system_prompt_runtime = $system_prompt;
+                $user = 'Payload JSON (no PII): ' . wp_json_encode($payload);
+            }
+            // Heuristic token cap: ~110 tokens per idea for the requested batch
+            $max_tokens = max(350, min(1200, 110 * (int)$req_qty));
 
             $http_args = [
                 'timeout' => 45, // increase timeout to reduce curl 28 timeouts
@@ -1971,60 +2241,228 @@ class Micro_Coach_Core {
                     'Accept'        => 'application/json',
                 ],
                 'body' => wp_json_encode([
-                    'model' => 'gpt-4o-mini',
+                    'model' => $selected_model,
                     'messages' => [
-                        ['role' => 'system', 'content' => $system],
+                        ['role' => 'system', 'content' => $system_prompt_runtime],
                         ['role' => 'user',   'content' => $user],
                     ],
-                    'temperature' => 0.7,
+                    'temperature' => 0.3,
+                    // Enforce valid JSON object (we accept { ideas: [] })
                     'response_format' => [ 'type' => 'json_object' ],
+                    'max_tokens' => $max_tokens,
                 ]),
             ];
 
             // First attempt
             $resp = wp_remote_post('https://api.openai.com/v1/chat/completions', $http_args);
             // Simple retry on timeout or 5xx
-            if (
-                (is_wp_error($resp) && false !== stripos($resp->get_error_message(), 'timed out')) ||
-                (!is_wp_error($resp) && (int)wp_remote_retrieve_response_code($resp) >= 500)
-            ) {
-                error_log('MC AI: retry after timeout/5xx');
-                // bump timeout a bit for the retry
-                $http_args['timeout'] = 60;
-                $resp = wp_remote_post('https://api.openai.com/v1/chat/completions', $http_args);
+//            $attempts = 1; $retry_note = '';
+//            if ((is_wp_error($resp) && false !== stripos($resp->get_error_message(), 'timed out')) || (!is_wp_error($resp) && (int)wp_remote_retrieve_response_code($resp) >= 500)) {
+//                $attempts = 2; $retry_note = is_wp_error($resp) ? $resp->get_error_message() : ('http_' . wp_remote_retrieve_response_code($resp));
+//                error_log('MC AI: retry after timeout/5xx');
+//                // bump timeout and reduce size to improve success
+//                $http_args['timeout'] = 75;
+//                $body_req = json_decode($http_args['body'], true);
+//                if (is_array($body_req)) {
+//                    // Lower token cap and quantity hint
+//                    $body_req['max_tokens'] = min(900, (int)($body_req['max_tokens'] ?? 900));
+//                    // Downgrade model to mini on retry for speed
+//                    if ($selected_model === 'gpt-4o') { $body_req['model'] = 'gpt-4o-mini'; }
+//                    // Reduce quantity in payload hint
+//                    $payload_retry = $payload; $payload_retry['filters']['quantity'] = min(8, (int)$qty);
+//                    $user_retry = 'Payload JSON (no PII): ' . wp_json_encode($payload_retry);
+//                    if (isset($body_req['messages'][1]['content'])) { $body_req['messages'][1]['content'] = $user_retry; }
+//                    $http_args['body'] = wp_json_encode($body_req);
+//                }
+//                $resp = wp_remote_post('https://api.openai.com/v1/chat/completions', $http_args);
             }
 
             if (!is_wp_error($resp) && ($code = wp_remote_retrieve_response_code($resp)) >= 200 && $code < 300) {
                 $body = json_decode(wp_remote_retrieve_body($resp), true);
                 $content = $body['choices'][0]['message']['content'] ?? '';
+                // Pre-clean: strip markdown code fences and zero-width/BOM
+                $clean = trim($content);
+                if (preg_match('/```(?:json)?\s*([\s\S]*?)```/u', $clean, $m)) { $clean = trim($m[1]); }
+                $clean = preg_replace('/^[\x{FEFF}\x{200B}]+/u', '', $clean); // BOM/zero-width
+                // Normalize curly quotes (skip for now to avoid parser edge cases)
+                // Remove trailing commas before closing tokens
+                $clean = preg_replace('/,\s*(\}|\])/m', '$1', $clean);
+                // Build debug metadata (model, tokens, rough cost)
+                $model = $body['model'] ?? ($body['choices'][0]['model'] ?? 'unknown');
+                $ptok  = isset($body['usage']['prompt_tokens']) ? intval($body['usage']['prompt_tokens']) : null;
+                $ctok  = isset($body['usage']['completion_tokens']) ? intval($body['usage']['completion_tokens']) : null;
+                $ttok  = isset($body['usage']['total_tokens']) ? intval($body['usage']['total_tokens']) : (($ptok && $ctok) ? ($ptok + $ctok) : null);
+                // Pricing map (USD/token) — rough estimates
+                $rates_in  = 0.0; $rates_out = 0.0; $estimated_cost = null;
+                if (is_string($model)) {
+                    $m = strtolower($model);
+                    if (strpos($m, 'gpt-4o-mini') !== false) { $rates_in = 0.15 / 1000000; $rates_out = 0.60 / 1000000; }
+                    elseif (preg_match('/gpt-4o(?!-mini)/', $m)) { $rates_in = 5.00 / 1000000; $rates_out = 15.00 / 1000000; }
+                }
+                if ($ptok !== null || $ctok !== null) {
+                    $estimated_cost = ($ptok ? $ptok * $rates_in : 0) + ($ctok ? $ctok * $rates_out : 0);
+                    $estimated_cost = round($estimated_cost, 6);
+                }
+                // Finish reason (if provided by API)
+                $finish_reason = '';
+                if (isset($body['choices'][0]['finish_reason'])) { $finish_reason = (string)$body['choices'][0]['finish_reason']; }
+                elseif (isset($body['choices'][0]['finish_details']['type'])) { $finish_reason = (string)$body['choices'][0]['finish_details']['type']; }
+                $debug_meta = [
+                    'model' => $model,
+                    'prompt_tokens' => $ptok,
+                    'completion_tokens' => $ctok,
+                    'total_tokens' => $ttok,
+                    'estimated_cost_usd' => $estimated_cost,
+                    'finish_reason' => $finish_reason,
+                    'system_prompt' => $sp_meta,
+                    'payload' => $debug_payload,
+                    'attempts' => $attempts,
+                    'retry_note' => $retry_note,
+                    'raw_preview' => substr($clean, 0, 400),
+                    'raw_tail' => substr($clean, max(0, strlen($clean)-400)),
+                ];
                 // Primary parse
-                $parsed = json_decode($content, true);
-                // Secondary: try trimming to nearest JSON braces if needed
+                $parsed = json_decode($clean, true);
+                if (is_string($parsed)) { $parsed = json_decode($parsed, true); }
+                // Secondary: try trimming to nearest JSON braces if needed, also try array
                 if (!is_array($parsed)) {
-                    $start = strpos($content, '{'); $end = strrpos($content, '}');
+                    $start = strpos($clean, '{'); $end = strrpos($clean, '}');
                     if ($start !== false && $end !== false && $end > $start) {
-                        $content2 = substr($content, $start, $end - $start + 1);
+                        $content2 = substr($clean, $start, $end - $start + 1);
                         $parsed = json_decode($content2, true);
+                        if (is_string($parsed)) { $parsed = json_decode($parsed, true); }
+                    }
+                    if (!is_array($parsed)) {
+                        $a = strpos($clean, '['); $b = strrpos($clean, ']');
+                        if ($a !== false && $b !== false && $b > $a) {
+                            $content3 = substr($clean, $a, $b - $a + 1);
+                            $parsed = json_decode($content3, true);
+                            if (is_string($parsed)) { $parsed = json_decode($parsed, true); }
+                        }
                     }
                 }
                 if (is_array($parsed)) {
                     if (isset($parsed['ideas']) && is_array($parsed['ideas'])) {
                         $ideas = $parsed['ideas'];
-                    } elseif (isset($parsed[0]) && is_array($parsed[0])) {
+                    } elseif (isset($parsed[0]) && (is_array($parsed[0]) || is_object($parsed[0]))) {
                         // Model returned a bare array; accept it
                         $ideas = $parsed;
                     } else {
-                        $used_fallback = true; $fallback_reason = 'json_object_missing_ideas';
-                        error_log('MC AI: json_object_missing_ideas — first 400 chars: ' . substr($content, 0, 400));
+                        // Try to extract an ideas array from an unexpected wrapper
+                        if (preg_match('/"ideas"\s*:\s*(\[[\s\S]*\])/u', $clean, $mm)) {
+                            $ideas_arr = json_decode($mm[1], true);
+                            if (is_array($ideas_arr)) { $ideas = $ideas_arr; }
+                        }
+                        if (empty($ideas)) {
+                            // Balanced scan to extract ideas array even if tail is truncated
+                            $posIdeas = strpos($clean, '"ideas"');
+                            if ($posIdeas !== false) {
+                                $posBracket = strpos($clean, '[', $posIdeas);
+                                if ($posBracket !== false) {
+                                    $depth = 0; $inStr=false; $esc=false; $end=null; $L=strlen($clean);
+                                    for ($k=$posBracket; $k<$L; $k++){
+                                        $ch=$clean[$k];
+                                        if ($inStr){
+                                            if ($esc){ $esc=false; }
+                                            else if ($ch==='\\'){ $esc=true; }
+                                            else if ($ch==='"'){ $inStr=false; }
+                                        } else {
+                                            if ($ch==='"'){ $inStr=true; }
+                                            else if ($ch==='['){ $depth++; }
+                                            else if ($ch===']'){ $depth--; if ($depth===0){ $end=$k; break; } }
+                                        }
+                                    }
+                                    $arrJson = ($end!==null) ? substr($clean, $posBracket, $end-$posBracket+1) : (substr($clean, $posBracket).']');
+                                    $try = json_decode($arrJson, true);
+                                    if (is_array($try)) { $ideas = $try; }
+                                }
+                            }
+                        }
+                        if (empty($ideas)) {
+                            $used_fallback = true; $fallback_reason = 'json_object_missing_ideas';
+                            error_log('MC AI: json_object_missing_ideas — first 400 chars: ' . substr($clean, 0, 400));
+                        }
                     }
                 } else {
-                    $used_fallback = true; $fallback_reason = 'parse_error';
-                    error_log('MC AI: parse_error — first 400 chars: ' . substr($content, 0, 400));
-                }
+                $used_fallback = true; $fallback_reason = 'parse_error';
+                error_log('MC AI: parse_error — first 400 chars: ' . substr($clean, 0, 400));
+            }
             } else {
                 $used_fallback = true; $fallback_reason = is_wp_error($resp) ? ('wp_error: ' . $resp->get_error_message()) : ('http_' . wp_remote_retrieve_response_code($resp));
                 $snippet = is_wp_error($resp) ? '' : substr(wp_remote_retrieve_body($resp), 0, 400);
                 error_log('MC AI: API error — ' . $fallback_reason . ' body: ' . $snippet);
+        // If we received fewer ideas than requested, attempt a supplemental fetch
+        if (!empty($ideas) && is_array($ideas) && count($ideas) < $qty && !empty($api_key)) {
+            $needed = max(0, min(12, $qty - count($ideas)));
+            if ($needed > 0) {
+                $existing_titles = [];
+                foreach ($ideas as $it){ if (is_array($it) && !empty($it['title'])) $existing_titles[] = (string)$it['title']; }
+                $supp_user = 'Payload JSON (no PII): ' . wp_json_encode($payload)
+                    . "\nExisting idea titles to avoid (no duplicates): " . wp_json_encode($existing_titles)
+                    . "\nRespond with a strict JSON object: {\"ideas\": [...]} containing exactly " . $needed . " new ideas.";
+
+                $supp_tokens = max(300, min(110 * $needed, 1200));
+                $supp_args = [
+                    'timeout' => 45,
+                    'redirection' => 3,
+                    'httpversion' => '1.1',
+                    'headers' => [
+                        'Authorization' => 'Bearer ' . $api_key,
+                        'Content-Type'  => 'application/json',
+                        'Accept'        => 'application/json',
+                    ],
+                    'body' => wp_json_encode([
+                        'model' => $selected_model,
+                        'messages' => [
+                            ['role' => 'system', 'content' => $system_prompt],
+                            ['role' => 'user',   'content' => $supp_user],
+                        ],
+                        'temperature' => 0.3,
+                        'response_format' => [ 'type' => 'json_object' ],
+                        'max_tokens' => $supp_tokens,
+                    ]),
+                ];
+                $supp_resp = wp_remote_post('https://api.openai.com/v1/chat/completions', $supp_args);
+                $supp_added = 0; $supp_note = '';
+                if (!is_wp_error($supp_resp) && (int)wp_remote_retrieve_response_code($supp_resp) >= 200 && (int)wp_remote_retrieve_response_code($supp_resp) < 300){
+                    $sbody = json_decode(wp_remote_retrieve_body($supp_resp), true);
+                    $scontent = $sbody['choices'][0]['message']['content'] ?? '';
+                    $sclean = trim($scontent);
+                    if (preg_match('/```(?:json)?\s*([\s\S]*?)```/u', $sclean, $mm)) { $sclean = trim($mm[1]); }
+                    $sclean = preg_replace('/^[\x{FEFF}\x{200B}]+/u', '', $sclean);
+                    $sp = json_decode($sclean, true);
+                    if (is_string($sp)) $sp = json_decode($sp, true);
+                    if (!is_array($sp)){
+                        $sa = strpos($sclean, '{'); $sb = strrpos($sclean, '}');
+                        if ($sa !== false && $sb !== false && $sb > $sa){ $sp = json_decode(substr($sclean, $sa, $sb-$sa+1), true); }
+                    }
+                    $new = [];
+                    if (is_array($sp)){
+                        if (isset($sp['ideas']) && is_array($sp['ideas'])){ $new = $sp['ideas']; }
+                        elseif (isset($sp[0]) && (is_array($sp[0])||is_object($sp[0]))){ $new = $sp; }
+                    }
+                    if (!empty($new)){
+                        // Deduplicate by title
+                        $seen = [];
+                        foreach ($ideas as $it){ $t = is_array($it)?($it['title']??''):(is_object($it)?($it->title??''):''); if ($t!=='') $seen[mb_strtolower($t)] = true; }
+                        foreach ($new as $it){
+                            if (is_object($it)) $it = (array)$it;
+                            if (!is_array($it)) continue;
+                            $t = isset($it['title']) ? mb_strtolower((string)$it['title']) : '';
+                            if ($t === '' || isset($seen[$t])) continue;
+                            $ideas[] = $it; $seen[$t] = true; $supp_added++;
+                            if (count($ideas) >= $qty) break;
+                        }
+                    }
+                    $supp_note = 'ok';
+                } else {
+                    $supp_note = is_wp_error($supp_resp) ? ('wp_error: ' . $supp_resp->get_error_message()) : ('http_' . wp_remote_retrieve_response_code($supp_resp));
+                }
+                if (isset($debug_meta) && is_array($debug_meta)){
+                    $debug_meta['supplement_attempted'] = true;
+                    $debug_meta['supplement_added'] = $supp_added;
+                    $debug_meta['supplement_note'] = $supp_note;
+                }
             }
         }
 
@@ -2121,14 +2559,49 @@ class Micro_Coach_Core {
             $ideas = $pool;
         }
 
+        // Post-process: coerce ranges, clamp lengths, basic safety filter
+        $coerce01 = function($v){ $n = is_numeric($v)?intval($v):0; return max(0, min(4, $n)); };
+        $trim_words = function($s, $max){ $t = wp_strip_all_tags((string)$s); if (mb_strlen($t) <= $max) return $t; $cut = mb_substr($t, 0, $max); $cut = preg_replace('/\s+\S*$/u', '', $cut); return rtrim($cut) . '…'; };
+        $blocked = ['diagnose','prescription','loan','alcohol','gambling','crypto','medicine','medical treatment','financial advice'];
+        $is_safe = function($idea) use ($blocked){
+            $fields = ['title','micro_description','why_this_fits_you'];
+            foreach ($fields as $f){ if (!empty($idea[$f])){ $v = mb_strtolower((string)$idea[$f]); foreach($blocked as $b){ if (mb_strpos($v, $b) !== false) return false; } } }
+            return true;
+        };
+        $clean = [];
+        foreach ((array)$ideas as $it){
+            if (is_object($it)) $it = (array)$it;
+            if (!is_array($it)) continue;
+            if (!$is_safe($it)) continue;
+            $it['title'] = $trim_words($it['title'] ?? 'Idea', 60);
+            $it['micro_description'] = $trim_words($it['micro_description'] ?? '', 140);
+            $it['estimated_cost'] = $coerce01($it['estimated_cost'] ?? 0);
+            $it['estimated_time'] = $coerce01($it['estimated_time'] ?? 1);
+            $it['estimated_energy'] = $coerce01($it['estimated_energy'] ?? 1);
+            $it['estimated_variety'] = $coerce01($it['estimated_variety'] ?? 2);
+            foreach (['steps','reflection_questions','tags'] as $arrKey){ if (!empty($it[$arrKey]) && is_array($it[$arrKey])){ $it[$arrKey] = array_values(array_map('wp_strip_all_tags', $it[$arrKey])); } }
+            $clean[] = $it;
+        }
+        $ideas = $clean;
+
         // Simple partition: shortlist 6, more next 6
         $shortlist = array_slice($ideas, 0, 6);
         $more      = array_slice($ideas, 6, 12);
+        // Ensure debug meta exists even on fallback
+        if (!isset($debug_meta)) {
+            $debug_meta = [
+                'model' => ($used_fallback ? 'poc_fallback' : 'unknown'),
+                'system_prompt' => isset($sp_meta) ? $sp_meta : null,
+                'payload' => $debug_payload,
+            ];
+        }
         wp_send_json_success([
             'shortlist' => $shortlist,
             'more'      => $more,
             'used_fallback' => $used_fallback,
             'fallback_reason' => $fallback_reason,
+            'debug' => $debug_meta,
         ]);
     }
+}
 }
