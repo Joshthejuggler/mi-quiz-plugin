@@ -1302,7 +1302,9 @@ class Micro_Coach_Core {
             .ai-section{ margin: 12px 0 8px; font-weight:700; }
             .ai-results-grid{ display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; }
             @media (max-width: 768px){ .ai-results-grid{ grid-template-columns: 1fr; } .ai-sliders{ grid-template-columns: 1fr 1fr; } }
-            .ai-card{ background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px; min-height:120px; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
+            .ai-card{ position:relative; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px; min-height:120px; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
+            .ai-card::after{ content:'\2197'; /* ↗ */ position:absolute; right:10px; bottom:8px; font-size:14px; color:#94a3b8; transition: color .15s ease; }
+            .ai-card:hover::after{ color:#64748b; }
             .ai-card.skeleton{ background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
             @keyframes shimmer { 0% { background-position: -400px 0;} 100%{ background-position: 400px 0; } }
 
@@ -1310,8 +1312,9 @@ class Micro_Coach_Core {
             .ai-drawer{ position: fixed; inset: 0; z-index: 1000; display:none; }
             .ai-drawer.open{ display:block; }
             .ai-drawer-backdrop{ position: absolute; inset: 0; background: rgba(15,23,42,0.35); }
-            .ai-drawer-panel{ position: absolute; top: 0; right: 0; width: min(480px, 96vw); height: 100%; overflow:auto; background:#fff; border-left:1px solid #e2e8f0; box-shadow:-6px 0 16px rgba(0,0,0,0.08); padding: 18px; }
-            .ai-drawer-close{ position: absolute; top: 10px; right: 12px; border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
+            /* Centered modal instead of side drawer */
+            .ai-drawer-panel{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:min(720px, 92vw); max-height:86vh; overflow:auto; background:#fff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 12px 28px rgba(0,0,0,0.18); padding: 18px 18px 24px; }
+            .ai-drawer-close{ position: absolute; top: 8px; right: 10px; border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
             .ai-drawer-title{ margin:0 0 4px; }
             .ai-drawer-lens{ display:inline-block; background:#eef2f7; border-radius:999px; padding:2px 10px; font-size:12px; color:#334155; }
             .ai-drawer-micro{ color:#475569; }
