@@ -1303,12 +1303,25 @@ class Micro_Coach_Core {
             .ai-section{ margin: 12px 0 8px; font-weight:700; }
             .ai-results-grid{ display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; }
             @media (max-width: 768px){ .ai-results-grid{ grid-template-columns: 1fr; } .ai-sliders{ grid-template-columns: 1fr 1fr; } }
-            .ai-card{ position:relative; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px; min-height:120px; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
+            .ai-card{ position:relative; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:12px; min-height:110px; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
             /* Arrow hint (hidden on skeletons). Circle badge appears on hover for emphasis. */
             .ai-card:not(.skeleton)::before{ content:''; position:absolute; right:6px; bottom:6px; width:28px; height:28px; border-radius:50%; background:#3b82f6; opacity:0; transform: scale(.8); transition: opacity .16s ease, transform .16s ease; }
             .ai-card:not(.skeleton)::after{ content:'\2197'; /* ↗ */ position:absolute; right:13px; bottom:9px; font-size:16px; color:#334155; transition: color .16s ease, transform .16s ease; }
-            .ai-card:hover:not(.skeleton)::before{ opacity:1; transform: scale(1); }
-            .ai-card:hover:not(.skeleton)::after{ color:#fff; transform: translateY(-1px); }
+            .ai-card:hover:not(.skeleton)::before{ opacity:1; transform: scale(1.1); }
+            .ai-card:hover:not(.skeleton)::after{ color:#fff; transform: translateY(-1px) scale(1.1); }
+            .ai-card h5{ margin:0 0 4px; font-size:17px; line-height:1.2; font-weight:700; }
+            .ai-lens-badge{ display:inline-block; background:#eef2f7; border-radius:999px; padding:3px 10px; font-size:12px; color:#334155; margin:0 0 6px; }
+            .lens-curiosity{ background:#e0f2fe !important; color:#075985 !important; }
+            .lens-rolemodels{ background:#ede9fe !important; color:#5b21b6 !important; }
+            .lens-opposites{ background:#fee2e2 !important; color:#7f1d1d !important; }
+            .lens-adjacency{ background:#dcfce7 !important; color:#065f46 !important; }
+            .ai-micro{ color:#475569; margin:0 8px 8px 0; }
+            .ai-effrow{ display:flex; align-items:center; gap:10px; }
+            .ai-eff{ display:flex; align-items:center; gap:6px; min-width:0; font-size:13px; color:#334155; }
+            .eff-cost{ color:#f59e0b; }
+            .eff-time{ color:#3b82f6; }
+            .eff-energy{ color:#facc15; }
+            .eff-variety{ color:#8b5cf6; }
             .ai-card.skeleton{ background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
             @keyframes shimmer { 0% { background-position: -400px 0;} 100%{ background-position: 400px 0; } }
 
@@ -1317,18 +1330,42 @@ class Micro_Coach_Core {
             .ai-drawer.open{ display:block; }
             .ai-drawer-backdrop{ position: absolute; inset: 0; background: rgba(15,23,42,0.35); }
             /* Centered modal instead of side drawer */
-            .ai-drawer-panel{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:min(720px, 92vw); max-height:86vh; overflow:auto; background:#fff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 12px 28px rgba(0,0,0,0.18); padding: 18px 18px 24px; }
+            .ai-drawer-panel{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:min(720px, 92vw); max-height:86vh; overflow:auto; background:#fff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 12px 28px rgba(0,0,0,0.18); padding: 18px 56px 24px; }
             .ai-drawer-close{ position: absolute; top: 8px; right: 10px; border:none; background:transparent; font-size:22px; cursor:pointer; color:#475569; }
+            .ai-drawer-header{ display:flex; align-items:center; gap:10px; }
             .ai-drawer-title{ margin:0 0 4px; }
-            .ai-drawer-lens{ display:inline-block; background:#eef2f7; border-radius:999px; padding:2px 10px; font-size:12px; color:#334155; }
+            .ai-drawer-lens{ display:inline-block; background:#eef2f7; border-radius:999px; padding:4px 12px; font-size:13px; font-weight:600; color:#334155; }
             .ai-drawer-micro{ color:#475569; }
+            .ai-drawer-effort{ display:flex; gap:10px; margin:8px 0; }
+            .ai-drawer-effort .eff{ display:flex; align-items:center; gap:6px; }
+            .ai-drawer-effort .bar{ --val:0; width:100px; height:8px; border-radius:999px; background:linear-gradient(90deg,#60a5fa var(--val), #e5e7eb var(--val)); outline:1px solid #e5e7eb; }
+            .ai-drawer-effort .num{ font-size:12px; color:#475569; }
             .ai-drawer-section{ margin-top: 12px; }
             .ai-drawer-section h4{ margin:0 0 6px; font-size: 0.95em; }
             .ai-drawer-steps{ padding-left: 16px; }
             .ai-drawer-reflect{ padding-left: 16px; }
             .ai-drawer-prompt{ background:#eef2ff; border:1px solid #c7d2fe; color:#1e3a8a; padding:8px 10px; border-radius:8px; }
+            .ai-prompt-row{ display:flex; gap:8px; align-items:center; }
+            .ai-prompt-input{ flex:1; background:#fff; border:1px solid #c7d2fe; border-radius:8px; padding:8px 10px; font-size:14px; resize:vertical; }
+            .ai-prompt-area{ min-height:64px; }
+            .ai-prompt-copy{ background:#3b82f6; color:#fff; border:none; border-radius:8px; padding:6px 10px; cursor:pointer; }
             .ai-drawer-footer{ margin-top: 12px; }
             .ai-drawer-chips .chip{ margin-right:8px; background:#eef2f7; border-radius:999px; padding:4px 10px; font-size:14px; display:inline-block; }
+            /* Centered side nav arrows inside the modal */
+            /* Outside-floating nav arrows relative to viewport */
+            .ai-drawer-nav{ position:fixed; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.98); border:1px solid #e2e8f0; color:#334155; width:44px; height:44px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.12); font-size:22px; transition: transform .15s ease, background-color .15s ease, color .15s ease, box-shadow .15s ease; z-index:1001; }
+            .ai-drawer-nav:hover{ background:#3b82f6; color:#fff; transform:translateY(-50%) scale(1.08); box-shadow:0 8px 18px rgba(59,130,246,0.25); }
+            .ai-drawer-nav:active{ transform:translateY(-50%) scale(0.98); }
+            .ai-drawer-nav:focus-visible{ outline:2px solid #3b82f6; outline-offset:2px; }
+            .ai-drawer-nav:disabled{ opacity:0.35; cursor:default; pointer-events:none; }
+            /* Position arrows just outside the modal width (min(720px, 92vw)) */
+            #ai-drawer-prev{ left: calc(50% - min(720px, 92vw)/2 - 28px); }
+            #ai-drawer-next{ right: calc(50% - min(720px, 92vw)/2 - 28px); }
+            @media (max-width: 640px){
+                /* On small screens, keep arrows near viewport edges for reachability */
+                #ai-drawer-prev{ left: 8px; }
+                #ai-drawer-next{ right: 8px; }
+            }
             .bars-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
             .badge-icn { margin-right: 6px; }
             .mi-badges { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -1541,6 +1578,9 @@ class Micro_Coach_Core {
                 return s;
             }
             let aiDefaults = { cost:0, time:1, energy:1, variety:2 };
+            // Track ideas for drawer navigation
+            let aiAllIdeas = [];
+            let aiActiveIndex = -1;
             function toInt01(v, def){ const n = Number(v); const ok = Number.isFinite(n); const clamped = Math.max(0, Math.min(4, ok?n:def)); return clamped; }
             function renderIdeas(el, ideas){
                 if (!el) return; el.innerHTML='';
@@ -1549,23 +1589,61 @@ class Micro_Coach_Core {
                 const backdrop = document.getElementById('ai-drawer-backdrop');
                 const set = (id, v)=>{ const n=document.getElementById(id); if (n) n.textContent = v || ''; };
                 const setList = (id, arr)=>{ const n=document.getElementById(id); if (!n) return; n.innerHTML=''; (arr||[]).forEach(x=>{ const li=document.createElement('li'); li.textContent = x; n.appendChild(li); }); };
+                const setListReflect = (id, arr)=>{ const n=document.getElementById(id); if (!n) return; n.innerHTML=''; (arr||[]).forEach(x=>{ const li=document.createElement('li'); li.textContent = '💬 ' + x; n.appendChild(li); }); };
                 const setChips = (id, tags)=>{ const n=document.getElementById(id); if (!n) return; n.innerHTML=''; (tags||[]).forEach(t=>{ const s=document.createElement('span'); s.className='chip'; s.textContent=t; n.appendChild(s); }); };
                 function openDrawer(item){ if (!drawer) return; drawer.classList.add('open');
+                    // Update active index for nav controls
+                    aiActiveIndex = aiAllIdeas.indexOf(item);
+                    if (aiActiveIndex < 0) { aiActiveIndex = aiAllIdeas.findIndex(it => (it.title||'')===(item.title||'') && (it.lens||'')===(item.lens||'')); }
                     set('ai-drawer-title', item.title||'Idea');
                     set('ai-drawer-lens', item.lens||'');
                     set('ai-drawer-micro', item.micro_description||'');
+                    // Effort bars
+                    const effort = {
+                        cost: toInt01(item.estimated_cost, aiDefaults.cost),
+                        time: toInt01(item.estimated_time, aiDefaults.time),
+                        energy: toInt01(item.estimated_energy, aiDefaults.energy),
+                        variety: toInt01(item.estimated_variety, aiDefaults.variety),
+                    };
+                    const bar = (id,val)=>{ const el=document.getElementById(id); if (el) el.style.setProperty('--val', (val*25)+'%'); const num=document.getElementById(id+'-num'); if (num) num.textContent = String(val); };
+                    bar('eff-cost', effort.cost); bar('eff-time', effort.time); bar('eff-energy', effort.energy); bar('eff-variety', effort.variety);
                     set('ai-drawer-why', item.why_this_fits_you||'');
                     set('ai-drawer-prompt', item.prompt_to_start||'');
+                    const promptInput = document.getElementById('ai-prompt-input');
+                    if (promptInput) {
+                        const steps = (item.steps||[]).slice(0,3).map((s,i)=>`${i+1}. ${s}`).join(' ');
+                        const parts = [
+                            (item.title? item.title : 'Experiment'),
+                            (item.lens ? `(${item.lens})` : ''),
+                            (item.micro_description || ''),
+                            (item.prompt_to_start || ''),
+                            (steps ? `Steps: ${steps}` : '')
+                        ].filter(Boolean);
+                        promptInput.value = parts.join(' — ').trim();
+                        // Auto-size textarea to fit content up to a reasonable height
+                        try { promptInput.style.height = 'auto'; promptInput.style.height = Math.min(promptInput.scrollHeight, 240) + 'px'; } catch(e){}
+                    }
+                    const promptCopy = document.getElementById('ai-prompt-copy'); if (promptCopy) { promptCopy.onclick = ()=>{ if (promptInput) { promptInput.select(); document.execCommand('copy'); promptCopy.textContent='Copied'; setTimeout(()=>promptCopy.textContent='Copy',1000); } }; }
                     setList('ai-drawer-steps', item.steps||[]);
                     set('ai-drawer-signal', item.signal_to_watch_for||'');
-                    setList('ai-drawer-reflect', item.reflection_questions||[]);
+                    setListReflect('ai-drawer-reflect', item.reflection_questions||[]);
                     const safetyWrap = document.getElementById('ai-drawer-safety-wrap');
                     if (safetyWrap) safetyWrap.style.display = item.safety_notes ? 'block' : 'none';
                     set('ai-drawer-safety', item.safety_notes||'');
                     setChips('ai-drawer-chips', item.tags||[]);
+                    // Enable/disable nav buttons
+                    const prevBtn = document.getElementById('ai-drawer-prev');
+                    const nextBtn = document.getElementById('ai-drawer-next');
+                    if (prevBtn) prevBtn.disabled = aiActiveIndex<=0;
+                    if (nextBtn) nextBtn.disabled = aiActiveIndex>=aiAllIdeas.length-1;
                 }
                 function closeDrawer(){ if (drawer) drawer.classList.remove('open'); }
                 if (closeBtn) closeBtn.onclick = closeDrawer; if (backdrop) backdrop.onclick = closeDrawer; window.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeDrawer(); });
+                // Nav buttons bind
+                const _prevBtn = document.getElementById('ai-drawer-prev');
+                const _nextBtn = document.getElementById('ai-drawer-next');
+                if (_prevBtn) _prevBtn.onclick = ()=>{ if (aiActiveIndex>0) openDrawer(aiAllIdeas[aiActiveIndex-1]); };
+                if (_nextBtn) _nextBtn.onclick = ()=>{ if (aiActiveIndex<aiAllIdeas.length-1) openDrawer(aiAllIdeas[aiActiveIndex+1]); };
 
                 ideas.forEach(item=>{
                     const c=document.createElement('div'); c.className='ai-card';
@@ -1573,14 +1651,16 @@ class Micro_Coach_Core {
                     c.setAttribute('role','button');
                     c.setAttribute('aria-label', 'Open details for ' + (item.title||'idea'));
                     c.title = 'Open details';
-                    const h=document.createElement('h5'); h.textContent=item.title||'Idea'; h.style.margin='0 0 6px';
-                    const b=document.createElement('div'); b.style.margin='0 0 8px';
-                    const lensTxt = item.lens ? ('• '+item.lens+' • ') : ''; b.textContent = lensTxt + (item.micro_description||'');
-                    const chips=document.createElement('div');
-                    const ec = toInt01(item.estimated_cost, aiDefaults.cost); const et = toInt01(item.estimated_time, aiDefaults.time);
-                    const ee = toInt01(item.estimated_energy, aiDefaults.energy); const ev = toInt01(item.estimated_variety, aiDefaults.variety);
-                    chips.appendChild(chip('cost', ec)); chips.appendChild(chip('time', et)); chips.appendChild(chip('energy', ee)); chips.appendChild(chip('variety', ev));
-                    c.appendChild(h); c.appendChild(b); c.appendChild(chips);
+                    const h=document.createElement('h5'); h.textContent=item.title||'Idea';
+                    const lens=document.createElement('div'); lens.className='ai-lens-badge'; lens.textContent=item.lens||'';
+                    const lc=(item.lens||'').toLowerCase(); if(lc){ lens.classList.add('lens-'+lc.replace(/\s+/g,'-')); }
+                    const micro=document.createElement('div'); micro.className='ai-micro'; micro.textContent = item.micro_description||'';
+                    // Effort row: icons + numbers only
+                    const row=document.createElement('div'); row.className='ai-effrow';
+                    const mk=(cls,icon,val)=>{ const w=document.createElement('div'); w.className='ai-eff'; const i=document.createElement('span'); i.className=cls; i.textContent=icon; const n=document.createElement('span'); n.textContent=String(val); w.appendChild(i); w.appendChild(n); return w; };
+                    const ec = toInt01(item.estimated_cost, aiDefaults.cost); const et = toInt01(item.estimated_time, aiDefaults.time); const ee = toInt01(item.estimated_energy, aiDefaults.energy); const ev = toInt01(item.estimated_variety, aiDefaults.variety);
+                    row.appendChild(mk('eff-cost','💰', ec)); row.appendChild(mk('eff-time','⏳', et)); row.appendChild(mk('eff-energy','⚡️', ee)); row.appendChild(mk('eff-variety','🎲', ev));
+                    c.appendChild(h); c.appendChild(lens); c.appendChild(micro); c.appendChild(row);
                     c.addEventListener('click', ()=> openDrawer(item));
                     c.addEventListener('keypress', (e)=>{ if (e.key==='Enter' || e.key===' ') { e.preventDefault(); openDrawer(item);} });
                     el.appendChild(c);
@@ -1619,8 +1699,9 @@ class Micro_Coach_Core {
                         .then(j=>{
                             const banner = document.getElementById('ai-banner');
                             if (j && j.success && j.data){
-                                renderIdeas(shortlistEl, j.data.shortlist||[]);
-                                const more = j.data.more||[];
+                                const shortlist = j.data.shortlist||[]; const more = j.data.more||[];
+                                aiAllIdeas = [...shortlist, ...more];
+                                renderIdeas(shortlistEl, shortlist);
                                 if (Array.isArray(more) && more.length){ if (moreWrap) moreWrap.style.display='block'; renderIdeas(moreEl, more); } else { if (moreWrap) moreWrap.style.display='none'; if (moreEl) moreEl.innerHTML=''; }
                                 if (banner) {
                                     if (j.data.used_fallback) {

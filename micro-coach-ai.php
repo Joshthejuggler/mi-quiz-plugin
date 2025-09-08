@@ -698,6 +698,9 @@ TXT;
         <!-- Drawer for idea details -->
         <div id="ai-drawer" class="ai-drawer" aria-hidden="true">
             <div class="ai-drawer-backdrop" id="ai-drawer-backdrop" tabindex="-1" aria-hidden="true"></div>
+            <!-- Nav buttons placed outside the panel so they can float next to it -->
+            <button type="button" class="ai-drawer-nav" id="ai-drawer-prev" aria-label="Previous">‹</button>
+            <button type="button" class="ai-drawer-nav" id="ai-drawer-next" aria-label="Next">›</button>
             <aside class="ai-drawer-panel" role="dialog" aria-labelledby="ai-drawer-title">
                 <button type="button" class="ai-drawer-close" id="ai-drawer-close" aria-label="Close">×</button>
                 <header class="ai-drawer-header">
@@ -705,28 +708,38 @@ TXT;
                     <span id="ai-drawer-lens" class="ai-drawer-lens"></span>
                 </header>
                 <p id="ai-drawer-micro" class="ai-drawer-micro"></p>
+                <div class="ai-drawer-effort">
+                    <div class="eff"><span class="icn">💰</span><span id="eff-cost" class="bar"></span><span id="eff-cost-num" class="num">0</span></div>
+                    <div class="eff"><span class="icn">⏳</span><span id="eff-time" class="bar"></span><span id="eff-time-num" class="num">0</span></div>
+                    <div class="eff"><span class="icn">⚡️</span><span id="eff-energy" class="bar"></span><span id="eff-energy-num" class="num">0</span></div>
+                    <div class="eff"><span class="icn">🎲</span><span id="eff-variety" class="bar"></span><span id="eff-variety-num" class="num">0</span></div>
+                </div>
                 <section class="ai-drawer-section">
-                    <h4>Why this fits you</h4>
+                    <h4>🎯 Why this fits you</h4>
                     <p id="ai-drawer-why"></p>
                 </section>
                 <section class="ai-drawer-section">
-                    <h4>Prompt to start</h4>
-                    <p id="ai-drawer-prompt" class="ai-drawer-prompt"></p>
+                    <h4>▶️ Prompt to start</h4>
+                    <div class="ai-prompt-row">
+                        <textarea id="ai-prompt-input" class="ai-prompt-input ai-prompt-area" rows="3" readonly></textarea>
+                        <button id="ai-prompt-copy" class="ai-prompt-copy" type="button">Copy</button>
+                    </div>
+                    <p id="ai-drawer-prompt" class="ai-drawer-prompt" style="display:none;"></p>
                 </section>
                 <section class="ai-drawer-section">
-                    <h4>Steps</h4>
+                    <h4>✅ Steps</h4>
                     <ul id="ai-drawer-steps" class="ai-drawer-steps"></ul>
                 </section>
                 <section class="ai-drawer-section">
-                    <h4>What to watch for</h4>
+                    <h4>👀 What to watch for</h4>
                     <p id="ai-drawer-signal"></p>
                 </section>
                 <section class="ai-drawer-section">
-                    <h4>Reflection</h4>
+                    <h4>💭 Reflection</h4>
                     <ul id="ai-drawer-reflect" class="ai-drawer-reflect"></ul>
                 </section>
                 <section class="ai-drawer-section" id="ai-drawer-safety-wrap" style="display:none;">
-                    <h4>Safety notes</h4>
+                    <h4>⚠️ Safety notes</h4>
                     <p id="ai-drawer-safety"></p>
                 </section>
                 <footer class="ai-drawer-footer">
