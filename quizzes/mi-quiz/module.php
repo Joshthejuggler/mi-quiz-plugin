@@ -109,11 +109,9 @@ class MI_Quiz_Plugin_AI {
                 echo '<p class="description">Admins to notify with a copy of results. Comma-separated.</p>';
             }, 'quiz-platform-settings', 'miq_main' );
 
-        add_settings_field(
-            self::OPT_ANTITHREAD, 'Reduce Inbox Threading', function(){
-                $checked = get_option(self::OPT_ANTITHREAD,'1') ? 'checked' : '';
-                echo '<label><input type="checkbox" name="'.esc_attr(self::OPT_ANTITHREAD).'" value="1" '.$checked.'> Add an invisible token to subjects so repeated sends don’t collapse into one thread.</label>';
-            }, 'quiz-platform-settings', 'miq_main' );
+        // Remove the UI for the anti-threading option per request, but
+        // leave functionality intact. The underlying option continues
+        // to be read by maybe_antithread() with a default of enabled.
     }
 
     public function render_subs_page(){

@@ -78,30 +78,9 @@ class Micro_Coach_Core {
      * Registers settings for the quiz platform, like descriptions.
      */
     public function register_settings() {
-        // Main platform settings
-        register_setting(self::OPT_GROUP, self::OPT_DESCRIPTIONS, [$this, 'sanitize_descriptions']);
-        add_settings_section('mc_quiz_descriptions_section', 'Quiz Descriptions', null, 'quiz-platform-settings');
-
-        $quizzes = self::get_quizzes();
-        uasort($quizzes, function($a, $b) {
-            return ($a['order'] ?? 99) <=> ($b['order'] ?? 99);
-        });
-
-        $descriptions = get_option(self::OPT_DESCRIPTIONS, []);
-
-        foreach ($quizzes as $id => $quiz) {
-            add_settings_field(
-                'mc_quiz_desc_' . $id,
-                $quiz['title'],
-                function() use ($id, $quiz, $descriptions) {
-                    $value = isset($descriptions[$id]) ? esc_textarea($descriptions[$id]) : '';
-                    echo '<textarea name="' . self::OPT_DESCRIPTIONS . '[' . esc_attr($id) . ']" rows="3" style="width: 90%; max-width: 500px;">' . $value . '</textarea>';
-                    echo '<p class="description">This text will be shown on the dashboard if the user has not yet taken this quiz. Default: <em>' . esc_html($quiz['description']) . '</em></p>';
-                },
-                'quiz-platform-settings',
-                'mc_quiz_descriptions_section'
-            );
-        }
+        // Intentionally left minimal: remove the "Quiz Descriptions" section
+        // and fields from the admin UI per request. Other modules (e.g., AI)
+        // still add their own settings/sections to this page.
     }
 
     public function sanitize_descriptions($input) {

@@ -12,8 +12,6 @@ class Micro_Coach_AI {
         if (is_admin()) {
             // Add admin settings fields to the main platform settings page.
             add_action('admin_init', [$this, 'register_settings']);
-            // Add the "Test Connection" button to the settings page.
-            add_action('mc_platform_settings_page_bottom', [$this, 'render_test_connection_section']);
         }
 
         // AJAX: AI Coach idea generation
@@ -52,20 +50,25 @@ class Micro_Coach_AI {
             'quiz-platform-settings',
             'mc_quiz_ai_section'
         );
+
+        // Put the Test Connection control in the same AI section so all
+        // AI settings are grouped together.
+        add_settings_field(
+            'mc_ai_test_connection',
+            'Test Connection',
+            [$this, 'render_test_connection_field'],
+            'quiz-platform-settings',
+            'mc_quiz_ai_section'
+        );
     }
 
     /**
-     * Renders the "Test Connection" section on the settings page.
+     * Renders the Test Connection field inside the AI settings section.
      */
-    public function render_test_connection_section() {
+    public function render_test_connection_field() {
         ?>
-        <hr>
-        <h2>AI Integration – Test Connection</h2>
-        <p>Verify your API key by sending a quick test to the AI endpoint.</p>
-        <p>
-            <button class="button button-primary" id="mc-ai-test-btn">Test AI</button>
-            <span id="mc-ai-test-status" style="margin-left: 8px;"></span>
-        </p>
+        <button class="button button-primary" id="mc-ai-test-btn">Test AI</button>
+        <span id="mc-ai-test-status" style="margin-left: 8px;"></span>
         <script>
         (function(){
             const btn   = document.getElementById('mc-ai-test-btn');
