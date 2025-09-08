@@ -1304,9 +1304,11 @@ class Micro_Coach_Core {
             .ai-results-grid{ display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; }
             @media (max-width: 768px){ .ai-results-grid{ grid-template-columns: 1fr; } .ai-sliders{ grid-template-columns: 1fr 1fr; } }
             .ai-card{ position:relative; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px; min-height:120px; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
-            /* Show the arrow only once real ideas render (not on skeletons) */
-            .ai-card:not(.skeleton)::after{ content:'\2197'; /* ↗ */ position:absolute; right:10px; bottom:8px; font-size:18px; color:#334155; opacity:0.9; transition: color .15s ease, transform .15s ease; }
-            .ai-card:hover:not(.skeleton)::after{ color:#111827; transform: translateY(-2px); }
+            /* Arrow hint (hidden on skeletons). Circle badge appears on hover for emphasis. */
+            .ai-card:not(.skeleton)::before{ content:''; position:absolute; right:6px; bottom:6px; width:28px; height:28px; border-radius:50%; background:#3b82f6; opacity:0; transform: scale(.8); transition: opacity .16s ease, transform .16s ease; }
+            .ai-card:not(.skeleton)::after{ content:'\2197'; /* ↗ */ position:absolute; right:13px; bottom:9px; font-size:16px; color:#334155; transition: color .16s ease, transform .16s ease; }
+            .ai-card:hover:not(.skeleton)::before{ opacity:1; transform: scale(1); }
+            .ai-card:hover:not(.skeleton)::after{ color:#fff; transform: translateY(-1px); }
             .ai-card.skeleton{ background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
             @keyframes shimmer { 0% { background-position: -400px 0;} 100%{ background-position: 400px 0; } }
 
@@ -1326,7 +1328,7 @@ class Micro_Coach_Core {
             .ai-drawer-reflect{ padding-left: 16px; }
             .ai-drawer-prompt{ background:#eef2ff; border:1px solid #c7d2fe; color:#1e3a8a; padding:8px 10px; border-radius:8px; }
             .ai-drawer-footer{ margin-top: 12px; }
-            .ai-drawer-chips .chip{ margin-right:6px; background:#eef2f7; border-radius:999px; padding:2px 8px; font-size:12px; display:inline-block; }
+            .ai-drawer-chips .chip{ margin-right:8px; background:#eef2f7; border-radius:999px; padding:4px 10px; font-size:14px; display:inline-block; }
             .bars-grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
             .badge-icn { margin-right: 6px; }
             .mi-badges { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -1529,7 +1531,15 @@ class Micro_Coach_Core {
             const moreEl = document.getElementById('ai-more');
 
             function renderSkeleton(el, n=6){ if (!el) return; el.innerHTML=''; for (let i=0;i<n;i++){ const d=document.createElement('div'); d.className='ai-card skeleton'; el.appendChild(d);} }
-            function chip(label, val){ const s=document.createElement('span'); s.className='chip'; s.textContent=label+': '+val; s.style.marginRight='6px'; s.style.fontSize='12px'; s.style.background='#eef2f7'; s.style.borderRadius='999px'; s.style.padding='2px 8px'; return s; }
+            function chip(kind, val){
+                const s=document.createElement('span'); s.className='chip';
+                const icons = { cost:'💰', time:'⏳', energy:'⚡️', variety:'🎲' };
+                const icon = icons[kind] || '';
+                s.textContent = (icon ? icon+' ' : '') + String(val);
+                s.style.marginRight='8px'; s.style.fontSize='14px'; s.style.background='#eef2f7'; s.style.borderRadius='999px'; s.style.padding='3px 10px';
+                s.setAttribute('aria-label', kind+': '+val);
+                return s;
+            }
             let aiDefaults = { cost:0, time:1, energy:1, variety:2 };
             function toInt01(v, def){ const n = Number(v); const ok = Number.isFinite(n); const clamped = Math.max(0, Math.min(4, ok?n:def)); return clamped; }
             function renderIdeas(el, ideas){
@@ -1560,13 +1570,16 @@ class Micro_Coach_Core {
                 ideas.forEach(item=>{
                     const c=document.createElement('div'); c.className='ai-card';
                     c.tabIndex=0; c.style.cursor='pointer';
+                    c.setAttribute('role','button');
+                    c.setAttribute('aria-label', 'Open details for ' + (item.title||'idea'));
+                    c.title = 'Open details';
                     const h=document.createElement('h5'); h.textContent=item.title||'Idea'; h.style.margin='0 0 6px';
                     const b=document.createElement('div'); b.style.margin='0 0 8px';
                     const lensTxt = item.lens ? ('• '+item.lens+' • ') : ''; b.textContent = lensTxt + (item.micro_description||'');
                     const chips=document.createElement('div');
                     const ec = toInt01(item.estimated_cost, aiDefaults.cost); const et = toInt01(item.estimated_time, aiDefaults.time);
                     const ee = toInt01(item.estimated_energy, aiDefaults.energy); const ev = toInt01(item.estimated_variety, aiDefaults.variety);
-                    chips.appendChild(chip('C', ec)); chips.appendChild(chip('T', et)); chips.appendChild(chip('E', ee)); chips.appendChild(chip('V', ev));
+                    chips.appendChild(chip('cost', ec)); chips.appendChild(chip('time', et)); chips.appendChild(chip('energy', ee)); chips.appendChild(chip('variety', ev));
                     c.appendChild(h); c.appendChild(b); c.appendChild(chips);
                     c.addEventListener('click', ()=> openDrawer(item));
                     c.addEventListener('keypress', (e)=>{ if (e.key==='Enter' || e.key===' ') { e.preventDefault(); openDrawer(item);} });
