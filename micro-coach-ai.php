@@ -11,6 +11,8 @@ class Micro_Coach_AI {
     const OPT_SYSTEM_INSTRUCTIONS = 'mc_ai_system_instructions';
     // Toggle admin-only debug capture and page
     const OPT_DEBUG_MODE = 'mc_ai_debug_mode';
+    // Model selection (admins): 'gpt-4o-mini' or 'gpt-4o'
+    const OPT_MODEL = 'mc_ai_model';
 
     public function __construct() {
         if (is_admin()) {
@@ -54,6 +56,11 @@ class Micro_Coach_AI {
         // Debug toggle (admins only)
         register_setting(Micro_Coach_Core::OPT_GROUP, self::OPT_DEBUG_MODE, function ($v) {
             return $v ? '1' : '0';
+        });
+        // Model selection (admins only)
+        register_setting(Micro_Coach_Core::OPT_GROUP, self::OPT_MODEL, function ($v) {
+            $v = is_string($v) ? trim($v) : '';
+            return in_array($v, ['gpt-4o-mini','gpt-4o'], true) ? $v : 'gpt-4o-mini';
         });
         add_settings_field(
             self::OPT_OPENAI_API_KEY,
@@ -99,6 +106,26 @@ class Micro_Coach_AI {
             function () {
                 $enabled = get_option(self::OPT_DEBUG_MODE, '0') === '1' ? 'checked' : '';
                 echo '<label><input type="checkbox" name="' . esc_attr(self::OPT_DEBUG_MODE) . '" value="1" ' . $enabled . '> Capture last AI request/response + estimated cost for the AI Debug page.</label>';
+            },
+            'quiz-platform-settings',
+            'mc_quiz_ai_section'
+        );
+
+        // Model selection radios
+        add_settings_field(
+            self::OPT_MODEL,
+            'Model',
+            function () {
+                $current = self::get_selected_model();
+                $name = esc_attr(self::OPT_MODEL);
+                $opt = function($val,$label) use ($current,$name){
+                    $checked = $current === $val ? 'checked' : '';
+                    echo '<label style="margin-right:16px;"><input type="radio" name="'.$name.'" value="'.esc_attr($val).'" '.$checked.'> '.esc_html($label).'</label>';
+                };
+                echo '<div>';
+                $opt('gpt-4o-mini','GPT‑4o mini (fast, cheaper)');
+                $opt('gpt-4o','GPT‑4o (higher quality, pricier)');
+                echo '</div>';
             },
             'quiz-platform-settings',
             'mc_quiz_ai_section'
@@ -174,6 +201,12 @@ TXT;
         return $v;
     }
 
+    /** Selected model (sanitized) with default */
+    public static function get_selected_model() {
+        $m = get_option(self::OPT_MODEL, 'gpt-4o-mini');
+        return in_array($m, ['gpt-4o-mini','gpt-4o'], true) ? $m : 'gpt-4o-mini';
+    }
+
     /** Adds the AI Debug submenu page under the main Quiz Platform menu. */
     public function add_admin_pages() {
         add_submenu_page(
@@ -247,6 +280,7 @@ TXT;
             wp_send_json_error(['message'=>'No API key configured']);
         }
         $system = 'You are a healthcheck. Reply with a JSON object {"ok":true} only.';
+        $model = self::get_selected_model();
         $resp = wp_remote_post('https://api.openai.com/v1/chat/completions', [
             'timeout' => 15,
             'headers' => [
@@ -254,7 +288,7 @@ TXT;
                 'Content-Type'  => 'application/json',
             ],
             'body' => wp_json_encode([
-                'model' => 'gpt-4o-mini',
+                'model' => $model,
                 'messages' => [ ['role'=>'system','content'=>$system], ['role'=>'user','content'=>'ping'] ],
                 'temperature' => 0,
             ]),
@@ -363,6 +397,11 @@ TXT;
                     .'reflection_questions (2-3 strings), tags (array of short tokens). '
                     .'Return: {"ideas": [...]}';
 
+            $model = self::get_selected_model();
+            if ( current_user_can('manage_options') ) {
+                $m = isset($_POST['model']) ? sanitize_text_field(wp_unslash($_POST['model'])) : '';
+                if (in_array($m, ['gpt-4o-mini','gpt-4o'], true)) { $model = $m; }
+            }
             $http_args = [
                 'timeout' => 45, // increase timeout to reduce curl 28 timeouts
                 'redirection' => 3,
@@ -373,7 +412,7 @@ TXT;
                     'Accept'        => 'application/json',
                 ],
                 'body' => wp_json_encode([
-                    'model' => 'gpt-4o-mini',
+                    'model' => $model,
                     'messages' => [
                         ['role' => 'system', 'content' => $system],
                         ['role' => 'user',   'content' => $user],
@@ -589,6 +628,22 @@ TXT;
                     <p class="ai-sub">to shape your filters to shape experiments you’ll see next.</p>
                 </div>
             </div>
+            <?php if ( current_user_can('manage_options') ): ?>
+            <div class="ai-filter">
+                <div class="ai-filter-row">
+                    <span class="f-icn">⚙️</span>
+                    <div class="f-title">Model (admin)</div>
+                    <div class="f-right">
+                        <?php $sel = self::get_selected_model(); ?>
+                        <select id="ai-model">
+                            <option value="gpt-4o-mini" <?php selected($sel,'gpt-4o-mini'); ?>>GPT‑4o mini</option>
+                            <option value="gpt-4o" <?php selected($sel,'gpt-4o'); ?>>GPT‑4o</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="f-sub">Temporarily override the default model for this request.</div>
+            </div>
+            <?php endif; ?>
             <div class="ai-filter">
                 <div class="ai-filter-row"><span class="f-icn">💰</span><div class="f-title">Cost</div><div class="f-right" id="ai-cost-label">Free</div></div>
                 <div class="f-sub">How much are you willing to spend?</div>

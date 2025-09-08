@@ -1591,6 +1591,9 @@ class Micro_Coach_Core {
                         lens_opposites: document.getElementById('lens-opposites')?.checked?1:0,
                         lens_adjacency: document.getElementById('lens-adjacency')?.checked?1:0,
                     });
+                    // Optional admin-only model override
+                    const modelSel = document.getElementById('ai-model');
+                    if (modelSel && modelSel.value) body.append('model', modelSel.value);
                     fetch(ajaxUrl, { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body })
                         .then(r=>r.json())
                         .then(j=>{
