@@ -678,6 +678,7 @@ TXT;
         <div id="ai-debug" class="ai-debug" style="display:none;"></div>
         <div class="ai-results">
             <h4 class="ai-section">Shortlist</h4>
+            <p class="ai-section-sub">Best‑fit ideas matched to your filters.</p>
             <div class="ai-results-grid" id="ai-shortlist">
                 <!-- Populated by AI → placeholder cards -->
                 <div class="ai-card skeleton"></div>
@@ -687,8 +688,11 @@ TXT;
                 <div class="ai-card skeleton"></div>
                 <div class="ai-card skeleton"></div>
             </div>
-            <h4 class="ai-section">More options</h4>
-            <div class="ai-results-grid" id="ai-more"></div>
+            <div id="ai-more-wrap" style="display:none;">
+                <h4 class="ai-section">More options</h4>
+                <p class="ai-section-sub">Additional ideas to explore if you want more variety.</p>
+                <div class="ai-results-grid" id="ai-more"></div>
+            </div>
         </div>
 
         <!-- Drawer for idea details -->

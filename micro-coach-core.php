@@ -1282,6 +1282,7 @@ class Micro_Coach_Core {
             .ai-alert{ background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
             .ai-filters{ background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow: 0 6px 14px rgba(15,23,42,.06); }
             .ai-banner{ background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
+            .ai-section-sub{ margin:4px 0 10px; color:#475569; font-size:13px; }
             .ai-debug{ background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; padding:10px 12px; border-radius:8px; margin:12px 0; }
             .ai-debug summary{ cursor:pointer; font-weight:600; }
             .ai-debug pre{ white-space:pre-wrap; overflow:auto; max-height:260px; background:#fff; border:1px solid #eee; padding:8px; border-radius:6px; }
@@ -1303,8 +1304,9 @@ class Micro_Coach_Core {
             .ai-results-grid{ display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; }
             @media (max-width: 768px){ .ai-results-grid{ grid-template-columns: 1fr; } .ai-sliders{ grid-template-columns: 1fr 1fr; } }
             .ai-card{ position:relative; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:14px; min-height:120px; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
-            .ai-card::after{ content:'\2197'; /* ↗ */ position:absolute; right:10px; bottom:8px; font-size:14px; color:#94a3b8; transition: color .15s ease; }
-            .ai-card:hover::after{ color:#64748b; }
+            /* Show the arrow only once real ideas render (not on skeletons) */
+            .ai-card:not(.skeleton)::after{ content:'\2197'; /* ↗ */ position:absolute; right:10px; bottom:8px; font-size:18px; color:#334155; opacity:0.9; transition: color .15s ease, transform .15s ease; }
+            .ai-card:hover:not(.skeleton)::after{ color:#111827; transform: translateY(-2px); }
             .ai-card.skeleton{ background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
             @keyframes shimmer { 0% { background-position: -400px 0;} 100%{ background-position: 400px 0; } }
 
@@ -1523,6 +1525,7 @@ class Micro_Coach_Core {
             const applyBtn = document.getElementById('ai-apply');
             const resetBtn = document.getElementById('ai-reset');
             const shortlistEl = document.getElementById('ai-shortlist');
+            const moreWrap = document.getElementById('ai-more-wrap');
             const moreEl = document.getElementById('ai-more');
 
             function renderSkeleton(el, n=6){ if (!el) return; el.innerHTML=''; for (let i=0;i<n;i++){ const d=document.createElement('div'); d.className='ai-card skeleton'; el.appendChild(d);} }
@@ -1574,7 +1577,8 @@ class Micro_Coach_Core {
             if (applyBtn){
                 applyBtn.addEventListener('click', function(e){
                     e.preventDefault();
-                    renderSkeleton(shortlistEl, 6); renderSkeleton(moreEl, 6);
+                    renderSkeleton(shortlistEl, 6);
+                    if (moreWrap) { moreWrap.style.display='none'; }
                     applyBtn.disabled = true; applyBtn.textContent = 'Generating…';
                     aiDefaults = {
                         cost: parseInt(document.getElementById('ai-cost')?.value||0,10),
@@ -1602,7 +1606,9 @@ class Micro_Coach_Core {
                         .then(j=>{
                             const banner = document.getElementById('ai-banner');
                             if (j && j.success && j.data){
-                                renderIdeas(shortlistEl, j.data.shortlist||[]); renderIdeas(moreEl, j.data.more||[]);
+                                renderIdeas(shortlistEl, j.data.shortlist||[]);
+                                const more = j.data.more||[];
+                                if (Array.isArray(more) && more.length){ if (moreWrap) moreWrap.style.display='block'; renderIdeas(moreEl, more); } else { if (moreWrap) moreWrap.style.display='none'; if (moreEl) moreEl.innerHTML=''; }
                                 if (banner) {
                                     if (j.data.used_fallback) {
                                         banner.style.display='block';
@@ -1633,10 +1639,11 @@ class Micro_Coach_Core {
                             else {
                                 if (shortlistEl) shortlistEl.innerHTML = '<div class="ai-card">We could not generate ideas just now.</div>';
                                 if (moreEl) moreEl.innerHTML = '';
+                                if (moreWrap) moreWrap.style.display='none';
                                 if (banner) { banner.style.display='block'; banner.textContent='Request failed — please try again.'; }
                             }
                         })
-                        .catch(()=>{ shortlistEl.innerHTML = '<div class="ai-card">Network error. Please try again.</div>'; moreEl.innerHTML=''; })
+                        .catch(()=>{ shortlistEl.innerHTML = '<div class="ai-card">Network error. Please try again.</div>'; if (moreEl) moreEl.innerHTML=''; if (moreWrap) moreWrap.style.display='none'; })
                         .finally(()=>{ applyBtn.disabled = false; applyBtn.textContent = 'Show experiments that fit my settings'; });
                 });
             }
