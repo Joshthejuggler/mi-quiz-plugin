@@ -1,6 +1,6 @@
 (function() {
     // --- Setup ---
-    const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data } = bartle_quiz_data;
+    const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, dashboardUrl } = bartle_quiz_data;
     const { cats: CATS, questions: QUESTIONS, likert: LIKERT } = data;
     const isLoggedIn = !!currentUser;
     const container = document.getElementById('bartle-quiz-container');
@@ -224,10 +224,23 @@
                 </div>
             </div>`;
 
+        let nextStepsHtml = '';
+        if (dashboardUrl) {
+            nextStepsHtml = `
+                <div class="bartle-results-section bartle-next-steps-section">
+                    <h3 class="bartle-section-title">Initial Assessments Complete!</h3>
+                    <p>You've finished the foundational assessments for Stage One. These results will help prepare you to start using AI-based tools to create minimum viable experiments with a high likelihood of success. Return to your dashboard to view your Self-Discovery Profile and see how your results fit together.</p>
+                    <div class="bartle-results-actions">
+                        <a href="${dashboardUrl}" class="bartle-quiz-button bartle-quiz-button-primary">View Your Self-Discovery Profile</a>
+                    </div>
+                </div>`;
+        }
+
         let resultsHtml = `
             <div id="bartle-results-content">
                 ${headerHtml}
                 ${overviewHtml}
+                ${nextStepsHtml}
             </div>
             <div id="bartle-results-actions" class="bartle-results-actions"></div>`;
         container.innerHTML = resultsHtml;
@@ -243,7 +256,8 @@
         };
 
         // Download PDF button (available for all users)
-        const downloadBtn = createActionButton('⬇️ Download PDF', 'bartle-quiz-button bartle-quiz-button-primary', (e) => {
+        const downloadBtnClasses = dashboardUrl ? 'bartle-quiz-button bartle-quiz-button-secondary' : 'bartle-quiz-button bartle-quiz-button-primary';
+        const downloadBtn = createActionButton('⬇️ Download PDF', downloadBtnClasses, (e) => {
             const btn = e.currentTarget;
             btn.textContent = 'Generating...';
             btn.disabled = true;

@@ -94,7 +94,18 @@ class CDT_Quiz_Plugin {
             }
         }
 
-        $bartle_quiz_url = $this->_find_page_by_shortcode('bartle_quiz');
+        $next_step_url = '';
+        $next_step_title = '';
+        if (is_user_logged_in()) {
+            $bartle_results = get_user_meta(get_current_user_id(), 'bartle_quiz_results', true);
+            if (!empty($bartle_results)) {
+                $next_step_url = $this->_find_page_by_shortcode('quiz_dashboard');
+                $next_step_title = 'View Your Self-Discovery Profile';
+            } else {
+                $next_step_url = $this->_find_page_by_shortcode('bartle_quiz');
+                $next_step_title = 'Take the Bartle Quiz Now';
+            }
+        }
 
         // Pass data to our JavaScript file.
         wp_localize_script('cdt-quiz-js', 'cdt_quiz_data', [
@@ -102,7 +113,8 @@ class CDT_Quiz_Plugin {
             'ajaxUrl'     => admin_url('admin-ajax.php'),
             'ajaxNonce'   => wp_create_nonce('cdt_nonce'),
             'loginUrl'    => wp_login_url(get_permalink()),
-            'bartleQuizUrl' => $bartle_quiz_url,
+            'nextStepUrl' => $next_step_url,
+            'nextStepTitle' => $next_step_title,
             'predictionData' => $prediction_data,
             'data'        => [
                 'cats'      => $cdt_categories ?? [],

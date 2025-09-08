@@ -109,6 +109,10 @@
     flex-direction: column;
     align-items: stretch; /* Make buttons full width for a cleaner mobile look */
   }
+  .site-branding {
+    flex-direction: column;
+    gap: 10px;
+  }
 }
 
 .mi-quiz-footer {

@@ -303,6 +303,18 @@ class Micro_Coach_Core {
                     $cdt_bottom_slug = null;
                     if (!empty($cdt_sorted)) { $last = end($cdt_sorted); if (!empty($last[0])) { $cdt_bottom_slug = $last[0]; } }
 
+                    // --- Build radar chart data ---
+                    $chart_labels = [ 'Linguistic', 'Logical', 'Spatial', 'Bodily', 'Musical', 'Interpersonal', 'Intrapersonal', 'Naturalistic', 'Ambiguity', 'Value Conflict', 'Self-Confront', 'Discomfort Reg', 'Growth', 'Explorer', 'Achiever', 'Socializer', 'Strategist' ];
+                    $mi_chart_data = array_fill(0, 17, null);
+                    $mi_slug_map = ['linguistic', 'logical-mathematical', 'spatial', 'bodily-kinesthetic', 'musical', 'interpersonal', 'intrapersonal', 'naturalistic'];
+                    foreach ($mi_slug_map as $i => $slug) { $mi_chart_data[$i] = round(($mi_results['part1Scores'][$slug] ?? 0) / 40 * 100); }
+                    $cdt_chart_data = array_fill(0, 17, null);
+                    $cdt_slug_map = ['ambiguity-tolerance', 'value-conflict-navigation', 'self-confrontation-capacity', 'discomfort-regulation', 'conflict-resolution-tolerance'];
+                    foreach ($cdt_slug_map as $i => $slug) { $cdt_chart_data[8 + $i] = round((($cdt_scores_by_slug[$slug] ?? 0) / 50) * 100); }
+                    $pt_chart_data = array_fill(0, 17, null);
+                    $pt_slug_map = ['explorer', 'achiever', 'socializer', 'strategist'];
+                    foreach ($pt_slug_map as $i => $slug) { $pt_chart_data[13 + $i] = round((($bartle_scores_by_slug[$slug] ?? 0) / 50) * 100); }
+
                     // Build result page URLs for deep links
                     $mi_url     = $this->find_page_by_shortcode('mi_quiz') ?: $this->find_page_by_shortcode('mi-quiz');
                     $cdt_url    = $this->find_page_by_shortcode('cdt_quiz') ?: $this->find_page_by_shortcode('cdt-quiz');
@@ -376,6 +388,7 @@ class Micro_Coach_Core {
                               <header class="pc-head pc-head--center">
                                 <h2 class="pc-title">Player Type</h2>
                               </header>
+                              <p class="pc-caption" style="text-align:center; margin:6px 0 10px;">Why I’m motivated to engage at all</p>
 
                               <?php
                                 $sec_slug  = $secondary_bartle_slug ?: '';
@@ -430,6 +443,7 @@ class Micro_Coach_Core {
 
                               <section class="pc-mi">
                                 <h3 class="pc-kicker">Top Multiple Intelligences</h3>
+                                <p class="pc-caption" style="text-align:center; margin:4px 0 10px;">What I’m naturally good at</p>
                                 <ul class="pc-mi-grid">
                                   <?php foreach ($mi_top3 as $mi): ?>
                                   <li class="mi" style="--val:<?php echo (int) $mi['pct']; ?>">
@@ -481,6 +495,7 @@ class Micro_Coach_Core {
 
                               <section class="pc-cdt">
                                 <h3 class="pc-kicker">CDT Highlights</h3>
+                                <p class="pc-caption" style="text-align:center; margin:4px 0 10px;">How I handle discomfort or internal conflict</p>
                                 <div class="pc-cdt-grid">
                                   <?php if ($cdt_top): ?>
                                   <div class="cdt-chip good">
@@ -524,7 +539,51 @@ class Micro_Coach_Core {
                                   <p class="pc-caption"><?php echo esc_html($cdt_caption); ?></p>
                                 <?php endif; ?>
                               </section>
+                              <!-- Radar Overview inside the card -->
+                              <section class="pc-spider">
+                                <header class="pc-spider-head">
+                                  <h3 class="pc-kicker pc-spider-title">How It All Fits</h3>
+                                </header>
+                                <div class="pc-spider-canvas">
+                                  <canvas id="compositeRadar" aria-label="Combined Profile Radar" role="img"></canvas>
+                                </div>
+                                <p class="pc-caption pc-spider-desc">How my profile looks as one picture.</p>
+                              </section>
                             </article>
+
+                            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                            <script>
+                              (function(){
+                                const el = document.getElementById('compositeRadar');
+                                if (!el || typeof Chart === 'undefined') return;
+                                const chartLabels = <?php echo json_encode(array_map(function($l) { return explode(' ', $l)[0]; }, $chart_labels)); ?>;
+                                const dataMI = <?php echo json_encode($mi_chart_data); ?>;
+                                const dataCDT = <?php echo json_encode($cdt_chart_data); ?>;
+                                const dataPT = <?php echo json_encode($pt_chart_data); ?>;
+                                const miHighlight = new Array(17).fill(null);
+                                const cdtHighlight = new Array(17).fill(null);
+                                const ptHighlight = new Array(17).fill(null);
+                                const miTopIdx = dataMI.slice(0,8).map((v,i)=>({v,i})).sort((a,b)=>(b.v||0)-(a.v||0)).slice(0,3).map(o=>o.i);
+                                miTopIdx.forEach(i=> miHighlight[i] = dataMI[i]);
+                                const cdtSlice = dataCDT.slice(8,13).map((v,i)=>({v,i:i+8})).sort((a,b)=>(b.v||0)-(a.v||0));
+                                if (cdtSlice.length && cdtSlice[0].v != null) cdtHighlight[cdtSlice[0].i] = dataCDT[cdtSlice[0].i];
+                                for (let i=13;i<=16;i++) ptHighlight[i] = dataPT[i];
+                                const zonesBg = { id:'zonesBg', beforeDraw(chart){ const {ctx, scales:{r}}=chart; if(!r) return; const band=(a,b,c)=>{ const inner=r.getDistanceFromCenterForValue(a), outer=r.getDistanceFromCenterForValue(b); ctx.save(); ctx.fillStyle=c; ctx.beginPath(); ctx.arc(r.xCenter,r.yCenter,outer,0,2*Math.PI); ctx.arc(r.xCenter,r.yCenter,inner,0,2*Math.PI,true); ctx.closePath(); ctx.fill(); ctx.restore();}; band(70,100,'rgba(16,185,129,0.06)'); band(40,70,'rgba(245,158,11,0.06)'); band(0,40,'rgba(239,68,68,0.05)'); } };
+                                new Chart(el, {
+                                  type:'radar',
+                                  data:{ labels: chartLabels, datasets:[
+                                    { label:'MI', data:dataMI, fill:true, borderWidth:1, pointRadius:0, backgroundColor:'rgba(54,162,235,0.08)', borderColor:'rgba(54,162,235,0.5)' },
+                                    { label:'CDT', data:dataCDT, fill:true, borderWidth:1, pointRadius:0, backgroundColor:'rgba(255,99,132,0.08)', borderColor:'rgba(255,99,132,0.5)' },
+                                    { label:'Player', data:dataPT, fill:true, borderWidth:1, pointRadius:0, backgroundColor:'rgba(75,192,192,0.08)', borderColor:'rgba(75,192,192,0.5)' },
+                                    { label:'Top MI', data:miHighlight, fill:true, borderWidth:3, pointRadius:2, backgroundColor:'rgba(54,162,235,0.25)', borderColor:'rgb(54,162,235)' },
+                                    { label:'Top CDT', data:cdtHighlight, fill:true, borderWidth:3, pointRadius:2, backgroundColor:'rgba(255,99,132,0.25)', borderColor:'rgb(255,99,132)' },
+                                    { label:'Player (hi)', data:ptHighlight, fill:true, borderWidth:3, pointRadius:2, backgroundColor:'rgba(75,192,192,0.20)', borderColor:'rgb(75,192,192)' }
+                                  ]},
+                                  options:{ responsive:true, maintainAspectRatio:false, layout:{ padding:{left:0,right:0} }, elements:{ line:{ tension:0.2 } }, scales:{ r:{ suggestedMin:0, suggestedMax:100, ticks:{ stepSize:25, backdropColor:'transparent' }, grid:{ color:'rgba(100,116,139,0.15)' }, angleLines:{ color:'rgba(100,116,139,0.15)' }, pointLabels:{ font:{ size:14 } } } }, plugins:{ legend:{ position:'bottom', align:'center', labels:{ filter:i=> ['MI','CDT','Player'].includes(i.text) } } } },
+                                  plugins:[zonesBg]
+                                });
+                              })();
+                            </script>
 
                             <div class="composite-cta profile-links" style="text-align:center"><em>
                               <?php if ($mi_url): ?><a class="inline-link" href="<?php echo esc_url($mi_url); ?>">View MI results</a> · <?php endif; ?>
@@ -1033,10 +1092,11 @@ class Micro_Coach_Core {
             /* 3) CDT chips — more contrast, steady spacing */
             .sosd-playercard .pc-cdt-grid{ gap: 14px; align-items: stretch; }
             .sosd-playercard .cdt-chip{ padding: 12px; background: #f9fafb; border: 1px solid #e6e9f2; display:grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto auto; row-gap:6px; column-gap:8px; min-height: 110px; }
-            .sosd-playercard .cdt-tag{ grid-column:1 / span 2; align-self:center; margin-bottom:2px; }
-            .sosd-playercard .cdt-name{ grid-column:1 / span 2; font-size:16px; font-weight:800; margin:0; }
-            .sosd-playercard .cdt-meter{ grid-column:1 / span 1; align-self:center; }
-            .sosd-playercard .cdt-val{ grid-column:2 / span 1; align-self:center; justify-self:end; padding-left:8px; font-weight:800; font-variant-numeric: tabular-nums; }
+            /* Bottom tag: centered title (row 1), meter+score (row 2), tag footer (row 3) */
+            .sosd-playercard .cdt-name{ grid-column:1 / span 2; font-size:16px; font-weight:800; margin:0; text-align:center; grid-row:1; }
+            .sosd-playercard .cdt-meter{ grid-column:1 / span 1; align-self:center; grid-row:2; }
+            .sosd-playercard .cdt-val{ grid-column:2 / span 1; align-self:center; justify-self:end; padding-left:8px; font-weight:800; font-variant-numeric: tabular-nums; grid-row:2; }
+            .sosd-playercard .cdt-tag{ grid-column:1 / span 2; align-self:center; justify-self:center; margin-top:6px; grid-row:3; }
             /* badges: tint only the tag; keep rest light */
             .sosd-playercard .cdt-chip.good .cdt-tag{
               background:#e8f8f2; color:#0f5132; padding:2px 8px; border-radius:999px; font-weight:800; font-size:11px;
@@ -1214,7 +1274,14 @@ class Micro_Coach_Core {
             .microcopy{ font-size: 13px; color: #51607a; margin: 8px 0 0; }
             .profile-grid { display:grid; grid-template-columns: 1fr; gap: clamp(16px, 3vw, 32px); background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; }
             .chart-panel { min-height: 420px; background:#fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.04); display:flex; align-items:center; justify-content:center; }
-            #compositeRadar { width: 100% !important; max-width: 620px; height: auto !important; }
+            /* In-card radar spacing and centering */
+            .sosd-playercard .pc-spider{ margin: 24px 0 10px; padding-top: 16px; position: relative; }
+            .sosd-playercard .pc-spider::before{ content:""; position:absolute; left:0; right:0; top:0; height:1px; background: rgba(15,23,42,.06); }
+            .sosd-playercard .pc-spider-head{ text-align:center; margin: 0; }
+            .sosd-playercard .pc-spider-title{ margin: 0 0 6px; }
+            .sosd-playercard .pc-spider-canvas{ max-width: 720px; width:100%; height:360px; margin: 10px auto 0; display:flex; align-items:center; justify-content:center; }
+            .sosd-playercard .pc-spider-desc{ margin: 12px auto 0; max-width: 60ch; text-align:center; }
+            #compositeRadar { width: 100% !important; height: 100% !important; display:block; }
             .composite-head { margin: 0 0 12px 0; }
             .composite-title { margin: 0 0 4px 0; font-size: 1.35em; font-weight: 700; color:#111826; }
             .composite-subtitle { margin: 0; font-size: .95em; color:#51607a; }
@@ -1229,6 +1296,54 @@ class Micro_Coach_Core {
             .ring::before { content:""; position:absolute; inset: 4px; background: #fff; border-radius: 50%; }
             .ring .ring-label { position: relative; font-size: 0.8em; font-weight: 700; color: #111826; }
             .ring-subtle { --fill: #64748b; }
+
+            /* MI tiles: badge-style vertical layout (Emoji → Label → Gauge) */
+            .sosd-playercard .pc-mi-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+            @media (max-width: 560px){ .sosd-playercard .pc-mi-grid{ grid-template-columns: 1fr; } }
+            .sosd-playercard .pc-mi-grid .mi{
+                display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+                padding: 18px 14px; border:1px solid #e6e9f2; border-radius: 16px; background:#fff;
+                box-shadow: 0 6px 14px rgba(15,23,42,.06);
+                transition: transform .15s ease, box-shadow .15s ease; cursor: default;
+            }
+            .sosd-playercard .pc-mi-grid .mi:hover{ transform: translateY(-2px); box-shadow: 0 12px 24px rgba(15,23,42,.10); }
+            .sosd-playercard .pc-mi-grid .mi-icon{ order:1; font-size: 72px; line-height:1; margin: 0 0 6px; }
+            .sosd-playercard .pc-mi-grid .mi-label{ order:2; font-weight:800; text-align:center; margin:0 0 6px; line-height:1.25; min-height:2.6em; display:flex; align-items:center; justify-content:center; }
+            .sosd-playercard .pc-mi-grid .mi-gauge{
+                order:3; width:60px; aspect-ratio:1; border-radius:50%; display:grid; place-items:center; font-weight:900; color:#0a1325;
+                /* Lighter ring + larger white core for maximum contrast */
+                background:
+                    conic-gradient(color-mix(in oklab, var(--mi-accent, #1e40af) 42%, #e7ecf3) calc(var(--val,0)*1%), #f2f5f9 0),
+                    radial-gradient(circle at 50% 50%, #ffffff 64%, transparent 65%);
+                border:1px solid #d6dbe3; position:relative; overflow:hidden;
+            }
+            /* Extra white core to ensure legibility over the ring in all themes */
+            .sosd-playercard .pc-mi-grid .mi-gauge::before{
+                content:""; position:absolute; inset:18%; background:#fff; border-radius:50%; z-index:0;
+            }
+            .sosd-playercard .pc-mi-grid .mi-gauge::after{
+                content: attr(data-val);
+                font-size: clamp(14px, 2.6vw, 18px);
+                font-weight: 900;
+                z-index:1;
+                /* Soft outline using multiple shadows to pop on any color */
+                text-shadow:
+                    0 1px 0 #fff,
+                    0 -1px 0 #fff,
+                    1px 0 0 #fff,
+                    -1px 0 0 #fff,
+                    0 0 2px rgba(255,255,255,0.7);
+            }
+            .sosd-playercard .pc-mi-grid .mi-val{ display:none; }
+            /* Per-intelligence accents (optional) */
+            .sosd-playercard .pc-mi-grid .mi--interpersonal{ --mi-accent:#3b82f6; }
+            .sosd-playercard .pc-mi-grid .mi--intrapersonal{ --mi-accent:#8b5cf6; }
+            .sosd-playercard .pc-mi-grid .mi--bodily-kinesthetic{ --mi-accent:#22c55e; }
+            .sosd-playercard .pc-mi-grid .mi--linguistic{ --mi-accent:#0ea5e9; }
+            .sosd-playercard .pc-mi-grid .mi--logical-mathematical{ --mi-accent:#f59e0b; }
+            .sosd-playercard .pc-mi-grid .mi--spatial{ --mi-accent:#06b6d4; }
+            .sosd-playercard .pc-mi-grid .mi--musical{ --mi-accent:#e11d48; }
+            .sosd-playercard .pc-mi-grid .mi--naturalistic{ --mi-accent:#10b981; }
             @media (max-width: 768px) {
                 .profile-grid { grid-template-columns: 1fr; }
                 .chart-panel { min-height: 360px; }

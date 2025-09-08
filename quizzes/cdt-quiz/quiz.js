@@ -4,7 +4,7 @@
     if (typeof cdt_quiz_data === 'undefined') { return; }
 
     // --- Setup ---
-    const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, bartleQuizUrl, predictionData } = cdt_quiz_data;
+    const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, nextStepUrl, nextStepTitle, predictionData } = cdt_quiz_data;
     const { cats: CATS, questions: QUESTIONS, likert: LIKERT, dimensionDetails: DIMENSION_DETAILS } = data || {};
     const isLoggedIn = !!currentUser;
     const container = document.getElementById('cdt-quiz-container');
@@ -47,13 +47,13 @@
             relational: { 'In Relationships': 'Brings calm in heated moments, protecting trust.', 'In Teams': 'Maintains stability when debates get intense.', 'As a Leader': 'Shows others that strong feelings can be acknowledged without derailing progress.' },
             practices: { 'Reflection': '“Which emotion shows up first when I face contradiction? How do I usually react?”', 'Micro-Challenge': 'Next time you feel tension, pause and name the feeling before speaking.', 'Reframe': '“Emotions are not roadblocks — they are signals pointing me to deeper truths.”' }
         },
-        'growth-orientation': {
-            title: 'Growth Orientation',
-            helps: 'I see inner tension as a sign that I’m learning.',
-            watchOut: 'I seek out ideas that challenge my assumptions.',
-            growth: ['I view cognitive dissonance as a sign to pay attention—not shut down.', 'I grow the most when things feel difficult at first.', 'I like learning things that make me rethink old habits.'],
-            relational: { 'In Relationships': 'I believe discomfort is part of becoming wiser.', 'In Teams': 'I’m drawn to experiences that stretch me.', 'As a Leader': 'I trust the process of learning, even when it feels messy.' },
-            practices: { 'Reflection': 'I prefer honest feedback over praise.', 'Micro-Challenge': 'I believe real growth takes time and discomfort.', 'Reframe': 'I believe real growth takes time and discomfort.' }
+        'conflict-resolution-tolerance': {
+            title: 'Conflict Resolution Tolerance',
+            helps: 'Conflict is a normal part of being human — whenever values, goals, or personalities collide, sparks fly. Your level of conflict resolution tolerance reveals how well you stay present in these moments. When you can tolerate conflict, you keep relationships intact while addressing the issues beneath the surface. This strength allows you to navigate hard conversations, find common ground, and keep communication flowing.',
+            watchOut: 'If you avoid conflict, small problems can grow into bigger issues. If you dive in too aggressively, you risk damaging trust. The goal is constructive engagement.',
+            growth: ['Practice assertive honesty: share your perspective clearly, but without hostility.', 'Use reflective listening: “What I hear you saying is…” before responding.', 'Notice your instincts — do you avoid conflict or dive in aggressively? Work on balancing these tendencies.'],
+            relational: { 'In Relationships': 'Allows you to hear others without getting defensive.', 'In Teams': 'Keeps communication open during disagreements.', 'As a Leader': 'Models how to handle pressure constructively.' },
+            practices: { 'Reflection': '“What is my go-to conflict style? Avoid, attack, or engage?”', 'Micro-Challenge': 'In a low-stakes disagreement, try to state the other person’s view to their satisfaction before sharing your own.', 'Reframe': '“Conflict is not a threat; it’s a request for clarity.”' }
         }
     };
 
@@ -297,13 +297,13 @@
             </div>`;
 
         let nextStepsHtml = '';
-        if (bartleQuizUrl) {
+        if (nextStepUrl) {
             nextStepsHtml = `
                 <div class="cdt-results-section cdt-next-steps-section">
                     <h3 class="cdt-section-title">Your Next Step: Discover Your Player Type</h3>
                     <p>You've explored how you handle inner conflict. Now, discover what truly motivates you. The Bartle Player Type quiz reveals your primary drivers in challenges, learning, and collaboration.</p>
                     <div class="cdt-results-actions">
-                        <a href="${bartleQuizUrl}" class="cdt-quiz-button cdt-quiz-button-primary">Take the Bartle Quiz Now</a>
+                        <a href="${nextStepUrl}" class="cdt-quiz-button cdt-quiz-button-primary">${nextStepTitle}</a>
                     </div>
                 </div>`;
         }

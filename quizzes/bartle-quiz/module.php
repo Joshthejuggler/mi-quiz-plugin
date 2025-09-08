@@ -64,12 +64,15 @@ class Bartle_Quiz_Plugin {
             ];
         }
 
+        $dashboard_url = $this->_find_page_by_shortcode('quiz_dashboard');
+
         // Pass data to our JavaScript file.
         wp_localize_script('bartle-quiz-js', 'bartle_quiz_data', [
             'currentUser' => $user_data,
             'ajaxUrl'     => admin_url('admin-ajax.php'),
             'ajaxNonce'   => wp_create_nonce('bartle_nonce'),
             'loginUrl'    => wp_login_url(get_permalink()),
+            'dashboardUrl' => $dashboard_url,
             'data'        => [
                 'cats'      => $bartle_categories ?? [],
                 'questions' => $bartle_questions ?? [],
