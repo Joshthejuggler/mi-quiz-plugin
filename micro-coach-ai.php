@@ -7,11 +7,17 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class Micro_Coach_AI {
     // Stores the OpenAI (or compatible) API key for AI features
     const OPT_OPENAI_API_KEY = 'mc_openai_api_key';
+    // Admin-editable, long-form system prompt used to steer idea generation
+    const OPT_SYSTEM_INSTRUCTIONS = 'mc_ai_system_instructions';
+    // Toggle admin-only debug capture and page
+    const OPT_DEBUG_MODE = 'mc_ai_debug_mode';
 
     public function __construct() {
         if (is_admin()) {
             // Add admin settings fields to the main platform settings page.
             add_action('admin_init', [$this, 'register_settings']);
+            // Add AI Debug submenu page
+            add_action('admin_menu', [$this, 'add_admin_pages']);
         }
 
         // AJAX: AI Coach idea generation
@@ -29,7 +35,7 @@ class Micro_Coach_AI {
             'mc_quiz_ai_section',
             'AI Integration',
             function () {
-                echo '<p>Configure credentials used to generate Minimum Viable Experiences (MVEs) and other AI-assisted features. Keys are stored as WordPress options.</p>';
+                echo '<p>Configure AI behavior and credentials used to generate Minimum Viable Experiments (MVEs). Keys are stored as WordPress options.</p>';
             },
             'quiz-platform-settings' // This page is registered by Micro_Coach_Core
         );
@@ -38,6 +44,16 @@ class Micro_Coach_AI {
         register_setting(Micro_Coach_Core::OPT_GROUP, self::OPT_OPENAI_API_KEY, function ($v) {
             // Keep it lean; accept plain text and trim
             return trim(sanitize_text_field($v));
+        });
+        // Admin-editable system instructions (fine-tuning prompt)
+        register_setting(Micro_Coach_Core::OPT_GROUP, self::OPT_SYSTEM_INSTRUCTIONS, function ($v) {
+            // Sanitize textarea content; allow basic punctuation and quotes
+            $v = is_string($v) ? trim($v) : '';
+            return sanitize_textarea_field($v);
+        });
+        // Debug toggle (admins only)
+        register_setting(Micro_Coach_Core::OPT_GROUP, self::OPT_DEBUG_MODE, function ($v) {
+            return $v ? '1' : '0';
         });
         add_settings_field(
             self::OPT_OPENAI_API_KEY,
@@ -51,12 +67,39 @@ class Micro_Coach_AI {
             'mc_quiz_ai_section'
         );
 
+        // Fine-tuning instructions textarea
+        add_settings_field(
+            self::OPT_SYSTEM_INSTRUCTIONS,
+            'AI System Instructions',
+            function () {
+                $default = Micro_Coach_AI::get_default_system_instructions();
+                $val = get_option(self::OPT_SYSTEM_INSTRUCTIONS, $default);
+                $val_esc = esc_textarea($val);
+                echo '<textarea name="' . esc_attr(self::OPT_SYSTEM_INSTRUCTIONS) . '" rows="10" style="width: 100%; max-width: 780px;">' . $val_esc . '</textarea>';
+                echo '<p class="description">Guides the AI when generating MVEs. Edit to fine‑tune tone and constraints. Note: output remains constrained to JSON for parsing.</p>';
+            },
+            'quiz-platform-settings',
+            'mc_quiz_ai_section'
+        );
+
         // Put the Test Connection control in the same AI section so all
         // AI settings are grouped together.
         add_settings_field(
             'mc_ai_test_connection',
             'Test Connection',
             [$this, 'render_test_connection_field'],
+            'quiz-platform-settings',
+            'mc_quiz_ai_section'
+        );
+
+        // Debug Mode
+        add_settings_field(
+            self::OPT_DEBUG_MODE,
+            'Debug Mode (Admins Only)',
+            function () {
+                $enabled = get_option(self::OPT_DEBUG_MODE, '0') === '1' ? 'checked' : '';
+                echo '<label><input type="checkbox" name="' . esc_attr(self::OPT_DEBUG_MODE) . '" value="1" ' . $enabled . '> Capture last AI request/response + estimated cost for the AI Debug page.</label>';
+            },
             'quiz-platform-settings',
             'mc_quiz_ai_section'
         );
@@ -98,6 +141,98 @@ class Micro_Coach_AI {
     public static function get_openai_api_key() {
         $key = get_option(self::OPT_OPENAI_API_KEY, '');
         return is_string($key) ? trim($key) : '';
+    }
+
+    /**
+     * Default long-form system instructions used to steer idea generation.
+     */
+    public static function get_default_system_instructions() {
+        return <<<'TXT'
+Role: You generate personalized “minimum viable experiments” (MVEs) for self-discovery.
+
+Inputs you will receive: A JSON payload with: MI top 3 (with scores), CDT subscale scores (plus strongest & growth edge), Bartle player type (primary and optional secondary), optional interests/context; and user-selected filters (cost, time, energy, variety), the brainstorming lenses to use (Curiosity, Role Models, Opposites, Adjacency), and a quantity target.
+
+Task: Produce a diverse set of safe, low-stakes MVEs that the user can try within 7 days. Respect filters; tie each idea back to MI/CDT/Bartle.
+
+Frameworks: Use TTCT (fluency/flexibility/originality/elaboration) for ideation; Fogg (Motivation × Ability × Prompt) for actionability; consider Gretchen Rubin’s Tendencies and Attachment/Interpersonal style for adherence & social fit.
+
+Constraints:
+– Specific, runnable steps (3–5), not generic advice.
+– Calibrate cost/time/energy/variety to sliders; don’t exceed ±1 unless you add a tradeoff note.
+– All ideas must be safe, legal, age-appropriate, and low-risk.
+– Keep language warm, concrete, and non-judgmental.
+TXT;
+    }
+
+    /**
+     * Returns the system instructions from settings or the default value.
+     */
+    public static function get_system_instructions() {
+        $v = get_option(self::OPT_SYSTEM_INSTRUCTIONS, '');
+        $v = is_string($v) ? trim($v) : '';
+        if ($v === '') return self::get_default_system_instructions();
+        return $v;
+    }
+
+    /** Adds the AI Debug submenu page under the main Quiz Platform menu. */
+    public function add_admin_pages() {
+        add_submenu_page(
+            'quiz-platform-settings',
+            'AI Debug',
+            'AI Debug',
+            'manage_options',
+            'mc-ai-debug',
+            [$this, 'render_debug_page']
+        );
+    }
+
+    /** Render the AI Debug page. */
+    public function render_debug_page() {
+        if (!current_user_can('manage_options')) return;
+        $uid = get_current_user_id();
+        $last = get_transient('mc_ai_last_debug_' . $uid);
+        echo '<div class="wrap"><h1>AI Debug</h1>';
+        if (get_option(self::OPT_DEBUG_MODE, '0') !== '1') {
+            echo '<div class="notice notice-warning"><p>Debug Mode is disabled. Enable it under <strong>Quiz Platform → Settings → AI Integration</strong>.</p></div>';
+        }
+        if (!$last) {
+            echo '<p>No recent debug data found. Trigger an AI generation while logged in as an admin.</p></div>';
+            return;
+        }
+        $esc = function($s){ return esc_html(is_string($s) ? $s : wp_json_encode($s, JSON_PRETTY_PRINT)); };
+        echo '<h2>Summary</h2>';
+        echo '<table class="widefat striped"><tbody>';
+        echo '<tr><th>Timestamp</th><td>' . $esc($last['timestamp'] ?? '') . '</td></tr>';
+        echo '<tr><th>Model</th><td>' . $esc($last['model'] ?? '') . '</td></tr>';
+        echo '<tr><th>HTTP Code</th><td>' . $esc($last['response']['code'] ?? '') . '</td></tr>';
+        echo '<tr><th>Prompt Tokens</th><td>' . $esc($last['response']['usage']['prompt_tokens'] ?? '') . '</td></tr>';
+        echo '<tr><th>Completion Tokens</th><td>' . $esc($last['response']['usage']['completion_tokens'] ?? '') . '</td></tr>';
+        echo '<tr><th>Estimated Cost (USD)</th><td>' . $esc($last['response']['cost_estimate_usd'] ?? '') . '</td></tr>';
+        echo '<tr><th>Retry Attempted</th><td>' . $esc(!empty($last['retry_attempted']) ? 'yes' : 'no') . '</td></tr>';
+        echo '<tr><th>Fallback</th><td>' . $esc((!empty($last['fallback']['used'])) ? ('yes — ' . ($last['fallback']['reason'] ?? '')) : 'no') . '</td></tr>';
+        echo '</tbody></table>';
+
+        echo '<h2>Request</h2>';
+        echo '<h3>System Instructions</h3><pre style="white-space:pre-wrap;">' . $esc($last['request']['system'] ?? '') . '</pre>';
+        echo '<h3>User Message</h3><pre style="white-space:pre-wrap;">' . $esc($last['request']['user'] ?? '') . '</pre>';
+        echo '<h3>Payload</h3><pre>' . $esc($last['request']['payload'] ?? []) . '</pre>';
+
+        echo '<h2>Response Snippet</h2><pre>' . $esc($last['response']['raw_snippet'] ?? '') . '</pre>';
+        echo '</div>';
+    }
+
+    /** Estimate cost in USD from usage for known models. */
+    public static function estimate_cost_usd($model, $usage) {
+        $in = 0.0005; $out = 0.0015; // defaults per 1K tokens
+        $map = [
+            'gpt-4o-mini' => ['in'=>0.00015, 'out'=>0.0006],
+            'gpt-4o'      => ['in'=>0.005,   'out'=>0.015],
+        ];
+        if (isset($map[$model])) { $in = $map[$model]['in']; $out = $map[$model]['out']; }
+        $pt = is_array($usage) && isset($usage['prompt_tokens']) ? (int)$usage['prompt_tokens'] : 0;
+        $ct = is_array($usage) && isset($usage['completion_tokens']) ? (int)$usage['completion_tokens'] : 0;
+        $cost = ($pt/1000.0)*$in + ($ct/1000.0)*$out;
+        return round($cost, 6);
     }
 
     /**
@@ -197,6 +332,9 @@ class Micro_Coach_AI {
         $used_fallback = false; $fallback_reason = '';
         $api_key = self::get_openai_api_key();
         if (!empty($api_key)) {
+            $debug_enabled = current_user_can('manage_options') && (get_option(self::OPT_DEBUG_MODE, '0') === '1');
+            $debug_info = null;
+            $retry_attempted = false;
             // Construct a compact payload for the model
             $payload = [
                 'user' => [
@@ -213,10 +351,10 @@ class Micro_Coach_AI {
                 ],
             ];
 
-            // JSON-mode prompt: require a single JSON object {"ideas": [...]} only.
-            $system = 'You are an AI coach that turns assessment profiles into safe, low‑stakes Minimum Viable Experiences (MVEs). '
+            // System instructions come from settings (admin fine‑tuning).
+            $system = self::get_system_instructions() . ' '
                     .'Always and only return a single JSON object with this top-level shape: {"ideas": [...]}. '
-                    .'Do not include prose, markdown, or backticks. Each idea must be runnable within 7 days.';
+                    .'Do not include prose, markdown, or backticks.';
             $user = 'Profile+filters JSON (no PII): ' . wp_json_encode($payload) . "\n\n" .
                     'Each ideas[] item must have: '
                     .'title (<=60), lens (Curiosity|Role Models|Opposites|Adjacency), micro_description (<=140), '
@@ -255,6 +393,7 @@ class Micro_Coach_AI {
                 error_log('MC AI: retry after timeout/5xx');
                 // bump timeout a bit for the retry
                 $http_args['timeout'] = 60;
+                $retry_attempted = true;
                 $resp = wp_remote_post('https://api.openai.com/v1/chat/completions', $http_args);
             }
 
@@ -289,6 +428,36 @@ class Micro_Coach_AI {
                 $used_fallback = true; $fallback_reason = is_wp_error($resp) ? ('wp_error: ' . $resp->get_error_message()) : ('http_' . wp_remote_retrieve_response_code($resp));
                 $snippet = is_wp_error($resp) ? '' : substr(wp_remote_retrieve_body($resp), 0, 400);
                 error_log('MC AI: API error — ' . $fallback_reason . ' body: ' . $snippet);
+            }
+
+            // Capture debug info for admins if enabled
+            if ($debug_enabled) {
+                $resp_code = is_wp_error($resp) ? 0 : (int) wp_remote_retrieve_response_code($resp);
+                $resp_body = is_wp_error($resp) ? '' : wp_remote_retrieve_body($resp);
+                $resp_json = json_decode($resp_body, true);
+                $usage = is_array($resp_json) ? ($resp_json['usage'] ?? []) : [];
+                $model_used = is_array($resp_json) ? ($resp_json['model'] ?? ($resp_json['choices'][0]['model'] ?? 'gpt-4o-mini')) : 'gpt-4o-mini';
+                $cost_est = self::estimate_cost_usd($model_used, $usage);
+                $uid = get_current_user_id();
+                $debug_payload = [
+                    'timestamp' => current_time('mysql'),
+                    'model' => $model_used,
+                    'request' => [
+                        'system' => $system,
+                        'user' => $user,
+                        'payload' => $payload,
+                    ],
+                    'response' => [
+                        'code' => $resp_code,
+                        'usage' => $usage,
+                        'cost_estimate_usd' => $cost_est,
+                        'raw_snippet' => substr($resp_body, 0, 1200),
+                    ],
+                    'retry_attempted' => $retry_attempted,
+                    'fallback' => [ 'used' => $used_fallback, 'reason' => $fallback_reason ],
+                ];
+                set_transient('mc_ai_last_debug_' . $uid, $debug_payload, HOUR_IN_SECONDS);
+                $debug_info = $debug_payload;
             }
         }
 
@@ -388,12 +557,14 @@ class Micro_Coach_AI {
         // Simple partition: shortlist 6, more next 6
         $shortlist = array_slice($ideas, 0, 6);
         $more      = array_slice($ideas, 6, 12);
-        wp_send_json_success([
+        $resp = [
             'shortlist' => $shortlist,
             'more'      => $more,
             'used_fallback' => $used_fallback,
             'fallback_reason' => $fallback_reason,
-        ]);
+        ];
+        if (!empty($debug_info)) { $resp['debug'] = $debug_info; }
+        wp_send_json_success($resp);
     }
 
     /**
@@ -449,6 +620,7 @@ class Micro_Coach_AI {
                 <button class="linklike" id="ai-reset" type="button">Reset</button>
             </div>
         </div>
+        <div id="ai-debug" class="ai-debug" style="display:none;"></div>
         <div class="ai-results">
             <h4 class="ai-section">Shortlist</h4>
             <div class="ai-results-grid" id="ai-shortlist">

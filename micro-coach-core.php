@@ -1282,6 +1282,9 @@ class Micro_Coach_Core {
             .ai-alert{ background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
             .ai-filters{ background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow: 0 6px 14px rgba(15,23,42,.06); }
             .ai-banner{ background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
+            .ai-debug{ background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; padding:10px 12px; border-radius:8px; margin:12px 0; }
+            .ai-debug summary{ cursor:pointer; font-weight:600; }
+            .ai-debug pre{ white-space:pre-wrap; overflow:auto; max-height:260px; background:#fff; border:1px solid #eee; padding:8px; border-radius:6px; }
             .ai-fheader{ display:flex; gap:10px; align-items:flex-start; margin-bottom:6px; }
             .ai-title{ margin:0 0 2px; font-size:1.1em; font-weight:800; }
             .ai-sub{ margin:0 0 10px; color:#64748b; }
@@ -1600,6 +1603,25 @@ class Micro_Coach_Core {
                                         const reason = j.data.fallback_reason || 'unknown';
                                         banner.textContent = 'Using placeholders — ' + reason.replace(/_/g,' ');
                                     } else { banner.style.display='none'; banner.textContent=''; }
+                                }
+                                // Debug render (admins only)
+                                const dbgEl = document.getElementById('ai-debug');
+                                if (dbgEl) {
+                                    if (j.data.debug) {
+                                        const d = j.data.debug;
+                                        const pt = d?.response?.usage?.prompt_tokens ?? '';
+                                        const ct = d?.response?.usage?.completion_tokens ?? '';
+                                        const usd = d?.response?.cost_estimate_usd ?? '';
+                                        const mdl = d?.model ?? '';
+                                        function esc(s){ return String(s||'').replace(/[&<]/g, c=> c==='&'?'&amp;':'&lt;'); }
+                                        let html = `<div><strong>Debug:</strong> ${esc(mdl)} · prompt ${esc(pt)} · completion ${esc(ct)} · $${esc(usd)}</div>`;
+                                        html += '<details style="margin-top:6px;"><summary>View request & response</summary>'+
+                                                `<div><h4 style=\"margin:8px 0 4px\">System</h4><pre>${esc(d?.request?.system)}</pre>`+
+                                                `<h4 style=\"margin:8px 0 4px\">User</h4><pre>${esc(d?.request?.user)}</pre>`+
+                                                `<h4 style=\"margin:8px 0 4px\">Response snippet</h4><pre>${esc(d?.response?.raw_snippet)}</pre></div>`+
+                                                '</details>';
+                                        dbgEl.innerHTML = html; dbgEl.style.display='block';
+                                    } else { dbgEl.style.display='none'; dbgEl.innerHTML=''; }
                                 }
                             }
                             else {
