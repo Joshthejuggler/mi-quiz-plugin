@@ -318,6 +318,7 @@ class Micro_Coach_Core {
                         <button class="tab-link active" data-tab="tab-composite">🧩 Your Self-Discovery Profile</button>
                         <button class="tab-link" data-tab="tab-path">📊 Detailed Results</button>
                         <button class="tab-link" data-tab="tab-ai">🤖 AI Coach</button>
+                        <button class="tab-link" data-tab="tab-saved">❤️ Saved</button>
                     </div>
                     <div class="tab-content-wrapper">
                         <div id="tab-composite" class="tab-content active">
@@ -637,6 +638,12 @@ class Micro_Coach_Core {
                                     (new Micro_Coach_AI())->render_ai_coach_tab();
                                 }
                             ?>
+                        </div>
+                        <!-- Saved Experiments Tab -->
+                        <div id="tab-saved" class="tab-content">
+                            <h3 class="ai-title">Saved Experiments</h3>
+                            <p class="ai-sub">Your liked experiments appear here. Click a card to view details or un‑heart to remove.</p>
+                            <div class="ai-results-grid" id="ai-saved"></div>
                         </div>
                     </div>
                 <?php else: ?>
@@ -1303,14 +1310,18 @@ class Micro_Coach_Core {
             .ai-section{ margin: 12px 0 8px; font-weight:700; }
             .ai-results-grid{ display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; }
             @media (max-width: 768px){ .ai-results-grid{ grid-template-columns: 1fr; } .ai-sliders{ grid-template-columns: 1fr 1fr; } }
-            .ai-card{ position:relative; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:12px; min-height:110px; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
+            /* Reserve room on the right for the heart button so text doesn't overlap */
+            .ai-card{ position:relative; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:12px 48px 12px 12px; min-height:110px; box-shadow:0 2px 6px rgba(0,0,0,0.04); }
             /* Arrow hint (hidden on skeletons). Circle badge appears on hover for emphasis. */
             .ai-card:not(.skeleton)::before{ content:''; position:absolute; right:6px; bottom:6px; width:28px; height:28px; border-radius:50%; background:#3b82f6; opacity:0; transform: scale(.8); transition: opacity .16s ease, transform .16s ease; }
             .ai-card:not(.skeleton)::after{ content:'\2197'; /* ↗ */ position:absolute; right:13px; bottom:9px; font-size:16px; color:#334155; transition: color .16s ease, transform .16s ease; }
             .ai-card:hover:not(.skeleton)::before{ opacity:1; transform: scale(1.1); }
             .ai-card:hover:not(.skeleton)::after{ color:#fff; transform: translateY(-1px) scale(1.1); }
-            .ai-card h5{ margin:0 0 4px; font-size:17px; line-height:1.2; font-weight:700; }
+            .ai-card h5{ margin:0 32px 4px 0; font-size:17px; line-height:1.2; font-weight:700; }
             .ai-lens-badge{ display:inline-block; background:#eef2f7; border-radius:999px; padding:3px 10px; font-size:12px; color:#334155; margin:0 0 6px; }
+            .ai-heart{ position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:50%; background:#f1f5f9; color:#ef4444; border:1px solid #e5e7eb; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:15px; z-index:1; }
+            .ai-heart.active{ background:#fee2e2; color:#b91c1c; }
+            .ai-heart:focus-visible{ outline:2px solid #3b82f6; outline-offset:2px; }
             .lens-curiosity{ background:#e0f2fe !important; color:#075985 !important; }
             .lens-rolemodels{ background:#ede9fe !important; color:#5b21b6 !important; }
             .lens-opposites{ background:#fee2e2 !important; color:#7f1d1d !important; }
@@ -1324,6 +1335,8 @@ class Micro_Coach_Core {
             .eff-variety{ color:#8b5cf6; }
             .ai-card.skeleton{ background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 37%, #f1f5f9 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; }
             @keyframes shimmer { 0% { background-position: -400px 0;} 100%{ background-position: 400px 0; } }
+            /* Hide hover arrow affordance for Saved grid */
+            #ai-saved .ai-card::before, #ai-saved .ai-card::after { display:none !important; content:none !important; }
 
             /* Drawer styles */
             .ai-drawer{ position: fixed; inset: 0; z-index: 1000; display:none; }
@@ -1348,6 +1361,9 @@ class Micro_Coach_Core {
             .ai-prompt-row{ display:flex; gap:8px; align-items:center; }
             .ai-prompt-input{ flex:1; background:#fff; border:1px solid #c7d2fe; border-radius:8px; padding:8px 10px; font-size:14px; resize:vertical; }
             .ai-prompt-area{ min-height:64px; }
+            .ai-stars{ display:flex; gap:4px; align-items:center; }
+            .ai-star{ font-size:18px; color:#d1d5db; cursor:pointer; }
+            .ai-star.active{ color:#f59e0b; }
             .ai-prompt-copy{ background:#3b82f6; color:#fff; border:none; border-radius:8px; padding:6px 10px; cursor:pointer; }
             .ai-drawer-footer{ margin-top: 12px; }
             .ai-drawer-chips .chip{ margin-right:8px; background:#eef2f7; border-radius:999px; padding:4px 10px; font-size:14px; display:inline-block; }
@@ -1566,6 +1582,7 @@ class Micro_Coach_Core {
             const shortlistEl = document.getElementById('ai-shortlist');
             const moreWrap = document.getElementById('ai-more-wrap');
             const moreEl = document.getElementById('ai-more');
+            const savedEl = document.getElementById('ai-saved');
 
             function renderSkeleton(el, n=6){ if (!el) return; el.innerHTML=''; for (let i=0;i<n;i++){ const d=document.createElement('div'); d.className='ai-card skeleton'; el.appendChild(d);} }
             function chip(kind, val){
@@ -1591,6 +1608,33 @@ class Micro_Coach_Core {
                 const setList = (id, arr)=>{ const n=document.getElementById(id); if (!n) return; n.innerHTML=''; (arr||[]).forEach(x=>{ const li=document.createElement('li'); li.textContent = x; n.appendChild(li); }); };
                 const setListReflect = (id, arr)=>{ const n=document.getElementById(id); if (!n) return; n.innerHTML=''; (arr||[]).forEach(x=>{ const li=document.createElement('li'); li.textContent = '💬 ' + x; n.appendChild(li); }); };
                 const setChips = (id, tags)=>{ const n=document.getElementById(id); if (!n) return; n.innerHTML=''; (tags||[]).forEach(t=>{ const s=document.createElement('span'); s.className='chip'; s.textContent=t; n.appendChild(s); }); };
+                // Persist like/rating feedback for an item; calls onDone() after attempt
+                function postFeedback(item, opts, onDone){
+                    try{
+                        const body = new URLSearchParams({
+                            action:'mc_ai_feedback',
+                            title: item.title||'',
+                            lens: item.lens||'',
+                            micro: item.micro_description||'',
+                            tags: JSON.stringify(item.tags||[])
+                        });
+                        if (opts && 'liked' in opts) body.append('liked', opts.liked?1:0);
+                        if (opts && 'rating' in opts && opts.rating!=null) body.append('rating', String(opts.rating));
+                        if (item.why_this_fits_you) body.append('why', item.why_this_fits_you);
+                        if (item.prompt_to_start) body.append('prompt', item.prompt_to_start);
+                        if (item.signal_to_watch_for) body.append('signal', item.signal_to_watch_for);
+                        if (Array.isArray(item.steps)) body.append('steps', JSON.stringify(item.steps));
+                        if (Array.isArray(item.reflection_questions)) body.append('reflect', JSON.stringify(item.reflection_questions));
+                        body.append('cost', aiDefaults.cost);
+                        body.append('time', aiDefaults.time);
+                        body.append('energy', aiDefaults.energy);
+                        body.append('variety', aiDefaults.variety);
+                        body.append('lenses', JSON.stringify(['Curiosity','Role Models','Opposites','Adjacency']));
+                        fetch(ajaxUrl, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body})
+                          .then(()=>{ if (onDone) onDone(); })
+                          .catch(()=>{ if (onDone) onDone(); });
+                    }catch(e){ if (onDone) onDone(); }
+                }
                 function openDrawer(item){ if (!drawer) return; drawer.classList.add('open');
                     // Update active index for nav controls
                     aiActiveIndex = aiAllIdeas.indexOf(item);
@@ -1624,18 +1668,35 @@ class Micro_Coach_Core {
                         try { promptInput.style.height = 'auto'; promptInput.style.height = Math.min(promptInput.scrollHeight, 240) + 'px'; } catch(e){}
                     }
                     const promptCopy = document.getElementById('ai-prompt-copy'); if (promptCopy) { promptCopy.onclick = ()=>{ if (promptInput) { promptInput.select(); document.execCommand('copy'); promptCopy.textContent='Copied'; setTimeout(()=>promptCopy.textContent='Copy',1000); } }; }
-                    setList('ai-drawer-steps', item.steps||[]);
+                    setList('ai-drawer-steps', Array.isArray(item.steps)?item.steps:[]);
                     set('ai-drawer-signal', item.signal_to_watch_for||'');
-                    setListReflect('ai-drawer-reflect', item.reflection_questions||[]);
+                    setListReflect('ai-drawer-reflect', Array.isArray(item.reflection_questions)?item.reflection_questions:[]);
                     const safetyWrap = document.getElementById('ai-drawer-safety-wrap');
                     if (safetyWrap) safetyWrap.style.display = item.safety_notes ? 'block' : 'none';
                     set('ai-drawer-safety', item.safety_notes||'');
                     setChips('ai-drawer-chips', item.tags||[]);
+                    // Hide sections if empty
+                    const hideIfEmpty = (id)=>{ const el=document.getElementById(id); if (!el) return; const sec=el.closest('.ai-drawer-section'); if (!sec) return; const has = (Array.isArray(el.children) && el.children.length) || (el.textContent && el.textContent.trim().length); sec.style.display = has? 'block':'none'; };
+                    hideIfEmpty('ai-drawer-why');
+                    hideIfEmpty('ai-drawer-steps');
+                    hideIfEmpty('ai-drawer-signal');
+                    hideIfEmpty('ai-drawer-reflect');
                     // Enable/disable nav buttons
                     const prevBtn = document.getElementById('ai-drawer-prev');
                     const nextBtn = document.getElementById('ai-drawer-next');
                     if (prevBtn) prevBtn.disabled = aiActiveIndex<=0;
-                    if (nextBtn) nextBtn.disabled = aiActiveIndex>=aiAllIdeas.length-1;
+                    if (nextBtn) nextBtn.disabled = aiAllIdeas.length===0 || aiActiveIndex>=aiAllIdeas.length-1;
+                    // Stars rating
+                    let starsWrap = document.getElementById('ai-stars');
+                    if (!starsWrap) {
+                        const sec = document.createElement('section'); sec.className='ai-drawer-section';
+                        const h4 = document.createElement('h4'); h4.textContent='Rate this'; sec.appendChild(h4);
+                        starsWrap = document.createElement('div'); starsWrap.className='ai-stars'; starsWrap.id='ai-stars'; sec.appendChild(starsWrap);
+                        const panel = document.querySelector('.ai-drawer-panel'); panel && panel.appendChild(sec);
+                    }
+                    starsWrap.innerHTML='';
+                    const current = (item._stats && item._stats.your_rating) ? item._stats.your_rating : 0;
+                    for(let i=1;i<=5;i++){ const s=document.createElement('span'); s.className='ai-star'+(i<=current?' active':''); s.textContent='★'; s.title=i+' stars'; s.onclick=()=>{ for(let j=0;j<starsWrap.children.length;j++){ starsWrap.children[j].classList.toggle('active', j< i); } item._stats=item._stats||{}; item._stats.your_rating=i; postFeedback(item,{rating:i}); }; starsWrap.appendChild(s); }
                 }
                 function closeDrawer(){ if (drawer) drawer.classList.remove('open'); }
                 if (closeBtn) closeBtn.onclick = closeDrawer; if (backdrop) backdrop.onclick = closeDrawer; window.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeDrawer(); });
@@ -1651,6 +1712,10 @@ class Micro_Coach_Core {
                     c.setAttribute('role','button');
                     c.setAttribute('aria-label', 'Open details for ' + (item.title||'idea'));
                     c.title = 'Open details';
+                    // Heart button
+                    const heart=document.createElement('button'); heart.type='button'; heart.className='ai-heart'; heart.innerHTML='❤';
+                    if (item._stats && item._stats.liked_by_you) heart.classList.add('active');
+                    heart.addEventListener('click', (ev)=>{ ev.stopPropagation(); const on = !heart.classList.contains('active'); heart.classList.toggle('active', on); item._stats=item._stats||{}; item._stats.liked_by_you=on; postFeedback(item, {liked:on}, ()=>{ try{ if (!on && savedEl && c.parentElement && c.parentElement.id==='ai-saved') { c.remove(); if (!savedEl.querySelector('.ai-card')) savedEl.innerHTML='<div class="ai-card">No saved experiments yet.</div>'; } }catch(e){} }); });
                     const h=document.createElement('h5'); h.textContent=item.title||'Idea';
                     const lens=document.createElement('div'); lens.className='ai-lens-badge'; lens.textContent=item.lens||'';
                     const lc=(item.lens||'').toLowerCase(); if(lc){ lens.classList.add('lens-'+lc.replace(/\s+/g,'-')); }
@@ -1660,12 +1725,34 @@ class Micro_Coach_Core {
                     const mk=(cls,icon,val)=>{ const w=document.createElement('div'); w.className='ai-eff'; const i=document.createElement('span'); i.className=cls; i.textContent=icon; const n=document.createElement('span'); n.textContent=String(val); w.appendChild(i); w.appendChild(n); return w; };
                     const ec = toInt01(item.estimated_cost, aiDefaults.cost); const et = toInt01(item.estimated_time, aiDefaults.time); const ee = toInt01(item.estimated_energy, aiDefaults.energy); const ev = toInt01(item.estimated_variety, aiDefaults.variety);
                     row.appendChild(mk('eff-cost','💰', ec)); row.appendChild(mk('eff-time','⏳', et)); row.appendChild(mk('eff-energy','⚡️', ee)); row.appendChild(mk('eff-variety','🎲', ev));
-                    c.appendChild(h); c.appendChild(lens); c.appendChild(micro); c.appendChild(row);
+                    c.appendChild(heart); c.appendChild(h); c.appendChild(lens); c.appendChild(micro); c.appendChild(row);
                     c.addEventListener('click', ()=> openDrawer(item));
                     c.addEventListener('keypress', (e)=>{ if (e.key==='Enter' || e.key===' ') { e.preventDefault(); openDrawer(item);} });
                     el.appendChild(c);
                 });
             }
+
+            async function loadSaved(){
+                if (!savedEl) return;
+                renderSkeleton(savedEl, 6);
+                try{
+                    const r = await fetch(ajaxUrl, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body: new URLSearchParams({action:'mc_ai_saved_list'})});
+                    const j = await r.json();
+                    if (j && j.success){
+                        const items = j.data.items||[];
+                        aiAllIdeas = items;
+                        renderIdeas(savedEl, items);
+                        if (!items.length){ savedEl.innerHTML = '<div class="ai-card">No saved experiments yet.</div>'; }
+                    } else { savedEl.innerHTML = '<div class="ai-card">Could not load saved experiments.</div>'; }
+                }catch(e){ savedEl.innerHTML = '<div class="ai-card">Network error.</div>'; }
+            }
+
+            // Load saved when user opens Saved tab
+            tabLinks.forEach(link=>{
+                link.addEventListener('click', function(){
+                    if (this.dataset.tab === 'tab-saved') { loadSaved(); }
+                });
+            });
 
             if (applyBtn){
                 applyBtn.addEventListener('click', function(e){

@@ -13,6 +13,9 @@ class Micro_Coach_AI {
     const OPT_DEBUG_MODE = 'mc_ai_debug_mode';
     // Model selection (admins): 'gpt-4o-mini' or 'gpt-4o'
     const OPT_MODEL = 'mc_ai_model';
+    // DB table names
+    const TABLE_EXPERIMENTS = 'mc_ai_experiments';
+    const TABLE_FEEDBACK    = 'mc_ai_feedback';
 
     public function __construct() {
         if (is_admin()) {
@@ -22,10 +25,17 @@ class Micro_Coach_AI {
             add_action('admin_menu', [$this, 'add_admin_pages']);
         }
 
+        // Ensure tables on admin load (idempotent)
+        add_action('admin_init', [$this, 'maybe_create_tables']);
+
         // AJAX: AI Coach idea generation
         add_action('wp_ajax_mc_ai_generate_mves', [$this, 'ajax_ai_generate_mves']);
         // AJAX: Test API key
         add_action('wp_ajax_mc_ai_test_key', [$this, 'ajax_ai_test_key']);
+        // AJAX: Save heart/rating feedback
+        add_action('wp_ajax_mc_ai_feedback', [$this, 'ajax_ai_feedback']);
+        // AJAX: List saved (liked) experiments for current user
+        add_action('wp_ajax_mc_ai_saved_list', [$this, 'ajax_ai_saved_list']);
     }
 
     /**
@@ -217,6 +227,14 @@ TXT;
             'mc-ai-debug',
             [$this, 'render_debug_page']
         );
+        add_submenu_page(
+            'quiz-platform-settings',
+            'AI Experiments',
+            'AI Experiments',
+            'manage_options',
+            'mc-ai-experiments',
+            [$this, 'render_experiments_admin']
+        );
     }
 
     /** Render the AI Debug page. */
@@ -254,6 +272,45 @@ TXT;
         echo '</div>';
     }
 
+    /** Admin list of saved experiments with basic stats and a hide toggle */
+    public function render_experiments_admin() {
+        if (!current_user_can('manage_options')) return;
+        $action = $_POST['mc_ai_bulk'] ?? '';
+        if ($action === 'hide' && !empty($_POST['hash'])) {
+            global $wpdb; $table = $wpdb->prefix . self::TABLE_EXPERIMENTS; $hash = sanitize_text_field($_POST['hash']);
+            $wpdb->update($table, ['hidden'=>1, 'updated_at'=>current_time('mysql')], ['hash'=>$hash]);
+            echo '<div class="notice notice-success"><p>Experiment hidden.</p></div>';
+        } elseif ($action === 'unhide' && !empty($_POST['hash'])) {
+            global $wpdb; $table = $wpdb->prefix . self::TABLE_EXPERIMENTS; $hash = sanitize_text_field($_POST['hash']);
+            $wpdb->update($table, ['hidden'=>0, 'updated_at'=>current_time('mysql')], ['hash'=>$hash]);
+            echo '<div class="notice notice-success"><p>Experiment unhidden.</p></div>';
+        }
+        global $wpdb; $exp = $wpdb->prefix . self::TABLE_EXPERIMENTS; $fb = $wpdb->prefix . self::TABLE_FEEDBACK;
+        $rows = $wpdb->get_results("SELECT e.hash,e.title,e.lens,e.hidden,
+            COALESCE(SUM(CASE WHEN f.liked=1 THEN 1 ELSE 0 END),0) like_count,
+            ROUND(AVG(NULLIF(f.rating,0)),2) AS avg_rating
+            FROM `$exp` e LEFT JOIN `$fb` f ON e.hash=f.hash
+            GROUP BY e.id ORDER BY like_count DESC, avg_rating DESC LIMIT 300", ARRAY_A);
+        echo '<div class="wrap"><h1>AI Experiments</h1>';
+        echo '<table class="widefat striped"><thead><tr><th>Title</th><th>Lens</th><th>Likes</th><th>Avg Rating</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($rows as $r){
+            $form = '<form method="post" style="display:inline">'
+                .'<input type="hidden" name="hash" value="'.esc_attr($r['hash']).'">'
+                .'<input type="hidden" name="mc_ai_bulk" value="'.($r['hidden']? 'unhide':'hide').'">'
+                .'<button class="button">'.($r['hidden']? 'Unhide':'Hide').'</button>'
+                .'</form>';
+            echo '<tr>'
+                .'<td>'.esc_html($r['title']).'</td>'
+                .'<td>'.esc_html($r['lens']).'</td>'
+                .'<td>'.intval($r['like_count']).'</td>'
+                .'<td>'.esc_html($r['avg_rating'] ?: '—').'</td>'
+                .'<td>'.($r['hidden']? '<span class="dashicons dashicons-hidden"></span> Hidden':'Visible').'</td>'
+                .'<td>'.$form.'</td>'
+                .'</tr>';
+        }
+        echo '</tbody></table></div>';
+    }
+
     /** Estimate cost in USD from usage for known models. */
     public static function estimate_cost_usd($model, $usage) {
         $in = 0.0005; $out = 0.0015; // defaults per 1K tokens
@@ -266,6 +323,200 @@ TXT;
         $ct = is_array($usage) && isset($usage['completion_tokens']) ? (int)$usage['completion_tokens'] : 0;
         $cost = ($pt/1000.0)*$in + ($ct/1000.0)*$out;
         return round($cost, 6);
+    }
+
+    /**
+     * Create DB tables if missing (safe to call repeatedly).
+     */
+    public function maybe_create_tables() {
+        global $wpdb; $charset = $wpdb->get_charset_collate();
+        $exp = $wpdb->prefix . self::TABLE_EXPERIMENTS;
+        $fb  = $wpdb->prefix . self::TABLE_FEEDBACK;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        $sql1 = "CREATE TABLE IF NOT EXISTS `$exp` (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            hash VARCHAR(64) NOT NULL,
+            title VARCHAR(200) NOT NULL,
+            lens VARCHAR(40) NOT NULL,
+            micro TEXT NULL,
+            tags TEXT NULL,
+            meta LONGTEXT NULL,
+            hidden TINYINT(1) NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY uhash (hash),
+            KEY lens (lens),
+            KEY hidden (hidden)
+        ) $charset;";
+        $sql2 = "CREATE TABLE IF NOT EXISTS `$fb` (
+            id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            hash VARCHAR(64) NOT NULL,
+            user_id BIGINT UNSIGNED NULL,
+            liked TINYINT(1) NOT NULL DEFAULT 0,
+            rating TINYINT UNSIGNED NULL,
+            profile LONGTEXT NULL,
+            filters LONGTEXT NULL,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME NOT NULL,
+            PRIMARY KEY (id),
+            KEY h (hash),
+            KEY u (user_id)
+        ) $charset;";
+        dbDelta($sql1); dbDelta($sql2);
+    }
+
+    private static function idea_hash($title, $lens){
+        return sha1(mb_strtolower(trim((string)$title)).'|'.mb_strtolower(trim((string)$lens)));
+    }
+
+    private function upsert_experiment($hash, $title, $lens, $micro, $tags = [], $meta = []){
+        global $wpdb; $table = $wpdb->prefix . self::TABLE_EXPERIMENTS;
+        $now = current_time('mysql');
+        $row = $wpdb->get_row($wpdb->prepare("SELECT id, meta FROM `$table` WHERE hash=%s", $hash), ARRAY_A);
+        $exists = $row['id'] ?? null;
+        // Merge meta if existing
+        $existing_meta = [];
+        if (!empty($row['meta'])) { $dec = json_decode($row['meta'], true); if (is_array($dec)) $existing_meta = $dec; }
+        if (!empty($meta) && is_array($meta)) { $existing_meta = array_merge($existing_meta, array_filter($meta, function($v){ return !empty($v); })); }
+        $meta_json = wp_json_encode($existing_meta);
+        if ($exists) {
+            $wpdb->update($table, ['title'=>$title, 'lens'=>$lens, 'micro'=>$micro, 'tags'=>wp_json_encode($tags), 'meta'=>$meta_json, 'updated_at'=>$now], ['id'=>$exists]);
+            return (int)$exists;
+        }
+        $wpdb->insert($table, ['hash'=>$hash, 'title'=>$title, 'lens'=>$lens, 'micro'=>$micro, 'tags'=>wp_json_encode($tags), 'meta'=>$meta_json ?: '{}', 'hidden'=>0, 'created_at'=>$now, 'updated_at'=>$now]);
+        return (int)$wpdb->insert_id;
+    }
+
+    private function save_feedback_row($hash, $user_id, $liked, $rating, $profile, $filters){
+        global $wpdb; $table = $wpdb->prefix . self::TABLE_FEEDBACK; $now = current_time('mysql');
+        $wpdb->insert($table, [
+            'hash'=>$hash, 'user_id'=>$user_id, 'liked'=>$liked?1:0, 'rating'=>is_null($rating)?null:intval($rating),
+            'profile'=>wp_json_encode($profile), 'filters'=>wp_json_encode($filters), 'created_at'=>$now, 'updated_at'=>$now
+        ]);
+    }
+
+    private function experiment_stats_for_hashes($hashes, $user_id){
+        if (empty($hashes)) return [];
+        global $wpdb; $exp = $wpdb->prefix . self::TABLE_EXPERIMENTS; $fb = $wpdb->prefix . self::TABLE_FEEDBACK;
+        $in = '('.implode(',', array_fill(0, count($hashes), '%s')).')';
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT e.hash,
+            SUM(CASE WHEN f.liked=1 THEN 1 ELSE 0 END) AS like_count,
+            AVG(NULLIF(f.rating,0)) AS avg_rating
+            FROM `$exp` e LEFT JOIN `$fb` f ON e.hash=f.hash
+            WHERE e.hash IN $in AND e.hidden=0 GROUP BY e.hash", $hashes), ARRAY_A);
+        $stats = [];
+        foreach ($rows as $r){ $stats[$r['hash']] = ['like_count'=>intval($r['like_count']), 'avg_rating'=>round(floatval($r['avg_rating']),2)]; }
+        // user's latest like/rating per hash
+        $mine_rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT f.hash, f.liked, f.rating
+             FROM `$fb` f
+             INNER JOIN (
+                SELECT hash, MAX(updated_at) AS latest
+                FROM `$fb`
+                WHERE user_id=%d AND hash IN $in
+                GROUP BY hash
+             ) m ON m.hash=f.hash AND f.updated_at=m.latest
+             WHERE f.user_id=%d",
+            array_merge([$user_id], $hashes, [$user_id])
+        ), ARRAY_A);
+        foreach ($mine_rows as $m){ $h=$m['hash']; if(!isset($stats[$h])) $stats[$h]=['like_count'=>0,'avg_rating'=>0]; $stats[$h]['liked_by_you']= (intval($m['liked'])===1); $stats[$h]['your_rating']= is_null($m['rating'])?null:intval($m['rating']); }
+        return $stats;
+    }
+
+    /**
+     * AJAX: record heart/rating.
+     */
+    public function ajax_ai_feedback(){
+        if (!is_user_logged_in()) wp_send_json_error(['message'=>'Please sign in.'], 401);
+        $user_id = get_current_user_id();
+        $title = sanitize_text_field($_POST['title'] ?? '');
+        $lens  = sanitize_text_field($_POST['lens'] ?? '');
+        $micro = sanitize_textarea_field($_POST['micro'] ?? '');
+        $tags  = json_decode(stripslashes($_POST['tags'] ?? '[]'), true) ?: [];
+        $liked = intval($_POST['liked'] ?? 0) ? 1 : 0;
+        $rating= isset($_POST['rating']) ? max(0, min(5, intval($_POST['rating']))) : null;
+        $meta = [
+            'why_this_fits_you' => sanitize_textarea_field($_POST['why'] ?? ''),
+            'prompt_to_start' => sanitize_textarea_field($_POST['prompt'] ?? ''),
+            'signal_to_watch_for' => sanitize_textarea_field($_POST['signal'] ?? ''),
+        ];
+        // Steps + reflection can be arrays via JSON
+        $steps = json_decode(stripslashes($_POST['steps'] ?? '[]'), true);
+        $reflect = json_decode(stripslashes($_POST['reflect'] ?? '[]'), true);
+        if (is_array($steps)) $meta['steps'] = array_values(array_map('sanitize_text_field', $steps));
+        if (is_array($reflect)) $meta['reflection_questions'] = array_values(array_map('sanitize_text_field', $reflect));
+        $filters = [
+            'cost'=>intval($_POST['cost'] ?? 0), 'time'=>intval($_POST['time'] ?? 0), 'energy'=>intval($_POST['energy'] ?? 0), 'variety'=>intval($_POST['variety'] ?? 0),
+            'lenses'=>json_decode(stripslashes($_POST['lenses'] ?? '[]'), true) ?: []
+        ];
+        $mi_results  = get_user_meta($user_id, 'miq_quiz_results', true) ?: [];
+        $cdt_results = get_user_meta($user_id, 'cdt_quiz_results', true) ?: [];
+        $pt_results  = get_user_meta($user_id, 'bartle_quiz_results', true) ?: [];
+        $profile = [ 'mi_top3' => $mi_results['top3'] ?? [], 'cdt_top' => $cdt_results['sortedScores'][0][0] ?? null, 'pt' => $pt_results['sortedScores'][0][0] ?? null];
+        $hash = self::idea_hash($title, $lens);
+        $this->maybe_create_tables();
+        $this->upsert_experiment($hash, $title, $lens, $micro, $tags, $meta);
+        $this->save_feedback_row($hash, $user_id, $liked, $rating, $profile, $filters);
+        wp_send_json_success(['hash'=>$hash]);
+    }
+
+    /**
+     * AJAX: return saved (liked) experiments for current user
+     */
+    public function ajax_ai_saved_list(){
+        if (!is_user_logged_in()) wp_send_json_error(['message'=>'Please sign in.'], 401);
+        $user_id = get_current_user_id();
+        $this->maybe_create_tables();
+        global $wpdb; $exp = $wpdb->prefix . self::TABLE_EXPERIMENTS; $fb = $wpdb->prefix . self::TABLE_FEEDBACK;
+        // Only include items whose latest feedback row for this user is liked=1
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT e.hash,e.title,e.lens,e.micro,e.tags,e.meta,
+                    f.updated_at as last_saved,
+                    f.filters as last_filters
+             FROM `$exp` e
+             INNER JOIN (
+                SELECT x.* FROM `$fb` x
+                INNER JOIN (
+                    SELECT hash, MAX(updated_at) AS latest
+                    FROM `$fb`
+                    WHERE user_id=%d
+                    GROUP BY hash
+                ) l ON l.hash=x.hash AND l.latest=x.updated_at
+                WHERE x.user_id=%d AND x.liked=1
+             ) f ON f.hash=e.hash
+             WHERE e.hidden=0
+             ORDER BY f.updated_at DESC
+             LIMIT 300",
+             $user_id, $user_id
+        ), ARRAY_A);
+        $items = [];
+        $hashes = [];
+        foreach ($rows as $r){
+            $filters = json_decode($r['last_filters'] ?: '{}', true) ?: [];
+            $meta = json_decode($r['meta'] ?: '{}', true) ?: [];
+            $items[] = [
+                'title' => $r['title'],
+                'lens'  => $r['lens'],
+                'micro_description' => $r['micro'],
+                'tags'  => (json_decode($r['tags'] ?: '[]', true) ?: []),
+                'estimated_cost' => isset($filters['cost']) ? intval($filters['cost']) : 0,
+                'estimated_time' => isset($filters['time']) ? intval($filters['time']) : 0,
+                'estimated_energy' => isset($filters['energy']) ? intval($filters['energy']) : 0,
+                'estimated_variety' => isset($filters['variety']) ? intval($filters['variety']) : 0,
+                'hash' => $r['hash'],
+                'why_this_fits_you' => $meta['why_this_fits_you'] ?? '',
+                'prompt_to_start' => $meta['prompt_to_start'] ?? '',
+                'steps' => $meta['steps'] ?? [],
+                'signal_to_watch_for' => $meta['signal_to_watch_for'] ?? '',
+                'reflection_questions' => $meta['reflection_questions'] ?? [],
+            ];
+            $hashes[] = $r['hash'];
+        }
+        $stats = $this->experiment_stats_for_hashes($hashes, $user_id);
+        foreach ($items as &$it){ $h=$it['hash']; $it['_stats']=$stats[$h] ?? ['like_count'=>0,'avg_rating'=>0]; }
+        unset($it);
+        wp_send_json_success(['items'=>$items]);
     }
 
     /**
@@ -593,6 +844,12 @@ TXT;
             $ideas = $pool;
         }
 
+        // Annotate with community stats and user likes
+        $hashes = [];
+        foreach ($ideas as $it){ $hashes[] = self::idea_hash($it['title'] ?? '', $it['lens'] ?? ''); }
+        $stats = $this->experiment_stats_for_hashes($hashes, $user_id);
+        foreach ($ideas as &$it){ $h = self::idea_hash($it['title'] ?? '', $it['lens'] ?? ''); $it['hash']=$h; $it['_stats']=$stats[$h] ?? ['like_count'=>0,'avg_rating'=>0]; }
+        unset($it);
         // Simple partition: shortlist 6, more next 6
         $shortlist = array_slice($ideas, 0, 6);
         $more      = array_slice($ideas, 6, 12);
