@@ -1298,6 +1298,10 @@ class Micro_Coach_Core {
             .ai-sub{ margin:0 0 10px; color:#64748b; }
             .ai-filter{ padding:10px 0; border-top:1px solid #e8eef5; }
             .ai-filter:first-of-type{ border-top:0; }
+            /* Grid to show 2x2 sliders */
+            .ai-filter-grid{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px 16px; }
+            .ai-filter-grid .ai-filter{ border-top:0; padding:8px 0; }
+            @media (max-width: 720px){ .ai-filter-grid{ grid-template-columns: 1fr; } }
             .ai-filter-row{ display:grid; grid-template-columns: 24px 1fr auto; align-items:center; gap:8px; }
             .f-icn{ font-size:18px; }
             .f-title{ font-weight:700; color:#0f172a; }
@@ -1305,6 +1309,16 @@ class Micro_Coach_Core {
             .f-sub{ color:#64748b; font-size:12px; margin:2px 0 6px; }
             .ai-filter input[type=range]{ width:100%; accent-color:#1e40af; }
             .ai-lenses{ display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; }
+            .ai-lenses .lens-chip{ display:inline-flex; align-items:center; gap:8px; border-radius:999px; padding:6px 10px; font-weight:600; cursor:pointer; user-select:none; border:1px solid transparent; }
+            .ai-lenses .lens-chip input{ position:absolute; opacity:0; width:1px; height:1px; overflow:hidden; }
+            .ai-lenses .lens-chip span{ position:relative; padding-left:18px; }
+            .ai-lenses .lens-chip span::before{ content:""; position:absolute; left:0; top:3px; width:12px; height:12px; border-radius:3px; background:#fff; border:1px solid rgba(15,23,42,.25); }
+            .ai-lenses .lens-chip input:checked + span::after{ content:"✓"; position:absolute; left:1px; top:0px; font-size:12px; color:#111827; }
+            /* Color variants matching lens badges */
+            .lens-curiosity{ background:#e0f2fe; color:#075985; border-color:#7dd3fc; }
+            .lens-rolemodels{ background:#ede9fe; color:#5b21b6; border-color:#c4b5fd; }
+            .lens-opposites{ background:#fee2e2; color:#7f1d1d; border-color:#fecaca; }
+            .lens-adjacency{ background:#dcfce7; color:#065f46; border-color:#bbf7d0; }
             .ai-actions{ display:flex; gap:12px; align-items:center; margin-top:12px; }
             .ai-actions .linklike{ background:none; border:none; color:#1e40af; cursor:pointer; padding:0; }
             .ai-section{ margin: 12px 0 8px; font-weight:700; }

@@ -901,31 +901,33 @@ TXT;
                 <div class="f-sub">Temporarily override the default model for this request.</div>
             </div>
             <?php endif; ?>
-            <div class="ai-filter">
-                <div class="ai-filter-row"><span class="f-icn">💰</span><div class="f-title">Cost</div><div class="f-right" id="ai-cost-label">Free</div></div>
-                <div class="f-sub">How much are you willing to spend?</div>
-                <input type="range" min="0" max="4" step="1" value="0" id="ai-cost">
-            </div>
-            <div class="ai-filter">
-                <div class="ai-filter-row"><span class="f-icn">⏳</span><div class="f-title">Time</div><div class="f-right" id="ai-time-label">15–30m</div></div>
-                <div class="f-sub">How much time can you commit?</div>
-                <input type="range" min="0" max="4" step="1" value="1" id="ai-time">
-            </div>
-            <div class="ai-filter">
-                <div class="ai-filter-row"><span class="f-icn">⚡️</span><div class="f-title">Energy</div><div class="f-right" id="ai-energy-label">Low‑focus</div></div>
-                <div class="f-sub">How much effort do you want to put in?</div>
-                <input type="range" min="0" max="4" step="1" value="1" id="ai-energy">
-            </div>
-            <div class="ai-filter">
-                <div class="ai-filter-row"><span class="f-icn">🎲</span><div class="f-title">Variety</div><div class="f-right" id="ai-variety-label">Near routine</div></div>
-                <div class="f-sub">How different from your routine should it be?</div>
-                <input type="range" min="0" max="4" step="1" value="2" id="ai-variety">
+            <div class="ai-filter-grid">
+                <div class="ai-filter">
+                    <div class="ai-filter-row"><span class="f-icn">💰</span><div class="f-title">Cost</div><div class="f-right" id="ai-cost-label">Free</div></div>
+                    <div class="f-sub">How much are you willing to spend?</div>
+                    <input type="range" min="0" max="4" step="1" value="0" id="ai-cost">
+                </div>
+                <div class="ai-filter">
+                    <div class="ai-filter-row"><span class="f-icn">⏳</span><div class="f-title">Time</div><div class="f-right" id="ai-time-label">15–30m</div></div>
+                    <div class="f-sub">How much time can you commit?</div>
+                    <input type="range" min="0" max="4" step="1" value="1" id="ai-time">
+                </div>
+                <div class="ai-filter">
+                    <div class="ai-filter-row"><span class="f-icn">⚡️</span><div class="f-title">Energy</div><div class="f-right" id="ai-energy-label">Low‑focus</div></div>
+                    <div class="f-sub">How much effort do you want to put in?</div>
+                    <input type="range" min="0" max="4" step="1" value="1" id="ai-energy">
+                </div>
+                <div class="ai-filter">
+                    <div class="ai-filter-row"><span class="f-icn">🎲</span><div class="f-title">Variety</div><div class="f-right" id="ai-variety-label">Near routine</div></div>
+                    <div class="f-sub">How different from your routine should it be?</div>
+                    <input type="range" min="0" max="4" step="1" value="2" id="ai-variety">
+                </div>
             </div>
             <div class="ai-lenses">
-                <label><input type="checkbox" id="lens-curiosity" checked> Curiosity</label>
-                <label><input type="checkbox" id="lens-rolemodels" checked> Role Models</label>
-                <label><input type="checkbox" id="lens-opposites" checked> Opposites</label>
-                <label><input type="checkbox" id="lens-adjacency" checked> Adjacency</label>
+                <label class="lens-chip lens-curiosity"><input type="checkbox" id="lens-curiosity" checked><span>Curiosity</span></label>
+                <label class="lens-chip lens-rolemodels"><input type="checkbox" id="lens-rolemodels" checked><span>Role Models</span></label>
+                <label class="lens-chip lens-opposites"><input type="checkbox" id="lens-opposites" checked><span>Opposites</span></label>
+                <label class="lens-chip lens-adjacency"><input type="checkbox" id="lens-adjacency" checked><span>Adjacency</span></label>
             </div>
             <div class="ai-actions">
                 <button class="quiz-dashboard-button" id="ai-apply">Show experiments that fit my settings</button>
