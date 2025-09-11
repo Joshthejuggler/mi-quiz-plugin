@@ -209,12 +209,10 @@ class Micro_Coach_Core {
  
             $next_step_url = '';
             $next_step_title = 'All Quizzes Complete!';
+            $next_step_action = '';
             if ($progress_pct >= 100) {
-                $composite_url = $this->find_page_by_shortcode('composite_profile');
-                if ($composite_url) {
-                    $next_step_url = $composite_url;
-                    $next_step_title = 'View Self-Discovery Profile';
-                }
+                $next_step_title = 'Try Your AI Coach';
+                $next_step_action = 'switch-to-ai-tab';
             }
             if ($progress_pct < 100) {
                 foreach ($quizzes as $id => $quiz) {
@@ -252,7 +250,9 @@ class Micro_Coach_Core {
                         <div class="progress-bar-container">
                             <div class="progress-bar-fill" style="width: <?php echo esc_attr($progress_pct); ?>%;"></div>
                         </div>
-                        <?php if ($next_step_url && $next_step_url !== '#'): ?>
+                        <?php if ($next_step_action === 'switch-to-ai-tab'): ?>
+                            <button type="button" id="switch-to-ai-coach" class="quiz-dashboard-button progress-card-next-step-btn"><?php echo esc_html($next_step_title); ?></button>
+                        <?php elseif ($next_step_url && $next_step_url !== '#'): ?>
                             <a href="<?php echo esc_url($next_step_url); ?>" class="quiz-dashboard-button progress-card-next-step-btn"><?php echo esc_html($next_step_title); ?></a>
                         <?php else: ?>
                             <span class="quiz-dashboard-button is-disabled progress-card-next-step-btn"><?php echo esc_html($next_step_title); ?></span>
@@ -273,7 +273,7 @@ class Micro_Coach_Core {
                     // --- Process Data for Identity Card ---
                     $mi_top3_names = array_map(function($slug) use ($mi_categories) { return $mi_categories[$slug] ?? ucfirst(str_replace('-', ' ', $slug)); }, $mi_results['top3'] ?? []);
                     $cdt_scores_by_slug = array_column($cdt_results['sortedScores'] ?? [], 1, 0);
-                    $cdt_slug_map = ['ambiguity-tolerance', 'value-conflict-navigation', 'self-confrontation-capacity', 'discomfort-regulation', 'conflict-resolution-tolerance'];
+                    $cdt_slug_map = ['ambiguity-tolerance', 'value-conflict-navigation', 'self-confrontation-capacity', 'discomfort-regulation', 'growth-orientation'];
                     $bartle_scores_by_slug = array_column($bartle_results['sortedScores'] ?? [], 1, 0);
                     $primary_bartle_slug = $bartle_results['sortedScores'][0][0] ?? '';
                     $secondary_bartle_slug = $bartle_results['sortedScores'][1][0] ?? '';
@@ -292,7 +292,7 @@ class Micro_Coach_Core {
                     $mi_slug_map = ['linguistic', 'logical-mathematical', 'spatial', 'bodily-kinesthetic', 'musical', 'interpersonal', 'intrapersonal', 'naturalistic'];
                     foreach ($mi_slug_map as $i => $slug) { $mi_chart_data[$i] = round(($mi_results['part1Scores'][$slug] ?? 0) / 40 * 100); }
                     $cdt_chart_data = array_fill(0, 17, null);
-                    $cdt_slug_map = ['ambiguity-tolerance', 'value-conflict-navigation', 'self-confrontation-capacity', 'discomfort-regulation', 'conflict-resolution-tolerance'];
+                    $cdt_slug_map = ['ambiguity-tolerance', 'value-conflict-navigation', 'self-confrontation-capacity', 'discomfort-regulation', 'growth-orientation'];
                     foreach ($cdt_slug_map as $i => $slug) { $cdt_chart_data[8 + $i] = round((($cdt_scores_by_slug[$slug] ?? 0) / 50) * 100); }
                     $pt_chart_data = array_fill(0, 17, null);
                     $pt_slug_map = ['explorer', 'achiever', 'socializer', 'strategist'];
@@ -690,7 +690,7 @@ class Micro_Coach_Core {
                                     if (is_array($mi_results) && is_array($cdt_results) && isset($player_type_templates)) {
                                         $bartle_scores = ['explorer' => 0, 'achiever' => 0, 'socializer' => 0, 'strategist' => 0];
                                         $mi_map = [ 'logical-mathematical' => ['achiever', 'strategist'], 'linguistic' => ['socializer'], 'spatial' => ['explorer'], 'bodily-kinesthetic' => ['achiever'], 'musical' => ['explorer', 'socializer'], 'interpersonal' => ['socializer', 'strategist'], 'intrapersonal' => ['explorer'], 'naturalistic' => ['explorer'], ];
-                                        $cdt_map = [ 'ambiguity-tolerance' => ['explorer'], 'value-conflict-navigation' => ['socializer'], 'self-confrontation-capacity' => ['achiever'], 'discomfort-regulation' => ['achiever', 'strategist'], 'conflict-resolution-tolerance' => ['strategist'], ];
+                                        $cdt_map = [ 'ambiguity-tolerance' => ['explorer'], 'value-conflict-navigation' => ['socializer'], 'self-confrontation-capacity' => ['achiever'], 'discomfort-regulation' => ['achiever', 'strategist'], 'growth-orientation' => ['explorer'] ];
                                         if (!empty($mi_results['top3'])) { $points = 3; foreach ($mi_results['top3'] as $mi_slug) { if (isset($mi_map[$mi_slug])) { foreach ($mi_map[$mi_slug] as $bartle_type) { $bartle_scores[$bartle_type] += $points; } } $points--; } }
                                         if (!empty($cdt_results['sortedScores'][0])) { $cdt_slug = $cdt_results['sortedScores'][0][0]; if (isset($cdt_map[$cdt_slug])) { foreach ($cdt_map[$cdt_slug] as $bartle_type) { $bartle_scores[$bartle_type] += 3; } } }
                                         arsort($bartle_scores); $predicted_type = key($bartle_scores);
@@ -867,6 +867,61 @@ class Micro_Coach_Core {
                     <a href="#" class="resource-link"><span class="dashicons dashicons-email-alt"></span> Contact Us</a>
                 </div>
             </div>
+
+            <!-- AI Drawer (global overlay, positioned outside tab containers) -->
+            <?php if ($user_id && $completed_quizzes === $total_quizzes && $total_quizzes > 0 && class_exists('Micro_Coach_AI')): ?>
+            <div id="ai-drawer" class="ai-drawer" aria-hidden="true">
+                <div class="ai-drawer-backdrop" id="ai-drawer-backdrop" tabindex="-1" aria-hidden="true"></div>
+                <!-- Nav buttons placed outside the panel so they can float next to it -->
+                <button type="button" class="ai-drawer-nav" id="ai-drawer-prev" aria-label="Previous">‹</button>
+                <button type="button" class="ai-drawer-nav" id="ai-drawer-next" aria-label="Next">›</button>
+                <aside class="ai-drawer-panel" role="dialog" aria-labelledby="ai-drawer-title">
+                    <button type="button" class="ai-drawer-close" id="ai-drawer-close" aria-label="Close">×</button>
+                    <header class="ai-drawer-header">
+                        <h3 id="ai-drawer-title" class="ai-drawer-title">Idea</h3>
+                        <span id="ai-drawer-lens" class="ai-drawer-lens"></span>
+                    </header>
+                    <p id="ai-drawer-micro" class="ai-drawer-micro"></p>
+                    <div class="ai-drawer-effort">
+                        <div class="eff"><span class="icn">💰</span><span id="eff-cost" class="bar"></span><span id="eff-cost-num" class="num">0</span></div>
+                        <div class="eff"><span class="icn">⏳</span><span id="eff-time" class="bar"></span><span id="eff-time-num" class="num">0</span></div>
+                        <div class="eff"><span class="icn">⚡️</span><span id="eff-energy" class="bar"></span><span id="eff-energy-num" class="num">0</span></div>
+                        <div class="eff"><span class="icn">🎲</span><span id="eff-variety" class="bar"></span><span id="eff-variety-num" class="num">0</span></div>
+                    </div>
+                    <section class="ai-drawer-section">
+                        <h4>🎯 Why this fits you</h4>
+                        <p id="ai-drawer-why"></p>
+                    </section>
+                    <section class="ai-drawer-section">
+                        <h4>▶️ Prompt to start</h4>
+                        <div class="ai-prompt-row">
+                            <textarea id="ai-prompt-input" class="ai-prompt-input ai-prompt-area" rows="3" readonly></textarea>
+                            <button id="ai-prompt-copy" class="ai-prompt-copy" type="button">Copy</button>
+                        </div>
+                        <p id="ai-drawer-prompt" class="ai-drawer-prompt" style="display:none;"></p>
+                    </section>
+                    <section class="ai-drawer-section">
+                        <h4>✅ Steps</h4>
+                        <ul id="ai-drawer-steps" class="ai-drawer-steps"></ul>
+                    </section>
+                    <section class="ai-drawer-section">
+                        <h4>👀 What to watch for</h4>
+                        <p id="ai-drawer-signal"></p>
+                    </section>
+                    <section class="ai-drawer-section">
+                        <h4>💭 Reflection</h4>
+                        <ul id="ai-drawer-reflect" class="ai-drawer-reflect"></ul>
+                    </section>
+                    <section class="ai-drawer-section" id="ai-drawer-safety-wrap" style="display:none;">
+                        <h4>⚠️ Safety notes</h4>
+                        <p id="ai-drawer-safety"></p>
+                    </section>
+                    <footer class="ai-drawer-footer">
+                        <div id="ai-drawer-chips" class="ai-drawer-chips"></div>
+                    </footer>
+                </aside>
+            </div>
+            <?php endif; ?>
  
         <?php } else { // Logged-out user view
             // Find the URL for the primary starting quiz.
@@ -1333,8 +1388,8 @@ class Micro_Coach_Core {
             .ai-card:hover:not(.skeleton)::after{ color:#fff; transform: translateY(-1px) scale(1.1); }
             .ai-card h5{ margin:0 32px 4px 0; font-size:17px; line-height:1.2; font-weight:700; }
             .ai-lens-badge{ display:inline-block; background:#eef2f7; border-radius:999px; padding:3px 10px; font-size:12px; color:#334155; margin:0 0 6px; }
-            .ai-heart{ position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:50%; background:#f1f5f9; color:#ef4444; border:1px solid #e5e7eb; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:15px; z-index:1; }
-            .ai-heart.active{ background:#fee2e2; color:#b91c1c; }
+            .ai-heart{ position:absolute; top:8px; right:8px; width:28px; height:28px; border-radius:50%; background:#f1f5f9; color:#ef4444; border:1px solid #e5e7eb; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:15px; z-index:1; transition: all 0.2s ease; }
+            .ai-heart.active{ background:#dc2626; color:#ffffff; border-color:#dc2626; transform: scale(1.1); }
             .ai-heart:focus-visible{ outline:2px solid #3b82f6; outline-offset:2px; }
             .lens-curiosity{ background:#e0f2fe !important; color:#075985 !important; }
             .lens-rolemodels{ background:#ede9fe !important; color:#5b21b6 !important; }
@@ -1573,6 +1628,19 @@ class Micro_Coach_Core {
                 });
             });
 
+            // Switch to AI Coach tab button handler
+            const switchToAiBtn = document.getElementById('switch-to-ai-coach');
+            if (switchToAiBtn) {
+                switchToAiBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    // Find and click the AI Coach tab
+                    const aiTabLink = tabContainer.querySelector('.tab-link[data-tab="tab-ai"]');
+                    if (aiTabLink) {
+                        aiTabLink.click();
+                    }
+                });
+            }
+
             // AI Coach handlers
             const ajaxUrl = '<?php echo esc_url_raw(admin_url('admin-ajax.php')); ?>';
             // Dynamic labels for filters
@@ -1637,6 +1705,7 @@ class Micro_Coach_Core {
                         if (item.why_this_fits_you) body.append('why', item.why_this_fits_you);
                         if (item.prompt_to_start) body.append('prompt', item.prompt_to_start);
                         if (item.signal_to_watch_for) body.append('signal', item.signal_to_watch_for);
+                        if (item.safety_notes) body.append('safety', item.safety_notes);
                         if (Array.isArray(item.steps)) body.append('steps', JSON.stringify(item.steps));
                         if (Array.isArray(item.reflection_questions)) body.append('reflect', JSON.stringify(item.reflection_questions));
                         body.append('cost', aiDefaults.cost);
@@ -1645,9 +1714,10 @@ class Micro_Coach_Core {
                         body.append('variety', aiDefaults.variety);
                         body.append('lenses', JSON.stringify(['Curiosity','Role Models','Opposites','Adjacency']));
                         fetch(ajaxUrl, {method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded'}, body})
-                          .then(()=>{ if (onDone) onDone(); })
-                          .catch(()=>{ if (onDone) onDone(); });
-                    }catch(e){ if (onDone) onDone(); }
+                          .then(r=>r.json())
+                          .then(j=>{ if (onDone) onDone(j && j.success); })
+                          .catch(()=>{ if (onDone) onDone(false); });
+                    }catch(e){ if (onDone) onDone(false); }
                 }
                 function openDrawer(item){ if (!drawer) return; drawer.classList.add('open');
                     // Update active index for nav controls
@@ -1710,7 +1780,41 @@ class Micro_Coach_Core {
                     }
                     starsWrap.innerHTML='';
                     const current = (item._stats && item._stats.your_rating) ? item._stats.your_rating : 0;
-                    for(let i=1;i<=5;i++){ const s=document.createElement('span'); s.className='ai-star'+(i<=current?' active':''); s.textContent='★'; s.title=i+' stars'; s.onclick=()=>{ for(let j=0;j<starsWrap.children.length;j++){ starsWrap.children[j].classList.toggle('active', j< i); } item._stats=item._stats||{}; item._stats.your_rating=i; postFeedback(item,{rating:i}); }; starsWrap.appendChild(s); }
+                    for(let i=1;i<=5;i++){ 
+                        const s=document.createElement('span'); 
+                        s.className='ai-star'+(i<=current?' active':''); 
+                        s.textContent='★'; 
+                        s.title=i+' stars'; 
+                        s.onclick=()=>{ 
+                            const rating = i;
+                            const originalClasses = Array.from(starsWrap.children).map(star => star.classList.contains('active'));
+                            
+                            // Update UI optimistically but prepare for rollback
+                            for(let j=0;j<starsWrap.children.length;j++){ 
+                                starsWrap.children[j].classList.toggle('active', j < rating); 
+                                starsWrap.children[j].style.opacity = '0.6'; // Show loading state
+                            }
+                            
+                            postFeedback(item, {rating}, (success)=>{ 
+                                // Re-enable stars
+                                for(let j=0;j<starsWrap.children.length;j++){ 
+                                    starsWrap.children[j].style.opacity = ''; 
+                                }
+                                
+                                if (success) {
+                                    // Server confirmed - update data
+                                    item._stats=item._stats||{}; 
+                                    item._stats.your_rating=rating; 
+                                } else {
+                                    // Server failed - rollback UI changes
+                                    for(let j=0;j<starsWrap.children.length;j++){ 
+                                        starsWrap.children[j].classList.toggle('active', originalClasses[j]); 
+                                    }
+                                }
+                            }); 
+                        }; 
+                        starsWrap.appendChild(s); 
+                    }
                 }
                 function closeDrawer(){ if (drawer) drawer.classList.remove('open'); }
                 if (closeBtn) closeBtn.onclick = closeDrawer; if (backdrop) backdrop.onclick = closeDrawer; window.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeDrawer(); });
@@ -1729,7 +1833,41 @@ class Micro_Coach_Core {
                     // Heart button
                     const heart=document.createElement('button'); heart.type='button'; heart.className='ai-heart'; heart.innerHTML='❤';
                     if (item._stats && item._stats.liked_by_you) heart.classList.add('active');
-                    heart.addEventListener('click', (ev)=>{ ev.stopPropagation(); const on = !heart.classList.contains('active'); heart.classList.toggle('active', on); item._stats=item._stats||{}; item._stats.liked_by_you=on; postFeedback(item, {liked:on}, ()=>{ try{ if (!on && savedEl && c.parentElement && c.parentElement.id==='ai-saved') { c.remove(); if (!savedEl.querySelector('.ai-card')) savedEl.innerHTML='<div class="ai-card">No saved experiments yet.</div>'; } }catch(e){} }); });
+                    heart.addEventListener('click', (ev)=>{ 
+                        ev.stopPropagation(); 
+                        const wasActive = heart.classList.contains('active');
+                        const willBeLiked = !wasActive;
+                        
+                        // Disable heart button while request is in progress
+                        heart.disabled = true;
+                        heart.style.opacity = '0.6';
+                        
+                        postFeedback(item, {liked: willBeLiked}, (success)=>{ 
+                            // Re-enable heart button
+                            heart.disabled = false;
+                            heart.style.opacity = '';
+                            
+                            if (success) {
+                                // Server confirmed - update UI and data
+                                heart.classList.toggle('active', willBeLiked);
+                                item._stats = item._stats || {};
+                                item._stats.liked_by_you = willBeLiked;
+                                
+                                // Handle removal from saved tab if unliking
+                                if (!willBeLiked && savedEl && c.parentElement && c.parentElement.id === 'ai-saved') {
+                                    try { 
+                                        c.remove(); 
+                                        if (!savedEl.querySelector('.ai-card')) {
+                                            savedEl.innerHTML = '<div class="ai-card">No saved experiments yet.</div>'; 
+                                        }
+                                    } catch(e) {}
+                                }
+                            } else {
+                                // Server failed - show error feedback (optional)
+                                console.warn('Failed to save heart state for:', item.title || 'experiment');
+                            }
+                        }); 
+                    });
                     const h=document.createElement('h5'); h.textContent=item.title||'Idea';
                     const lens=document.createElement('div'); lens.className='ai-lens-badge'; lens.textContent=item.lens||'';
                     const lc=(item.lens||'').toLowerCase(); if(lc){ lens.classList.add('lens-'+lc.replace(/\s+/g,'-')); }
@@ -1771,6 +1909,9 @@ class Micro_Coach_Core {
             if (applyBtn){
                 applyBtn.addEventListener('click', function(e){
                     e.preventDefault();
+                    // Show the results container
+                    const resultsContainer = document.getElementById('ai-results-container');
+                    if (resultsContainer) { resultsContainer.style.display = 'block'; }
                     renderSkeleton(shortlistEl, 6);
                     if (moreWrap) { moreWrap.style.display='none'; }
                     applyBtn.disabled = true; applyBtn.textContent = 'Generating…';

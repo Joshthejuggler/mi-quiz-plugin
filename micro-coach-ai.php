@@ -440,6 +440,7 @@ TXT;
             'why_this_fits_you' => sanitize_textarea_field($_POST['why'] ?? ''),
             'prompt_to_start' => sanitize_textarea_field($_POST['prompt'] ?? ''),
             'signal_to_watch_for' => sanitize_textarea_field($_POST['signal'] ?? ''),
+            'safety_notes' => sanitize_textarea_field($_POST['safety'] ?? ''),
         ];
         // Steps + reflection can be arrays via JSON
         $steps = json_decode(stripslashes($_POST['steps'] ?? '[]'), true);
@@ -510,6 +511,7 @@ TXT;
                 'steps' => $meta['steps'] ?? [],
                 'signal_to_watch_for' => $meta['signal_to_watch_for'] ?? '',
                 'reflection_questions' => $meta['reflection_questions'] ?? [],
+                'safety_notes' => $meta['safety_notes'] ?? '',
             ];
             $hashes[] = $r['hash'];
         }
@@ -764,7 +766,7 @@ TXT;
             $cdt_names = [
                 'ambiguity-tolerance'=>'Ambiguity Tolerance','value-conflict-navigation'=>'Value Conflict Navigation',
                 'self-confrontation-capacity'=>'Self‑Confrontation Capacity','discomfort-regulation'=>'Discomfort Regulation',
-                'conflict-resolution-tolerance'=>'Conflict Resolution Tolerance'
+                'growth-orientation'=>'Growth Orientation'
             ];
             $pt_primary_name = $primary_pt ? ucfirst($primary_pt) : '';
             $mi_top1 = $mi_profile[0]['slug'] ?? ''; $mi_top1_name = $mi_names[$mi_top1] ?? ($mi_top1 ?: 'Strength');
@@ -935,76 +937,15 @@ TXT;
             </div>
         </div>
         <div id="ai-debug" class="ai-debug" style="display:none;"></div>
-        <div class="ai-results">
+        <div class="ai-results" id="ai-results-container" style="display:none;">
             <h4 class="ai-section">Shortlist</h4>
             <p class="ai-section-sub">Best‑fit ideas matched to your filters.</p>
-            <div class="ai-results-grid" id="ai-shortlist">
-                <!-- Populated by AI → placeholder cards -->
-                <div class="ai-card skeleton"></div>
-                <div class="ai-card skeleton"></div>
-                <div class="ai-card skeleton"></div>
-                <div class="ai-card skeleton"></div>
-                <div class="ai-card skeleton"></div>
-                <div class="ai-card skeleton"></div>
-            </div>
+            <div class="ai-results-grid" id="ai-shortlist"></div>
             <div id="ai-more-wrap" style="display:none;">
                 <h4 class="ai-section">More options</h4>
                 <p class="ai-section-sub">Additional ideas to explore if you want more variety.</p>
                 <div class="ai-results-grid" id="ai-more"></div>
             </div>
-        </div>
-
-        <!-- Drawer for idea details -->
-        <div id="ai-drawer" class="ai-drawer" aria-hidden="true">
-            <div class="ai-drawer-backdrop" id="ai-drawer-backdrop" tabindex="-1" aria-hidden="true"></div>
-            <!-- Nav buttons placed outside the panel so they can float next to it -->
-            <button type="button" class="ai-drawer-nav" id="ai-drawer-prev" aria-label="Previous">‹</button>
-            <button type="button" class="ai-drawer-nav" id="ai-drawer-next" aria-label="Next">›</button>
-            <aside class="ai-drawer-panel" role="dialog" aria-labelledby="ai-drawer-title">
-                <button type="button" class="ai-drawer-close" id="ai-drawer-close" aria-label="Close">×</button>
-                <header class="ai-drawer-header">
-                    <h3 id="ai-drawer-title" class="ai-drawer-title">Idea</h3>
-                    <span id="ai-drawer-lens" class="ai-drawer-lens"></span>
-                </header>
-                <p id="ai-drawer-micro" class="ai-drawer-micro"></p>
-                <div class="ai-drawer-effort">
-                    <div class="eff"><span class="icn">💰</span><span id="eff-cost" class="bar"></span><span id="eff-cost-num" class="num">0</span></div>
-                    <div class="eff"><span class="icn">⏳</span><span id="eff-time" class="bar"></span><span id="eff-time-num" class="num">0</span></div>
-                    <div class="eff"><span class="icn">⚡️</span><span id="eff-energy" class="bar"></span><span id="eff-energy-num" class="num">0</span></div>
-                    <div class="eff"><span class="icn">🎲</span><span id="eff-variety" class="bar"></span><span id="eff-variety-num" class="num">0</span></div>
-                </div>
-                <section class="ai-drawer-section">
-                    <h4>🎯 Why this fits you</h4>
-                    <p id="ai-drawer-why"></p>
-                </section>
-                <section class="ai-drawer-section">
-                    <h4>▶️ Prompt to start</h4>
-                    <div class="ai-prompt-row">
-                        <textarea id="ai-prompt-input" class="ai-prompt-input ai-prompt-area" rows="3" readonly></textarea>
-                        <button id="ai-prompt-copy" class="ai-prompt-copy" type="button">Copy</button>
-                    </div>
-                    <p id="ai-drawer-prompt" class="ai-drawer-prompt" style="display:none;"></p>
-                </section>
-                <section class="ai-drawer-section">
-                    <h4>✅ Steps</h4>
-                    <ul id="ai-drawer-steps" class="ai-drawer-steps"></ul>
-                </section>
-                <section class="ai-drawer-section">
-                    <h4>👀 What to watch for</h4>
-                    <p id="ai-drawer-signal"></p>
-                </section>
-                <section class="ai-drawer-section">
-                    <h4>💭 Reflection</h4>
-                    <ul id="ai-drawer-reflect" class="ai-drawer-reflect"></ul>
-                </section>
-                <section class="ai-drawer-section" id="ai-drawer-safety-wrap" style="display:none;">
-                    <h4>⚠️ Safety notes</h4>
-                    <p id="ai-drawer-safety"></p>
-                </section>
-                <footer class="ai-drawer-footer">
-                    <div id="ai-drawer-chips" class="ai-drawer-chips"></div>
-                </footer>
-            </aside>
         </div>
         <?php
     }
