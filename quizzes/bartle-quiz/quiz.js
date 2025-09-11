@@ -229,7 +229,7 @@
             nextStepsHtml = `
                 <div class="bartle-results-section bartle-next-steps-section">
                     <h3 class="bartle-section-title">Initial Assessments Complete!</h3>
-                    <p>You've finished the foundational assessments for Stage One. These results will help prepare you to start using AI-based tools to create minimum viable experiments with a high likelihood of success. Return to your dashboard to view your Self-Discovery Profile and see how your results fit together.</p>
+                    <p>Great work—your <em>Self-Discovery Profile</em> is now unlocked. Review it below, then let our <strong>AI Coach</strong> translate your strengths into real-world experiments that have a <em>high likelihood of success</em>.</p>
                     <div class="bartle-results-actions">
                         <a href="${dashboardUrl}" class="bartle-quiz-button bartle-quiz-button-primary">View Your Self-Discovery Profile</a>
                     </div>

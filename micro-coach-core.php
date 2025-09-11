@@ -22,6 +22,12 @@ class Micro_Coach_Core {
         }
 
         add_action('save_post', [$this, 'clear_shortcode_page_transients']);
+        
+        // AJAX endpoint for enhanced flow - mark AI coach as unlocked
+        add_action('wp_ajax_mc_mark_ai_unlocked', [$this, 'ajax_mark_ai_unlocked']);
+        
+        // Add body class for enhanced flow (early hook)
+        add_filter('body_class', [$this, 'add_enhanced_flow_body_class']);
     }
 
     /**
@@ -269,6 +275,42 @@ class Micro_Coach_Core {
                     $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
                     $cdt_results = get_user_meta($user_id, 'cdt_quiz_results', true);
                     $bartle_results = get_user_meta($user_id, 'bartle_quiz_results', true);
+
+                    // --- Enhanced Flow Detection ---
+                    $enhanced = !empty($bartle_results['enhanced_flow']) && empty(get_user_meta($user_id, 'ai_coach_unlocked', true));
+                    
+                    // Debug: Add console logging for troubleshooting
+                    if (current_user_can('manage_options')) {
+                        add_action('wp_footer', function() use ($enhanced, $bartle_results, $user_id) {
+                            echo '<script>console.log("Enhanced Flow Debug:", ' . json_encode([
+                                'enhanced' => $enhanced,
+                                'bartle_enhanced_flow' => !empty($bartle_results['enhanced_flow']),
+                                'ai_coach_unlocked' => !empty(get_user_meta($user_id, 'ai_coach_unlocked', true)),
+                                'bartle_results' => $bartle_results
+                            ]) . ');</script>';
+                        });
+                    }
+                    if ($enhanced) {
+                        // Add CSS class for enhanced profile-only mode
+                        add_action('wp_head', function() {
+                            echo '<style>
+                                body.mc-enhanced-profile-only .dashboard-tabs { display: none !important; }
+                                body.mc-enhanced-profile-only .tab-content-wrapper { border-top: none !important; margin-top: 0 !important; padding-top: 0 !important; }
+                                body.mc-enhanced-profile-only .quiz-dashboard-hero { display: none !important; }
+                                body.mc-enhanced-profile-only .quiz-dashboard-section-title,
+                                body.mc-enhanced-profile-only .quiz-dashboard-lower-grid,
+                                body.mc-enhanced-profile-only .quiz-dashboard-resources { display: none !important; }
+                            </style>';
+                        });
+                        
+                        // Enqueue enhanced dashboard script and CSS
+                        wp_enqueue_script('dashboard-enhanced-js', plugins_url('assets/dashboard-enhanced.js', __FILE__), ['jquery'], '1.0.0', true);
+                        wp_enqueue_style('dashboard-enhanced-css', plugins_url('assets/dashboard.css', __FILE__), [], '1.0.0');
+                        wp_localize_script('dashboard-enhanced-js', 'dashboard_enhanced_data', [
+                            'ajaxUrl' => admin_url('admin-ajax.php'),
+                            'nonce' => wp_create_nonce('mc_dash')
+                        ]);
+                    }
 
                     // --- Process Data for Identity Card ---
                     $mi_top3_names = array_map(function($slug) use ($mi_categories) { return $mi_categories[$slug] ?? ucfirst(str_replace('-', ' ', $slug)); }, $mi_results['top3'] ?? []);
@@ -2023,6 +2065,50 @@ class Micro_Coach_Core {
         foreach ($quizzes as $quiz) {
             if (!empty($quiz['shortcode'])) delete_transient('page_url_for_' . $quiz['shortcode']);
         }
+    }
+
+    /**
+     * Add body class for enhanced flow mode.
+     */
+    public function add_enhanced_flow_body_class($classes) {
+        // Only check on pages that might have the quiz dashboard
+        if (is_admin()) return $classes;
+        
+        $user_id = get_current_user_id();
+        if (!$user_id) return $classes;
+        
+        // Check if we're on a page with the quiz dashboard shortcode
+        global $post;
+        if (!is_a($post, 'WP_Post') || !has_shortcode($post->post_content, 'quiz_dashboard')) {
+            return $classes;
+        }
+        
+        // Check enhanced flow conditions
+        $bartle_results = get_user_meta($user_id, 'bartle_quiz_results', true);
+        $ai_unlocked = get_user_meta($user_id, 'ai_coach_unlocked', true);
+        $enhanced = !empty($bartle_results['enhanced_flow']) && empty($ai_unlocked);
+        
+        if ($enhanced) {
+            $classes[] = 'mc-enhanced-profile-only';
+        }
+        
+        return $classes;
+    }
+
+    /**
+     * AJAX endpoint to mark the AI coach as unlocked for enhanced flow users.
+     */
+    public function ajax_mark_ai_unlocked() {
+        check_ajax_referer('mc_dash');
+        
+        if (!is_user_logged_in()) {
+            wp_send_json_error('User must be logged in.');
+        }
+        
+        $user_id = get_current_user_id();
+        update_user_meta($user_id, 'ai_coach_unlocked', 1);
+        
+        wp_send_json_success('AI Coach unlocked successfully!');
     }
 
 }

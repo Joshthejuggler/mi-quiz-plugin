@@ -6,6 +6,9 @@ class Bartle_Quiz_Plugin {
     const VERSION = '1.0';
     const META_KEY = 'bartle_quiz_results';
     const SHORTCODE = 'bartle_quiz';
+    
+    // Enhanced flow feature flag - users completing Bartle after this date get new UX
+    const ENHANCED_FLOW_START = 1704067200; // 2024-01-01 00:00 UTC
 
     public function __construct() {
         // 1. Register this quiz with the core platform.
@@ -114,6 +117,7 @@ class Bartle_Quiz_Plugin {
         // Sanitize results before saving
         $sanitized_results = [];
         $sanitized_results['completed_at'] = time(); // Add timestamp
+        $sanitized_results['enhanced_flow'] = ( $sanitized_results['completed_at'] >= self::ENHANCED_FLOW_START );
         if (isset($results['ageGroup'])) {
             $sanitized_results['ageGroup'] = sanitize_text_field($results['ageGroup']);
         }
@@ -124,6 +128,20 @@ class Bartle_Quiz_Plugin {
         }
 
         update_user_meta($user_id, self::META_KEY, $sanitized_results);
+        
+        // For testing: If this is enhanced flow, clear AI coach unlock status
+        // so user can experience the progressive reveal again
+        if ($sanitized_results['enhanced_flow']) {
+            delete_user_meta($user_id, 'ai_coach_unlocked');
+        }
+        
+        // Debug logging for admins
+        if (current_user_can('manage_options')) {
+            error_log('Bartle Quiz Saved - Enhanced Flow: ' . ($sanitized_results['enhanced_flow'] ? 'YES' : 'NO') . 
+                      ', Timestamp: ' . $sanitized_results['completed_at'] . 
+                      ', Cutoff: ' . self::ENHANCED_FLOW_START);
+        }
+        
         wp_send_json_success('Results saved.');
     }
 
