@@ -407,6 +407,7 @@ class MI_Quiz_Plugin_AI {
         $career = $mi_career_suggestions  ?? $GLOBALS['mi_career_suggestions']  ?? [];
         $lev    = $mi_leverage_tips       ?? $GLOBALS['mi_leverage_tips']       ?? [];
         $grow   = $mi_growth_tips         ?? $GLOBALS['mi_growth_tips']         ?? [];
+        $skills = $mi_potential_skills    ?? $GLOBALS['mi_potential_skills']    ?? [];
 
         $cdt_quiz_url = $this->_find_page_by_shortcode('cdt_quiz');
 
@@ -436,6 +437,7 @@ class MI_Quiz_Plugin_AI {
                 'career' => $career,
                 'lev'    => $lev,
                 'grow'   => $grow,
+                'skills' => $skills,
                 'likert' => [1 => 'Not at all like me', 2 => 'Not really like me', 3 => 'Somewhat like me', 4 => 'Mostly like me', 5 => 'Very much like me'],
                 'cdtPrompts' => $mi_cdt_prompts,
             ],

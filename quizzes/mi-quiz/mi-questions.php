@@ -1579,3 +1579,855 @@ $mi_growth_tips = [
     ],
   ],
 ];
+
+// NEW: Potential Skills based on intelligence combinations
+$mi_potential_skills = [
+  'adult' => [
+    'Intrapersonal+Interpersonal+Naturalistic' => [
+      "You'd be good at leading a group hike up a mountain, pausing along the way to reflect and share insights.",
+      "You'd thrive at helping people connect their inner growth with the beauty of nature.",
+      "You'd shine at designing an outdoor challenge that builds teamwork and personal reflection."
+    ],
+    'Intrapersonal+Interpersonal+Bodily-Kinesthetic' => [
+      "You'd be good at coaching a team through a physical challenge while encouraging honesty and trust.",
+      "You'd thrive at helping a sports group reflect on their teamwork after practice.",
+      "You'd shine at using movement to help groups bond and share experiences."
+    ],
+    'Intrapersonal+Interpersonal+Logical-Mathematical' => [
+      "You'd be good at guiding a group in solving problems while making sure everyone's voice is heard.",
+      "You'd thrive at combining emotional insight with logical thinking in group projects.",
+      "You'd shine at balancing people's needs with fair and structured decision-making."
+    ],
+    'Intrapersonal+Interpersonal+Linguistic' => [
+      "You'd be good at leading group discussions where people share stories about themselves.",
+      "You'd thrive at helping a group write something meaningful together, like a poem or pledge.",
+      "You'd shine at weaving together different voices into one shared message."
+    ],
+    'Intrapersonal+Interpersonal+Musical' => [
+      "You'd be good at helping a group write and perform a song that reflects their shared experiences.",
+      "You'd thrive at encouraging people to express their feelings through rhythm or music.",
+      "You'd shine at using music to build group identity and reflection."
+    ],
+    'Intrapersonal+Interpersonal+Visual-Spatial' => [
+      "You'd be good at guiding a group to create a mural or vision board that reflects shared values.",
+      "You'd thrive at helping people use symbols and images to express what they feel inside.",
+      "You'd shine at leading collaborative art projects that spark conversation and growth."
+    ],
+    'Intrapersonal+Naturalistic+Bodily-Kinesthetic' => [
+      "You'd be good at planning and leading outdoor challenges that require teamwork and self-reflection.",
+      "You'd thrive at guiding others in using their bodies to connect with nature and personal growth.",
+      "You'd shine at combining physical activity with quiet reflection outdoors."
+    ],
+    'Intrapersonal+Naturalistic+Logical-Mathematical' => [
+      "You'd be good at tracking patterns in nature and reflecting on what they teach about life.",
+      "You'd thrive at analyzing natural systems and drawing personal lessons from them.",
+      "You'd shine at helping others see the logic in how nature and self-discovery connect."
+    ],
+    'Intrapersonal+Naturalistic+Linguistic' => [
+      "You'd be good at journaling about outdoor experiences and sharing them with others.",
+      "You'd thrive at writing stories or essays that connect nature and personal reflection.",
+      "You'd shine at leading discussions that combine environmental awareness with self-growth."
+    ],
+    'Intrapersonal+Naturalistic+Musical' => [
+      "You'd be good at composing music inspired by your personal experiences in nature.",
+      "You'd thrive at creating rhythms or melodies that reflect the natural world and inner emotions.",
+      "You'd shine at leading group activities that connect music, nature, and reflection."
+    ],
+    'Intrapersonal+Naturalistic+Visual-Spatial' => [
+      "You'd be good at sketching landscapes that reflect both nature and your inner life.",
+      "You'd thrive at creating art projects outdoors that spark reflection.",
+      "You'd shine at helping others see themselves in the beauty of nature through visuals."
+    ],
+    'Intrapersonal+Bodily-Kinesthetic+Logical-Mathematical' => [
+      "You'd be good at mastering physical routines through step-by-step logic.",
+      "You'd thrive at designing group challenges that combine movement with problem-solving.",
+      "You'd shine at analyzing performance to improve physical skills."
+    ],
+    'Intrapersonal+Bodily-Kinesthetic+Linguistic' => [
+      "You'd be good at writing about personal experiences with sports or movement.",
+      "You'd thrive at acting or performing in ways that communicate your inner world.",
+      "You'd shine at explaining physical techniques with clarity and self-awareness."
+    ],
+    'Intrapersonal+Bodily-Kinesthetic+Musical' => [
+      "You'd be good at expressing your inner life through dance or rhythm.",
+      "You'd thrive at creating movement routines set to music.",
+      "You'd shine at leading group exercises that combine fitness and reflection."
+    ],
+    'Intrapersonal+Bodily-Kinesthetic+Visual-Spatial' => [
+      "You'd be good at choreographing movements that tell a personal story.",
+      "You'd thrive at designing physical performances that are visually striking.",
+      "You'd shine at helping others connect body, image, and self-expression."
+    ],
+    'Intrapersonal+Logical-Mathematical+Linguistic' => [
+      "You'd be good at writing essays that use logic to explore personal ideas.",
+      "You'd thrive at analyzing your own reasoning and expressing it clearly.",
+      "You'd shine at teaching others through structured arguments rooted in self-awareness."
+    ],
+    'Intrapersonal+Logical-Mathematical+Musical' => [
+      "You'd be good at finding mathematical patterns in your personal creative process.",
+      "You'd thrive at composing music that reflects both structure and emotion.",
+      "You'd shine at explaining how rhythm mirrors your thought process."
+    ],
+    'Intrapersonal+Logical-Mathematical+Visual-Spatial' => [
+      "You'd be good at designing diagrams that map your personal growth.",
+      "You'd thrive at building systems that visually represent logical steps.",
+      "You'd shine at using charts to show progress toward your goals."
+    ],
+    'Intrapersonal+Linguistic+Musical' => [
+      "You'd be good at writing lyrics that express deep self-awareness.",
+      "You'd thrive at combining storytelling and music to process personal experiences.",
+      "You'd shine at helping groups reflect through songs you create."
+    ],
+    'Intrapersonal+Linguistic+Visual-Spatial' => [
+      "You'd be good at writing and illustrating personal stories.",
+      "You'd thrive at designing presentations that combine words and images to inspire reflection.",
+      "You'd shine at leading projects that blend writing with visual expression."
+    ],
+    'Intrapersonal+Musical+Visual-Spatial' => [
+      "You'd be good at creating art projects that blend sound and imagery.",
+      "You'd thrive at composing pieces inspired by visual symbols.",
+      "You'd shine at helping others feel both music and visuals in new ways."
+    ],
+    'Interpersonal+Naturalistic+Bodily-Kinesthetic' => [
+      "You'd be good at organizing outdoor team games that require both strategy and movement.",
+      "You'd thrive at leading physical activities in natural environments.",
+      "You'd shine at building group trust through outdoor adventures."
+    ],
+    'Interpersonal+Naturalistic+Logical-Mathematical' => [
+      "You'd be good at leading a team in solving nature-based problems, like designing a sustainable project.",
+      "You'd thrive at guiding groups to notice patterns in the environment.",
+      "You'd shine at helping people connect data with real-world teamwork."
+    ],
+    'Interpersonal+Naturalistic+Linguistic' => [
+      "You'd be good at telling stories about nature that bring people together.",
+      "You'd thrive at leading group reflections outdoors with words and conversation.",
+      "You'd shine at teaching others about the environment in ways that inspire action."
+    ],
+    'Interpersonal+Naturalistic+Musical' => [
+      "You'd be good at organizing outdoor events with music to bring people together.",
+      "You'd thrive at composing songs that celebrate the natural world.",
+      "You'd shine at leading rhythm-based activities in nature."
+    ],
+    'Interpersonal+Naturalistic+Visual-Spatial' => [
+      "You'd be good at leading a group mural that celebrates nature.",
+      "You'd thrive at designing outdoor spaces that help people connect with each other.",
+      "You'd shine at creating visual projects that combine environment and community."
+    ],
+    'Interpersonal+Bodily-Kinesthetic+Logical-Mathematical' => [
+      "You'd be good at designing physical team challenges that require logical problem-solving.",
+      "You'd thrive at leading escape-room style games for groups.",
+      "You'd shine at guiding others through puzzles that mix movement and strategy."
+    ],
+    'Interpersonal+Bodily-Kinesthetic+Linguistic' => [
+      "You'd be good at leading group drama performances that explore relationships.",
+      "You'd thrive at acting in plays that help people reflect on community.",
+      "You'd shine at coaching public speaking with gestures and body awareness."
+    ],
+    'Interpersonal+Bodily-Kinesthetic+Musical' => [
+      "You'd be good at choreographing dances that groups perform together.",
+      "You'd thrive at teaching rhythm-based team games.",
+      "You'd shine at blending movement and music to bring groups closer."
+    ],
+    'Interpersonal+Bodily-Kinesthetic+Visual-Spatial' => [
+      "You'd be good at designing group art projects that involve performance.",
+      "You'd thrive at creating dramatic performances with sets and visuals.",
+      "You'd shine at leading workshops that combine movement and design."
+    ],
+    'Interpersonal+Logical-Mathematical+Linguistic' => [
+      "You'd be good at leading debates where arguments are backed by logic and respect.",
+      "You'd thrive at explaining complex ideas in ways groups understand.",
+      "You'd shine at mediating conflicts using both reason and words."
+    ],
+    'Interpersonal+Logical-Mathematical+Musical' => [
+      "You'd be good at organizing music ensembles with structured roles.",
+      "You'd thrive at helping groups practice rhythm with precision.",
+      "You'd shine at showing how math and music unite teams."
+    ],
+    'Interpersonal+Logical-Mathematical+Visual-Spatial' => [
+      "You'd be good at leading design teams that plan projects step by step.",
+      "You'd thrive at showing groups diagrams that simplify big ideas.",
+      "You'd shine at balancing creativity and logic in teamwork."
+    ],
+    'Interpersonal+Linguistic+Musical' => [
+      "You'd be good at helping groups write songs that tell their shared story.",
+      "You'd thrive at leading chants or performances that unite people.",
+      "You'd shine at storytelling through rhythm and sound."
+    ],
+    'Interpersonal+Linguistic+Visual-Spatial' => [
+      "You'd be good at helping groups create posters or campaigns that share a message.",
+      "You'd thrive at designing events that blend words and visuals.",
+      "You'd shine at leading collaborative art with a powerful story."
+    ],
+    'Interpersonal+Musical+Visual-Spatial' => [
+      "You'd be good at creating performances that mix rhythm and imagery.",
+      "You'd thrive at designing group projects like music videos or shows.",
+      "You'd shine at helping others express stories through sound and visuals."
+    ],
+    'Naturalistic+Bodily-Kinesthetic+Logical-Mathematical' => [
+      "You'd be good at designing experiments outdoors that require teamwork.",
+      "You'd thrive at leading survival or nature-based challenges.",
+      "You'd shine at mixing data and movement in the environment."
+    ],
+    'Naturalistic+Bodily-Kinesthetic+Linguistic' => [
+      "You'd be good at acting in plays or skits about nature and environment.",
+      "You'd thrive at guiding outdoor storytelling through movement.",
+      "You'd shine at sharing environmental lessons with drama."
+    ],
+    'Naturalistic+Bodily-Kinesthetic+Musical' => [
+      "You'd be good at composing music inspired by outdoor adventures.",
+      "You'd thrive at leading rhythm-based group activities outdoors.",
+      "You'd shine at celebrating nature through sound and movement."
+    ],
+    'Naturalistic+Bodily-Kinesthetic+Visual-Spatial' => [
+      "You'd be good at creating sculptures or installations from natural materials.",
+      "You'd thrive at guiding outdoor art projects with teams.",
+      "You'd shine at blending movement, space, and the environment."
+    ],
+    'Naturalistic+Logical-Mathematical+Linguistic' => [
+      "You'd be good at writing reports or stories based on environmental data.",
+      "You'd thrive at sharing scientific ideas in simple words.",
+      "You'd shine at persuading people with both evidence and passion for nature."
+    ],
+    'Naturalistic+Logical-Mathematical+Musical' => [
+      "You'd be good at finding rhythm in environmental patterns.",
+      "You'd thrive at creating songs that explain natural cycles.",
+      "You'd shine at leading groups in celebrating the math of nature with music."
+    ],
+    'Naturalistic+Logical-Mathematical+Visual-Spatial' => [
+      "You'd be good at creating infographics that explain ecosystems.",
+      "You'd thrive at mapping natural systems for others.",
+      "You'd shine at blending data and visuals to inspire care for the planet."
+    ],
+    'Naturalistic+Linguistic+Musical' => [
+      "You'd be good at writing songs about the beauty of nature.",
+      "You'd thrive at performing pieces that inspire people to care for the environment.",
+      "You'd shine at leading creative projects that combine words, sound, and the outdoors."
+    ],
+    'Naturalistic+Linguistic+Visual-Spatial' => [
+      "You'd be good at creating children's books about the environment with words and illustrations.",
+      "You'd thrive at teaching through posters or campaigns about nature.",
+      "You'd shine at storytelling that mixes writing and visuals outdoors."
+    ],
+    'Naturalistic+Musical+Visual-Spatial' => [
+      "You'd be good at composing soundtracks inspired by landscapes.",
+      "You'd thrive at designing shows or videos that pair nature and music.",
+      "You'd shine at leading projects where sound and visuals bring the outdoors to life."
+    ],
+    'Bodily-Kinesthetic+Logical-Mathematical+Linguistic' => [
+      "You'd be good at explaining sports strategies with clear logic and words.",
+      "You'd thrive at writing guides for physical training routines.",
+      "You'd shine at teaching complex movement through step-by-step explanation."
+    ],
+    'Bodily-Kinesthetic+Logical-Mathematical+Musical' => [
+      "You'd be good at creating dance routines based on mathematical patterns.",
+      "You'd thrive at analyzing rhythm in sports or performance.",
+      "You'd shine at helping groups coordinate timing and movement."
+    ],
+    'Bodily-Kinesthetic+Logical-Mathematical+Visual-Spatial' => [
+      "You'd be good at building obstacle courses that require teamwork.",
+      "You'd thrive at guiding others through puzzle-like challenges.",
+      "You'd shine at blending design, logic, and physical skills."
+    ],
+    'Bodily-Kinesthetic+Linguistic+Musical' => [
+      "You'd be good at choreographing performances that tell a story.",
+      "You'd thrive at using rhythm to enhance acting or movement.",
+      "You'd shine at guiding groups to express emotions with body and sound."
+    ],
+    'Bodily-Kinesthetic+Linguistic+Visual-Spatial' => [
+      "You'd be good at performing plays with strong movement and staging.",
+      "You'd thrive at directing shows where words, movement, and visuals combine.",
+      "You'd shine at teaching expression through drama and design."
+    ],
+    'Bodily-Kinesthetic+Musical+Visual-Spatial' => [
+      "You'd be good at designing performances that combine dance and visuals.",
+      "You'd thrive at choreographing group routines with powerful staging.",
+      "You'd shine at creating shows where movement and imagery tell a story."
+    ],
+    'Logical-Mathematical+Linguistic+Musical' => [
+      "You'd be good at writing songs that explain big ideas clearly.",
+      "You'd thrive at teaching math or science concepts through rhythm.",
+      "You'd shine at showing how structure and creativity work together."
+    ],
+    'Logical-Mathematical+Linguistic+Visual-Spatial' => [
+      "You'd be good at creating charts and stories that explain complex ideas.",
+      "You'd thrive at designing visual reports that persuade with logic.",
+      "You'd shine at teaching others with both evidence and images."
+    ],
+    'Logical-Mathematical+Musical+Visual-Spatial' => [
+      "You'd be good at composing music that mirrors geometric patterns.",
+      "You'd thrive at designing light or sound shows with mathematical precision.",
+      "You'd shine at blending math, rhythm, and visuals into one project."
+    ],
+    'Linguistic+Musical+Visual-Spatial' => [
+      "You'd be good at creating illustrated lyrics or music videos.",
+      "You'd thrive at designing group projects that combine song and image.",
+      "You'd shine at storytelling through both visuals and sound."
+    ]
+  ],
+  'teen' => [
+    // Using same skills for teens - they would be applicable across age groups
+    'Intrapersonal+Interpersonal+Naturalistic' => [
+      "You'd be good at leading a group hike up a mountain, pausing along the way to reflect and share insights.",
+      "You'd thrive at helping people connect their inner growth with the beauty of nature.",
+      "You'd shine at designing an outdoor challenge that builds teamwork and personal reflection."
+    ],
+    'Intrapersonal+Interpersonal+Bodily-Kinesthetic' => [
+      "You'd be good at coaching a team through a physical challenge while encouraging honesty and trust.",
+      "You'd thrive at helping a sports group reflect on their teamwork after practice.",
+      "You'd shine at using movement to help groups bond and share experiences."
+    ],
+    'Intrapersonal+Interpersonal+Logical-Mathematical' => [
+      "You'd be good at guiding a group in solving problems while making sure everyone's voice is heard.",
+      "You'd thrive at combining emotional insight with logical thinking in group projects.",
+      "You'd shine at balancing people's needs with fair and structured decision-making."
+    ],
+    'Intrapersonal+Interpersonal+Linguistic' => [
+      "You'd be good at leading group discussions where people share stories about themselves.",
+      "You'd thrive at helping a group write something meaningful together, like a poem or pledge.",
+      "You'd shine at weaving together different voices into one shared message."
+    ],
+    'Intrapersonal+Interpersonal+Musical' => [
+      "You'd be good at helping a group write and perform a song that reflects their shared experiences.",
+      "You'd thrive at encouraging people to express their feelings through rhythm or music.",
+      "You'd shine at using music to build group identity and reflection."
+    ],
+    'Intrapersonal+Interpersonal+Visual-Spatial' => [
+      "You'd be good at guiding a group to create a mural or vision board that reflects shared values.",
+      "You'd thrive at helping people use symbols and images to express what they feel inside.",
+      "You'd shine at leading collaborative art projects that spark conversation and growth."
+    ],
+    'Intrapersonal+Naturalistic+Bodily-Kinesthetic' => [
+      "You'd be good at planning and leading outdoor challenges that require teamwork and self-reflection.",
+      "You'd thrive at guiding others in using their bodies to connect with nature and personal growth.",
+      "You'd shine at combining physical activity with quiet reflection outdoors."
+    ],
+    'Intrapersonal+Naturalistic+Logical-Mathematical' => [
+      "You'd be good at tracking patterns in nature and reflecting on what they teach about life.",
+      "You'd thrive at analyzing natural systems and drawing personal lessons from them.",
+      "You'd shine at helping others see the logic in how nature and self-discovery connect."
+    ],
+    'Intrapersonal+Naturalistic+Linguistic' => [
+      "You'd be good at journaling about outdoor experiences and sharing them with others.",
+      "You'd thrive at writing stories or essays that connect nature and personal reflection.",
+      "You'd shine at leading discussions that combine environmental awareness with self-growth."
+    ],
+    'Intrapersonal+Naturalistic+Musical' => [
+      "You'd be good at composing music inspired by your personal experiences in nature.",
+      "You'd thrive at creating rhythms or melodies that reflect the natural world and inner emotions.",
+      "You'd shine at leading group activities that connect music, nature, and reflection."
+    ],
+    'Intrapersonal+Naturalistic+Visual-Spatial' => [
+      "You'd be good at sketching landscapes that reflect both nature and your inner life.",
+      "You'd thrive at creating art projects outdoors that spark reflection.",
+      "You'd shine at helping others see themselves in the beauty of nature through visuals."
+    ],
+    'Intrapersonal+Bodily-Kinesthetic+Logical-Mathematical' => [
+      "You'd be good at mastering physical routines through step-by-step logic.",
+      "You'd thrive at designing group challenges that combine movement with problem-solving.",
+      "You'd shine at analyzing performance to improve physical skills."
+    ],
+    'Intrapersonal+Bodily-Kinesthetic+Linguistic' => [
+      "You'd be good at writing about personal experiences with sports or movement.",
+      "You'd thrive at acting or performing in ways that communicate your inner world.",
+      "You'd shine at explaining physical techniques with clarity and self-awareness."
+    ],
+    'Intrapersonal+Bodily-Kinesthetic+Musical' => [
+      "You'd be good at expressing your inner life through dance or rhythm.",
+      "You'd thrive at creating movement routines set to music.",
+      "You'd shine at leading group exercises that combine fitness and reflection."
+    ],
+    'Intrapersonal+Bodily-Kinesthetic+Visual-Spatial' => [
+      "You'd be good at choreographing movements that tell a personal story.",
+      "You'd thrive at designing physical performances that are visually striking.",
+      "You'd shine at helping others connect body, image, and self-expression."
+    ],
+    'Intrapersonal+Logical-Mathematical+Linguistic' => [
+      "You'd be good at writing essays that use logic to explore personal ideas.",
+      "You'd thrive at analyzing your own reasoning and expressing it clearly.",
+      "You'd shine at teaching others through structured arguments rooted in self-awareness."
+    ],
+    'Intrapersonal+Logical-Mathematical+Musical' => [
+      "You'd be good at finding mathematical patterns in your personal creative process.",
+      "You'd thrive at composing music that reflects both structure and emotion.",
+      "You'd shine at explaining how rhythm mirrors your thought process."
+    ],
+    'Intrapersonal+Logical-Mathematical+Visual-Spatial' => [
+      "You'd be good at designing diagrams that map your personal growth.",
+      "You'd thrive at building systems that visually represent logical steps.",
+      "You'd shine at using charts to show progress toward your goals."
+    ],
+    'Intrapersonal+Linguistic+Musical' => [
+      "You'd be good at writing lyrics that express deep self-awareness.",
+      "You'd thrive at combining storytelling and music to process personal experiences.",
+      "You'd shine at helping groups reflect through songs you create."
+    ],
+    'Intrapersonal+Linguistic+Visual-Spatial' => [
+      "You'd be good at writing and illustrating personal stories.",
+      "You'd thrive at designing presentations that combine words and images to inspire reflection.",
+      "You'd shine at leading projects that blend writing with visual expression."
+    ],
+    'Intrapersonal+Musical+Visual-Spatial' => [
+      "You'd be good at creating art projects that blend sound and imagery.",
+      "You'd thrive at composing pieces inspired by visual symbols.",
+      "You'd shine at helping others feel both music and visuals in new ways."
+    ],
+    'Interpersonal+Naturalistic+Bodily-Kinesthetic' => [
+      "You'd be good at organizing outdoor team games that require both strategy and movement.",
+      "You'd thrive at leading physical activities in natural environments.",
+      "You'd shine at building group trust through outdoor adventures."
+    ],
+    'Interpersonal+Naturalistic+Logical-Mathematical' => [
+      "You'd be good at leading a team in solving nature-based problems, like designing a sustainable project.",
+      "You'd thrive at guiding groups to notice patterns in the environment.",
+      "You'd shine at helping people connect data with real-world teamwork."
+    ],
+    'Interpersonal+Naturalistic+Linguistic' => [
+      "You'd be good at telling stories about nature that bring people together.",
+      "You'd thrive at leading group reflections outdoors with words and conversation.",
+      "You'd shine at teaching others about the environment in ways that inspire action."
+    ],
+    'Interpersonal+Naturalistic+Musical' => [
+      "You'd be good at organizing outdoor events with music to bring people together.",
+      "You'd thrive at composing songs that celebrate the natural world.",
+      "You'd shine at leading rhythm-based activities in nature."
+    ],
+    'Interpersonal+Naturalistic+Visual-Spatial' => [
+      "You'd be good at leading a group mural that celebrates nature.",
+      "You'd thrive at designing outdoor spaces that help people connect with each other.",
+      "You'd shine at creating visual projects that combine environment and community."
+    ],
+    'Interpersonal+Bodily-Kinesthetic+Logical-Mathematical' => [
+      "You'd be good at designing physical team challenges that require logical problem-solving.",
+      "You'd thrive at leading escape-room style games for groups.",
+      "You'd shine at guiding others through puzzles that mix movement and strategy."
+    ],
+    'Interpersonal+Bodily-Kinesthetic+Linguistic' => [
+      "You'd be good at leading group drama performances that explore relationships.",
+      "You'd thrive at acting in plays that help people reflect on community.",
+      "You'd shine at coaching public speaking with gestures and body awareness."
+    ],
+    'Interpersonal+Bodily-Kinesthetic+Musical' => [
+      "You'd be good at choreographing dances that groups perform together.",
+      "You'd thrive at teaching rhythm-based team games.",
+      "You'd shine at blending movement and music to bring groups closer."
+    ],
+    'Interpersonal+Bodily-Kinesthetic+Visual-Spatial' => [
+      "You'd be good at designing group art projects that involve performance.",
+      "You'd thrive at creating dramatic performances with sets and visuals.",
+      "You'd shine at leading workshops that combine movement and design."
+    ],
+    'Interpersonal+Logical-Mathematical+Linguistic' => [
+      "You'd be good at leading debates where arguments are backed by logic and respect.",
+      "You'd thrive at explaining complex ideas in ways groups understand.",
+      "You'd shine at mediating conflicts using both reason and words."
+    ],
+    'Interpersonal+Logical-Mathematical+Musical' => [
+      "You'd be good at organizing music ensembles with structured roles.",
+      "You'd thrive at helping groups practice rhythm with precision.",
+      "You'd shine at showing how math and music unite teams."
+    ],
+    'Interpersonal+Logical-Mathematical+Visual-Spatial' => [
+      "You'd be good at leading design teams that plan projects step by step.",
+      "You'd thrive at showing groups diagrams that simplify big ideas.",
+      "You'd shine at balancing creativity and logic in teamwork."
+    ],
+    'Interpersonal+Linguistic+Musical' => [
+      "You'd be good at helping groups write songs that tell their shared story.",
+      "You'd thrive at leading chants or performances that unite people.",
+      "You'd shine at storytelling through rhythm and sound."
+    ],
+    'Interpersonal+Linguistic+Visual-Spatial' => [
+      "You'd be good at helping groups create posters or campaigns that share a message.",
+      "You'd thrive at designing events that blend words and visuals.",
+      "You'd shine at leading collaborative art with a powerful story."
+    ],
+    'Interpersonal+Musical+Visual-Spatial' => [
+      "You'd be good at creating performances that mix rhythm and imagery.",
+      "You'd thrive at designing group projects like music videos or shows.",
+      "You'd shine at helping others express stories through sound and visuals."
+    ],
+    'Naturalistic+Bodily-Kinesthetic+Logical-Mathematical' => [
+      "You'd be good at designing experiments outdoors that require teamwork.",
+      "You'd thrive at leading survival or nature-based challenges.",
+      "You'd shine at mixing data and movement in the environment."
+    ],
+    'Naturalistic+Bodily-Kinesthetic+Linguistic' => [
+      "You'd be good at acting in plays or skits about nature and environment.",
+      "You'd thrive at guiding outdoor storytelling through movement.",
+      "You'd shine at sharing environmental lessons with drama."
+    ],
+    'Naturalistic+Bodily-Kinesthetic+Musical' => [
+      "You'd be good at composing music inspired by outdoor adventures.",
+      "You'd thrive at leading rhythm-based group activities outdoors.",
+      "You'd shine at celebrating nature through sound and movement."
+    ],
+    'Naturalistic+Bodily-Kinesthetic+Visual-Spatial' => [
+      "You'd be good at creating sculptures or installations from natural materials.",
+      "You'd thrive at guiding outdoor art projects with teams.",
+      "You'd shine at blending movement, space, and the environment."
+    ],
+    'Naturalistic+Logical-Mathematical+Linguistic' => [
+      "You'd be good at writing reports or stories based on environmental data.",
+      "You'd thrive at sharing scientific ideas in simple words.",
+      "You'd shine at persuading people with both evidence and passion for nature."
+    ],
+    'Naturalistic+Logical-Mathematical+Musical' => [
+      "You'd be good at finding rhythm in environmental patterns.",
+      "You'd thrive at creating songs that explain natural cycles.",
+      "You'd shine at leading groups in celebrating the math of nature with music."
+    ],
+    'Naturalistic+Logical-Mathematical+Visual-Spatial' => [
+      "You'd be good at creating infographics that explain ecosystems.",
+      "You'd thrive at mapping natural systems for others.",
+      "You'd shine at blending data and visuals to inspire care for the planet."
+    ],
+    'Naturalistic+Linguistic+Musical' => [
+      "You'd be good at writing songs about the beauty of nature.",
+      "You'd thrive at performing pieces that inspire people to care for the environment.",
+      "You'd shine at leading creative projects that combine words, sound, and the outdoors."
+    ],
+    'Naturalistic+Linguistic+Visual-Spatial' => [
+      "You'd be good at creating children's books about the environment with words and illustrations.",
+      "You'd thrive at teaching through posters or campaigns about nature.",
+      "You'd shine at storytelling that mixes writing and visuals outdoors."
+    ],
+    'Naturalistic+Musical+Visual-Spatial' => [
+      "You'd be good at composing soundtracks inspired by landscapes.",
+      "You'd thrive at designing shows or videos that pair nature and music.",
+      "You'd shine at leading projects where sound and visuals bring the outdoors to life."
+    ],
+    'Bodily-Kinesthetic+Logical-Mathematical+Linguistic' => [
+      "You'd be good at explaining sports strategies with clear logic and words.",
+      "You'd thrive at writing guides for physical training routines.",
+      "You'd shine at teaching complex movement through step-by-step explanation."
+    ],
+    'Bodily-Kinesthetic+Logical-Mathematical+Musical' => [
+      "You'd be good at creating dance routines based on mathematical patterns.",
+      "You'd thrive at analyzing rhythm in sports or performance.",
+      "You'd shine at helping groups coordinate timing and movement."
+    ],
+    'Bodily-Kinesthetic+Logical-Mathematical+Visual-Spatial' => [
+      "You'd be good at building obstacle courses that require teamwork.",
+      "You'd thrive at guiding others through puzzle-like challenges.",
+      "You'd shine at blending design, logic, and physical skills."
+    ],
+    'Bodily-Kinesthetic+Linguistic+Musical' => [
+      "You'd be good at choreographing performances that tell a story.",
+      "You'd thrive at using rhythm to enhance acting or movement.",
+      "You'd shine at guiding groups to express emotions with body and sound."
+    ],
+    'Bodily-Kinesthetic+Linguistic+Visual-Spatial' => [
+      "You'd be good at performing plays with strong movement and staging.",
+      "You'd thrive at directing shows where words, movement, and visuals combine.",
+      "You'd shine at teaching expression through drama and design."
+    ],
+    'Bodily-Kinesthetic+Musical+Visual-Spatial' => [
+      "You'd be good at designing performances that combine dance and visuals.",
+      "You'd thrive at choreographing group routines with powerful staging.",
+      "You'd shine at creating shows where movement and imagery tell a story."
+    ],
+    'Logical-Mathematical+Linguistic+Musical' => [
+      "You'd be good at writing songs that explain big ideas clearly.",
+      "You'd thrive at teaching math or science concepts through rhythm.",
+      "You'd shine at showing how structure and creativity work together."
+    ],
+    'Logical-Mathematical+Linguistic+Visual-Spatial' => [
+      "You'd be good at creating charts and stories that explain complex ideas.",
+      "You'd thrive at designing visual reports that persuade with logic.",
+      "You'd shine at teaching others with both evidence and images."
+    ],
+    'Logical-Mathematical+Musical+Visual-Spatial' => [
+      "You'd be good at composing music that mirrors geometric patterns.",
+      "You'd thrive at designing light or sound shows with mathematical precision.",
+      "You'd shine at blending math, rhythm, and visuals into one project."
+    ],
+    'Linguistic+Musical+Visual-Spatial' => [
+      "You'd be good at creating illustrated lyrics or music videos.",
+      "You'd thrive at designing group projects that combine song and image.",
+      "You'd shine at storytelling through both visuals and sound."
+    ]
+  ],
+  'graduate' => [
+    // Using same skills for graduates as they are universally applicable
+    'Intrapersonal+Interpersonal+Naturalistic' => [
+      "You'd be good at leading a group hike up a mountain, pausing along the way to reflect and share insights.",
+      "You'd thrive at helping people connect their inner growth with the beauty of nature.",
+      "You'd shine at designing an outdoor challenge that builds teamwork and personal reflection."
+    ],
+    'Intrapersonal+Interpersonal+Bodily-Kinesthetic' => [
+      "You'd be good at coaching a team through a physical challenge while encouraging honesty and trust.",
+      "You'd thrive at helping a sports group reflect on their teamwork after practice.",
+      "You'd shine at using movement to help groups bond and share experiences."
+    ],
+    'Intrapersonal+Interpersonal+Logical-Mathematical' => [
+      "You'd be good at guiding a group in solving problems while making sure everyone's voice is heard.",
+      "You'd thrive at combining emotional insight with logical thinking in group projects.",
+      "You'd shine at balancing people's needs with fair and structured decision-making."
+    ],
+    'Intrapersonal+Interpersonal+Linguistic' => [
+      "You'd be good at leading group discussions where people share stories about themselves.",
+      "You'd thrive at helping a group write something meaningful together, like a poem or pledge.",
+      "You'd shine at weaving together different voices into one shared message."
+    ],
+    'Intrapersonal+Interpersonal+Musical' => [
+      "You'd be good at helping a group write and perform a song that reflects their shared experiences.",
+      "You'd thrive at encouraging people to express their feelings through rhythm or music.",
+      "You'd shine at using music to build group identity and reflection."
+    ],
+    'Intrapersonal+Interpersonal+Visual-Spatial' => [
+      "You'd be good at guiding a group to create a mural or vision board that reflects shared values.",
+      "You'd thrive at helping people use symbols and images to express what they feel inside.",
+      "You'd shine at leading collaborative art projects that spark conversation and growth."
+    ],
+    'Intrapersonal+Naturalistic+Bodily-Kinesthetic' => [
+      "You'd be good at planning and leading outdoor challenges that require teamwork and self-reflection.",
+      "You'd thrive at guiding others in using their bodies to connect with nature and personal growth.",
+      "You'd shine at combining physical activity with quiet reflection outdoors."
+    ],
+    'Intrapersonal+Naturalistic+Logical-Mathematical' => [
+      "You'd be good at tracking patterns in nature and reflecting on what they teach about life.",
+      "You'd thrive at analyzing natural systems and drawing personal lessons from them.",
+      "You'd shine at helping others see the logic in how nature and self-discovery connect."
+    ],
+    'Intrapersonal+Naturalistic+Linguistic' => [
+      "You'd be good at journaling about outdoor experiences and sharing them with others.",
+      "You'd thrive at writing stories or essays that connect nature and personal reflection.",
+      "You'd shine at leading discussions that combine environmental awareness with self-growth."
+    ],
+    'Intrapersonal+Naturalistic+Musical' => [
+      "You'd be good at composing music inspired by your personal experiences in nature.",
+      "You'd thrive at creating rhythms or melodies that reflect the natural world and inner emotions.",
+      "You'd shine at leading group activities that connect music, nature, and reflection."
+    ],
+    'Intrapersonal+Naturalistic+Visual-Spatial' => [
+      "You'd be good at sketching landscapes that reflect both nature and your inner life.",
+      "You'd thrive at creating art projects outdoors that spark reflection.",
+      "You'd shine at helping others see themselves in the beauty of nature through visuals."
+    ],
+    'Intrapersonal+Bodily-Kinesthetic+Logical-Mathematical' => [
+      "You'd be good at mastering physical routines through step-by-step logic.",
+      "You'd thrive at designing group challenges that combine movement with problem-solving.",
+      "You'd shine at analyzing performance to improve physical skills."
+    ],
+    'Intrapersonal+Bodily-Kinesthetic+Linguistic' => [
+      "You'd be good at writing about personal experiences with sports or movement.",
+      "You'd thrive at acting or performing in ways that communicate your inner world.",
+      "You'd shine at explaining physical techniques with clarity and self-awareness."
+    ],
+    'Intrapersonal+Bodily-Kinesthetic+Musical' => [
+      "You'd be good at expressing your inner life through dance or rhythm.",
+      "You'd thrive at creating movement routines set to music.",
+      "You'd shine at leading group exercises that combine fitness and reflection."
+    ],
+    'Intrapersonal+Bodily-Kinesthetic+Visual-Spatial' => [
+      "You'd be good at choreographing movements that tell a personal story.",
+      "You'd thrive at designing physical performances that are visually striking.",
+      "You'd shine at helping others connect body, image, and self-expression."
+    ],
+    'Intrapersonal+Logical-Mathematical+Linguistic' => [
+      "You'd be good at writing essays that use logic to explore personal ideas.",
+      "You'd thrive at analyzing your own reasoning and expressing it clearly.",
+      "You'd shine at teaching others through structured arguments rooted in self-awareness."
+    ],
+    'Intrapersonal+Logical-Mathematical+Musical' => [
+      "You'd be good at finding mathematical patterns in your personal creative process.",
+      "You'd thrive at composing music that reflects both structure and emotion.",
+      "You'd shine at explaining how rhythm mirrors your thought process."
+    ],
+    'Intrapersonal+Logical-Mathematical+Visual-Spatial' => [
+      "You'd be good at designing diagrams that map your personal growth.",
+      "You'd thrive at building systems that visually represent logical steps.",
+      "You'd shine at using charts to show progress toward your goals."
+    ],
+    'Intrapersonal+Linguistic+Musical' => [
+      "You'd be good at writing lyrics that express deep self-awareness.",
+      "You'd thrive at combining storytelling and music to process personal experiences.",
+      "You'd shine at helping groups reflect through songs you create."
+    ],
+    'Intrapersonal+Linguistic+Visual-Spatial' => [
+      "You'd be good at writing and illustrating personal stories.",
+      "You'd thrive at designing presentations that combine words and images to inspire reflection.",
+      "You'd shine at leading projects that blend writing with visual expression."
+    ],
+    'Intrapersonal+Musical+Visual-Spatial' => [
+      "You'd be good at creating art projects that blend sound and imagery.",
+      "You'd thrive at composing pieces inspired by visual symbols.",
+      "You'd shine at helping others feel both music and visuals in new ways."
+    ],
+    'Interpersonal+Naturalistic+Bodily-Kinesthetic' => [
+      "You'd be good at organizing outdoor team games that require both strategy and movement.",
+      "You'd thrive at leading physical activities in natural environments.",
+      "You'd shine at building group trust through outdoor adventures."
+    ],
+    'Interpersonal+Naturalistic+Logical-Mathematical' => [
+      "You'd be good at leading a team in solving nature-based problems, like designing a sustainable project.",
+      "You'd thrive at guiding groups to notice patterns in the environment.",
+      "You'd shine at helping people connect data with real-world teamwork."
+    ],
+    'Interpersonal+Naturalistic+Linguistic' => [
+      "You'd be good at telling stories about nature that bring people together.",
+      "You'd thrive at leading group reflections outdoors with words and conversation.",
+      "You'd shine at teaching others about the environment in ways that inspire action."
+    ],
+    'Interpersonal+Naturalistic+Musical' => [
+      "You'd be good at organizing outdoor events with music to bring people together.",
+      "You'd thrive at composing songs that celebrate the natural world.",
+      "You'd shine at leading rhythm-based activities in nature."
+    ],
+    'Interpersonal+Naturalistic+Visual-Spatial' => [
+      "You'd be good at leading a group mural that celebrates nature.",
+      "You'd thrive at designing outdoor spaces that help people connect with each other.",
+      "You'd shine at creating visual projects that combine environment and community."
+    ],
+    'Interpersonal+Bodily-Kinesthetic+Logical-Mathematical' => [
+      "You'd be good at designing physical team challenges that require logical problem-solving.",
+      "You'd thrive at leading escape-room style games for groups.",
+      "You'd shine at guiding others through puzzles that mix movement and strategy."
+    ],
+    'Interpersonal+Bodily-Kinesthetic+Linguistic' => [
+      "You'd be good at leading group drama performances that explore relationships.",
+      "You'd thrive at acting in plays that help people reflect on community.",
+      "You'd shine at coaching public speaking with gestures and body awareness."
+    ],
+    'Interpersonal+Bodily-Kinesthetic+Musical' => [
+      "You'd be good at choreographing dances that groups perform together.",
+      "You'd thrive at teaching rhythm-based team games.",
+      "You'd shine at blending movement and music to bring groups closer."
+    ],
+    'Interpersonal+Bodily-Kinesthetic+Visual-Spatial' => [
+      "You'd be good at designing group art projects that involve performance.",
+      "You'd thrive at creating dramatic performances with sets and visuals.",
+      "You'd shine at leading workshops that combine movement and design."
+    ],
+    'Interpersonal+Logical-Mathematical+Linguistic' => [
+      "You'd be good at leading debates where arguments are backed by logic and respect.",
+      "You'd thrive at explaining complex ideas in ways groups understand.",
+      "You'd shine at mediating conflicts using both reason and words."
+    ],
+    'Interpersonal+Logical-Mathematical+Musical' => [
+      "You'd be good at organizing music ensembles with structured roles.",
+      "You'd thrive at helping groups practice rhythm with precision.",
+      "You'd shine at showing how math and music unite teams."
+    ],
+    'Interpersonal+Logical-Mathematical+Visual-Spatial' => [
+      "You'd be good at leading design teams that plan projects step by step.",
+      "You'd thrive at showing groups diagrams that simplify big ideas.",
+      "You'd shine at balancing creativity and logic in teamwork."
+    ],
+    'Interpersonal+Linguistic+Musical' => [
+      "You'd be good at helping groups write songs that tell their shared story.",
+      "You'd thrive at leading chants or performances that unite people.",
+      "You'd shine at storytelling through rhythm and sound."
+    ],
+    'Interpersonal+Linguistic+Visual-Spatial' => [
+      "You'd be good at helping groups create posters or campaigns that share a message.",
+      "You'd thrive at designing events that blend words and visuals.",
+      "You'd shine at leading collaborative art with a powerful story."
+    ],
+    'Interpersonal+Musical+Visual-Spatial' => [
+      "You'd be good at creating performances that mix rhythm and imagery.",
+      "You'd thrive at designing group projects like music videos or shows.",
+      "You'd shine at helping others express stories through sound and visuals."
+    ],
+    'Naturalistic+Bodily-Kinesthetic+Logical-Mathematical' => [
+      "You'd be good at designing experiments outdoors that require teamwork.",
+      "You'd thrive at leading survival or nature-based challenges.",
+      "You'd shine at mixing data and movement in the environment."
+    ],
+    'Naturalistic+Bodily-Kinesthetic+Linguistic' => [
+      "You'd be good at acting in plays or skits about nature and environment.",
+      "You'd thrive at guiding outdoor storytelling through movement.",
+      "You'd shine at sharing environmental lessons with drama."
+    ],
+    'Naturalistic+Bodily-Kinesthetic+Musical' => [
+      "You'd be good at composing music inspired by outdoor adventures.",
+      "You'd thrive at leading rhythm-based group activities outdoors.",
+      "You'd shine at celebrating nature through sound and movement."
+    ],
+    'Naturalistic+Bodily-Kinesthetic+Visual-Spatial' => [
+      "You'd be good at creating sculptures or installations from natural materials.",
+      "You'd thrive at guiding outdoor art projects with teams.",
+      "You'd shine at blending movement, space, and the environment."
+    ],
+    'Naturalistic+Logical-Mathematical+Linguistic' => [
+      "You'd be good at writing reports or stories based on environmental data.",
+      "You'd thrive at sharing scientific ideas in simple words.",
+      "You'd shine at persuading people with both evidence and passion for nature."
+    ],
+    'Naturalistic+Logical-Mathematical+Musical' => [
+      "You'd be good at finding rhythm in environmental patterns.",
+      "You'd thrive at creating songs that explain natural cycles.",
+      "You'd shine at leading groups in celebrating the math of nature with music."
+    ],
+    'Naturalistic+Logical-Mathematical+Visual-Spatial' => [
+      "You'd be good at creating infographics that explain ecosystems.",
+      "You'd thrive at mapping natural systems for others.",
+      "You'd shine at blending data and visuals to inspire care for the planet."
+    ],
+    'Naturalistic+Linguistic+Musical' => [
+      "You'd be good at writing songs about the beauty of nature.",
+      "You'd thrive at performing pieces that inspire people to care for the environment.",
+      "You'd shine at leading creative projects that combine words, sound, and the outdoors."
+    ],
+    'Naturalistic+Linguistic+Visual-Spatial' => [
+      "You'd be good at creating children's books about the environment with words and illustrations.",
+      "You'd thrive at teaching through posters or campaigns about nature.",
+      "You'd shine at storytelling that mixes writing and visuals outdoors."
+    ],
+    'Naturalistic+Musical+Visual-Spatial' => [
+      "You'd be good at composing soundtracks inspired by landscapes.",
+      "You'd thrive at designing shows or videos that pair nature and music.",
+      "You'd shine at leading projects where sound and visuals bring the outdoors to life."
+    ],
+    'Bodily-Kinesthetic+Logical-Mathematical+Linguistic' => [
+      "You'd be good at explaining sports strategies with clear logic and words.",
+      "You'd thrive at writing guides for physical training routines.",
+      "You'd shine at teaching complex movement through step-by-step explanation."
+    ],
+    'Bodily-Kinesthetic+Logical-Mathematical+Musical' => [
+      "You'd be good at creating dance routines based on mathematical patterns.",
+      "You'd thrive at analyzing rhythm in sports or performance.",
+      "You'd shine at helping groups coordinate timing and movement."
+    ],
+    'Bodily-Kinesthetic+Logical-Mathematical+Visual-Spatial' => [
+      "You'd be good at building obstacle courses that require teamwork.",
+      "You'd thrive at guiding others through puzzle-like challenges.",
+      "You'd shine at blending design, logic, and physical skills."
+    ],
+    'Bodily-Kinesthetic+Linguistic+Musical' => [
+      "You'd be good at choreographing performances that tell a story.",
+      "You'd thrive at using rhythm to enhance acting or movement.",
+      "You'd shine at guiding groups to express emotions with body and sound."
+    ],
+    'Bodily-Kinesthetic+Linguistic+Visual-Spatial' => [
+      "You'd be good at performing plays with strong movement and staging.",
+      "You'd thrive at directing shows where words, movement, and visuals combine.",
+      "You'd shine at teaching expression through drama and design."
+    ],
+    'Bodily-Kinesthetic+Musical+Visual-Spatial' => [
+      "You'd be good at designing performances that combine dance and visuals.",
+      "You'd thrive at choreographing group routines with powerful staging.",
+      "You'd shine at creating shows where movement and imagery tell a story."
+    ],
+    'Logical-Mathematical+Linguistic+Musical' => [
+      "You'd be good at writing songs that explain big ideas clearly.",
+      "You'd thrive at teaching math or science concepts through rhythm.",
+      "You'd shine at showing how structure and creativity work together."
+    ],
+    'Logical-Mathematical+Linguistic+Visual-Spatial' => [
+      "You'd be good at creating charts and stories that explain complex ideas.",
+      "You'd thrive at designing visual reports that persuade with logic.",
+      "You'd shine at teaching others with both evidence and images."
+    ],
+    'Logical-Mathematical+Musical+Visual-Spatial' => [
+      "You'd be good at composing music that mirrors geometric patterns.",
+      "You'd thrive at designing light or sound shows with mathematical precision.",
+      "You'd shine at blending math, rhythm, and visuals into one project."
+    ],
+    'Linguistic+Musical+Visual-Spatial' => [
+      "You'd be good at creating illustrated lyrics or music videos.",
+      "You'd thrive at designing group projects that combine song and image.",
+      "You'd shine at storytelling through both visuals and sound."
+    ]
+  ]
+];

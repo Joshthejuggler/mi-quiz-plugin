@@ -1,6 +1,6 @@
 (function(){
   const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, cdtQuizUrl } = miq_quiz_data;
-  const { cats: CATS, q1: Q1, q2: Q2, career: CAREER, lev: LEV, grow: GROW, likert: LIKERT, cdtPrompts } = data;
+  const { cats: CATS, q1: Q1, q2: Q2, career: CAREER, lev: LEV, grow: GROW, skills: SKILLS, likert: LIKERT, cdtPrompts } = data;
   const isLoggedIn = !!currentUser;
 
   const $id=(s)=>document.getElementById(s);
@@ -242,6 +242,27 @@
     ];
   }
 
+  // Helper function to create skills key from top 3 intelligences
+  function createSkillsKey(intelligences) {
+    if (!intelligences || intelligences.length < 3) return null;
+    
+    // Map the slugs to the proper names for skills key
+    const nameMap = {
+      'logical-mathematical': 'Logical-Mathematical',
+      'linguistic': 'Linguistic',
+      'spatial': 'Visual-Spatial',
+      'bodily-kinesthetic': 'Bodily-Kinesthetic',
+      'musical': 'Musical',
+      'interpersonal': 'Interpersonal',
+      'intrapersonal': 'Intrapersonal',
+      'naturalistic': 'Naturalistic'
+    };
+    
+    // Sort the intelligences alphabetically to match the skills data structure
+    const sortedNames = intelligences.map(slug => nameMap[slug] || slug).sort();
+    return sortedNames.join('+');
+  }
+
   function showResults(p2Steps){
     detailed={};
     const src = Q2[age] || Q2['adult'] || {};
@@ -314,39 +335,39 @@
     });
     top5Html += `</div></div>`;
 
+    // Generate amalgamated career/hobby suggestions
     let careerHtml = `<div class="mi-results-section">
-      <h2 class="mi-section-title">🚀 Career & Hobby Suggestions</h2>
+      <h2 class="mi-section-title">🚀 Potential Applications</h2>
       <div class="mi-career-grid">`;
     top3.forEach(sl=>{
       const s = CAREER?.[age]?.[sl]; if(!s) return;
       const slugClass = sl.replace('bodily-','').split('-')[0];
+      // Amalgamate careers and hobbies into one list
+      const allSuggestions = [...(s.careers||[]), ...(s.hobbies||[])];
       careerHtml += `<div class="mi-career-card">
         <div class="mi-career-card-header" style="background-color: var(--mi-color-${slugClass});">
           <h4>For your ${CATS[sl]||sl}</h4>
         </div>
         <div class="mi-career-card-body">
-          <p><strong>Potential Careers:</strong></p>
-          <ul>${(s.careers||[]).map(c=>`<li>${c}</li>`).join('')}</ul>
-          <p><strong>Related Hobbies:</strong></p>
-          <ul>${(s.hobbies||[]).map(h=>`<li>${h}</li>`).join('')}</ul>
+          <ul>${allSuggestions.map(c=>`<li>${c}</li>`).join('')}</ul>
         </div>
       </div>`;
     });
     careerHtml += `</div></div>`;
 
-    let growthHtml = `<div class="mi-results-section bg-secondary">
-      <h2 class="mi-section-title">⚡️ Your Areas for Growth</h2>
-      <div class="mi-strengths-grid">`;
-    bottom3.forEach(it=>{
-      const tips = (GROW?.[age]?.[it.slug]?.[it.name]) || fallbackGrow(it.slug, it.name);
-      growthHtml += `<div class="mi-strength-card">
-        <h4>${it.name}</h4>
-        <p><em>Part of ${it.parent}</em></p>
-        <strong class="growth-title">How to grow:</strong>
-        <ul class="growth-list">${tips.map(t=>`<li>${t}</li>`).join('')}</ul>
+    // Generate potential skills based on intelligence combination
+    let skillsHtml = '';
+    const skillsKey = createSkillsKey(top3);
+    const potentialSkills = SKILLS?.[age]?.[skillsKey];
+    if (potentialSkills && potentialSkills.length > 0) {
+      skillsHtml = `<div class="mi-results-section bg-secondary">
+        <h2 class="mi-section-title">✨ Your Unique Potential</h2>
+        <p class="mi-skills-intro">Based on your unique combination of ${top3.map(sl=>CATS[sl]||sl).join(', ')}, here are some things you might excel at:</p>
+        <div class="mi-skills-grid">
+          ${potentialSkills.map(skill => `<div class="mi-skill-card">${skill}</div>`).join('')}
+        </div>
       </div>`;
-    });
-    growthHtml += `</div></div>`;
+    }
 
     // Simplified detailed results - no accordions
     let detailedHtml = `<div class="mi-results-section">
@@ -363,7 +384,7 @@
     });
     detailedHtml += `</div>`;
     
-    return titleHtml + detailedHtml + top5Html + careerHtml + growthHtml;
+    return titleHtml + detailedHtml + top5Html + careerHtml + skillsHtml;
   }
 
   function renderResults() {

@@ -327,6 +327,34 @@
 .mi-career-card-body p { font-size: 0.9em; margin: 0 0 0.5em 0; }
 .mi-career-card-body ul { margin: 0 0 1em 1.2em; padding: 0; font-size: 0.9em; }
 .mi-career-card-body li { margin-bottom: 0.25em; }
+
+/* Skills Section */
+.mi-skills-intro {
+  text-align: center;
+  font-size: 1.1em;
+  margin-bottom: 1.5em;
+  color: #4a5568;
+}
+.mi-skills-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1em;
+}
+.mi-skill-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.2em;
+  margin-bottom: 1em;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transition: transform 0.2s;
+  font-size: 0.95em;
+  line-height: 1.5;
+}
+.mi-skill-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
 .accordion-content-wrapper {
   padding: 1em 0;
 }
