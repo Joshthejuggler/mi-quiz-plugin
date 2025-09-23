@@ -63,29 +63,35 @@
 .lab-btn {
     display: inline-flex;
     align-items: center;
-    padding: 12px 24px;
+    justify-content: center;
+    padding: 0.7rem 1.25rem;
     border: none;
     border-radius: var(--lab-radius);
-    font-size: 14px;
+    font-size: 0.9rem;
     font-weight: 500;
     text-decoration: none;
     cursor: pointer;
     transition: all 0.2s ease;
-    gap: 8px;
+    gap: 0.5rem;
+    position: relative;
+    overflow: hidden;
 }
 
 .lab-btn-primary {
     background: var(--lab-primary);
     color: white;
+    box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
 }
 
 .lab-btn-primary:hover {
     background: var(--lab-primary-hover);
     color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(59, 130, 246, 0.25);
 }
 
 .lab-btn-secondary {
-    background: var(--lab-surface);
+    background: white;
     color: var(--lab-text);
     border: 1px solid var(--lab-border);
 }
@@ -93,6 +99,8 @@
 .lab-btn-secondary:hover {
     background: var(--lab-background);
     color: var(--lab-text);
+    transform: translateY(-1px);
+    border-color: var(--lab-text-muted);
 }
 
 .lab-btn:disabled {
@@ -1930,6 +1938,9 @@ body.lab-mode-active {
     box-shadow: var(--lab-shadow);
     overflow: hidden;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
 }
 
 .experiment-card:hover {
@@ -1938,29 +1949,32 @@ body.lab-mode-active {
 }
 
 .experiment-header {
-    padding: 20px 20px 16px;
+    padding: 1.25rem;
     border-bottom: 1px solid var(--lab-border);
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
+    gap: 1rem;
 }
 
 .experiment-title {
     margin: 0;
-    font-size: 18px;
+    font-size: 1.25rem;
     color: var(--lab-text);
-    line-height: 1.3;
+    line-height: 1.4;
+    font-weight: 600;
     flex: 1;
-    margin-right: 12px;
 }
 
 /* ===== Archetype Badges ===== */
 .archetype-badge {
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 12px;
+    padding: 0.35rem 1rem;
+    border-radius: 99px;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
 }
 
 .archetype-discover {
@@ -1980,58 +1994,103 @@ body.lab-mode-active {
 
 /* ===== Experiment Body ===== */
 .experiment-body {
-    padding: 20px;
+    padding: 1.5rem;
+    flex: 1;
 }
 
 .experiment-rationale {
     color: var(--lab-text-muted);
-    margin-bottom: 20px;
+    margin-bottom: 1.25rem;
     line-height: 1.5;
 }
 
-.experiment-steps {
-    margin-bottom: 20px;
+/* Section Headers for Experiment Cards */
+.experiment-description, 
+.experiment-connection {
+    margin-bottom: 1.25rem;
 }
 
+.experiment-description h4,
+.experiment-connection h4,
 .experiment-steps h4 {
-    margin: 0 0 12px 0;
-    font-size: 14px;
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
     font-weight: 600;
     color: var(--lab-text);
+    letter-spacing: 0.01em;
+}
+
+/* What You'll Do Section */
+.experiment-description .experiment-summary {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--lab-text);
+    margin: 0;
+    font-weight: 500;
+}
+
+/* Why This Fits You Section */
+.experiment-connection {
+    background: rgba(59, 130, 246, 0.06);
+    border-left: 3px solid var(--lab-primary);
+    padding: 0.9rem 1rem;
+    margin: 1.25rem 0;
+    border-radius: 0 var(--lab-radius) var(--lab-radius) 0;
+}
+
+.connection-text {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: var(--lab-text);
+    font-style: italic;
+}
+
+.experiment-steps {
+    margin: 1.5rem 0;
 }
 
 .experiment-steps ol {
-    margin: 0;
-    padding-left: 20px;
+    margin: 0.75rem 0 0 0;
+    padding-left: 1.5rem;
 }
 
 .experiment-steps li {
-    margin-bottom: 8px;
+    margin-bottom: 0.8rem;
     color: var(--lab-text);
-    line-height: 1.4;
+    line-height: 1.5;
+    padding-left: 0.5rem;
+}
+
+.experiment-steps li:last-child {
+    margin-bottom: 0;
 }
 
 /* ===== Experiment Meta ===== */
 .experiment-meta {
     border-top: 1px solid var(--lab-border);
-    padding-top: 16px;
+    padding-top: 1.25rem;
+    margin-top: 1.5rem;
 }
 
 .experiment-effort {
     display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
     flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
 }
 
 .effort-time,
 .effort-budget {
-    background: var(--lab-background);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.75rem;
+    border-radius: var(--lab-radius);
+    font-size: 0.85rem;
     color: var(--lab-text);
     font-weight: 500;
+    background: var(--lab-background);
 }
 
 /* ===== Risk Levels ===== */
@@ -2060,35 +2119,41 @@ body.lab-mode-active {
 
 /* ===== Success Criteria ===== */
 .success-criteria {
-    margin-bottom: 16px;
+    margin: 1.25rem 0 0.5rem 0;
 }
 
 .success-criteria h5 {
-    margin: 0 0 8px 0;
-    font-size: 14px;
+    margin: 0 0 0.75rem 0;
+    font-size: 0.9rem;
     font-weight: 600;
     color: var(--lab-text);
 }
 
 .success-criteria ul {
     margin: 0;
-    padding-left: 20px;
+    padding-left: 1.5rem;
 }
 
 .success-criteria li {
-    margin-bottom: 4px;
-    color: var(--lab-text-muted);
-    font-size: 14px;
-    line-height: 1.4;
+    margin-bottom: 0.6rem;
+    color: var(--lab-text);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.success-criteria li:last-child {
+    margin-bottom: 0;
 }
 
 /* ===== Experiment Actions ===== */
 .experiment-actions {
-    padding: 16px 20px;
+    padding: 1.25rem;
     background: var(--lab-background);
+    border-top: 1px solid var(--lab-border);
     display: flex;
-    gap: 12px;
+    gap: 0.75rem;
     justify-content: flex-end;
+    flex-wrap: wrap;
 }
 
 /* ===== Running Experiment ===== */
@@ -2488,9 +2553,37 @@ body.lab-mode-active {
     
     .experiment-actions {
         flex-direction: column;
+        padding: 1rem;
     }
     
     .lab-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .experiment-header,
+    .experiment-body {
+        padding: 1.25rem 1rem;
+    }
+    
+    .experiment-card {
+        margin-bottom: 1.25rem;
+    }
+    
+    .experiment-meta {
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+    }
+    
+    .experiment-effort {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: flex-start;
+    }
+    
+    .effort-time,
+    .effort-budget,
+    .risk-level {
         width: 100%;
         justify-content: center;
     }
