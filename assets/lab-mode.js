@@ -120,18 +120,120 @@
         },
         
         // Initialize typeform-style interface
-        initializeTypeform: function(topMI, bottomCDT) {
-            // Clear any existing state
-            this.typeformState = {
-                currentQuestionIndex: 0,
-                answers: {}, // Start with completely clean answers
-                topMI: topMI,
-                bottomCDT: bottomCDT,
-                questions: this.buildQuestionFlow(topMI, bottomCDT)
-            };
+        initializeTypeform: function(topMI, bottomCDT, clearExisting = false) {
+            // Try to restore previous state if available
+            const savedState = this.loadTypeformState();
             
-            console.log('Initializing typeform with clean state:', this.typeformState);
+            if (!clearExisting && savedState && savedState.topMI && savedState.bottomCDT) {
+                // Restore previous answers and saved progress, but ALWAYS start at welcome screen
+                this.typeformState = {
+                    currentQuestionIndex: 0, // Always start at welcome screen
+                    answers: savedState.answers || {}, // Restore saved answers
+                    topMI: topMI, // Update with current MI data in case it changed
+                    bottomCDT: bottomCDT, // Update with current CDT data
+                    questions: this.buildQuestionFlow(topMI, bottomCDT),
+                    // Store the saved progress separately for the resume functionality
+                    savedQuestionIndex: savedState.currentQuestionIndex || 0
+                };
+                console.log('Restored answers from previous session, starting at welcome screen');
+                console.log('Saved progress was at question:', savedState.currentQuestionIndex);
+            } else {
+                // Create fresh state
+                this.typeformState = {
+                    currentQuestionIndex: 0,
+                    answers: {},
+                    topMI: topMI,
+                    bottomCDT: bottomCDT,
+                    questions: this.buildQuestionFlow(topMI, bottomCDT),
+                    savedQuestionIndex: null
+                };
+                console.log('Initializing typeform with clean state:', this.typeformState);
+            }
+            
             this.renderTypeform();
+        },
+        
+        // Save typeform state to localStorage
+        saveTypeformState: function() {
+            if (this.typeformState) {
+                try {
+                    const stateToSave = {
+                        currentQuestionIndex: this.typeformState.currentQuestionIndex,
+                        answers: this.typeformState.answers,
+                        topMI: this.typeformState.topMI,
+                        bottomCDT: this.typeformState.bottomCDT,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('labModeTypeformState', JSON.stringify(stateToSave));
+                    console.log('Saved typeform state to localStorage');
+                } catch (error) {
+                    console.error('Failed to save typeform state:', error);
+                }
+            }
+        },
+        
+        // Load typeform state from localStorage
+        loadTypeformState: function() {
+            try {
+                const savedState = localStorage.getItem('labModeTypeformState');
+                if (savedState) {
+                    const parsedState = JSON.parse(savedState);
+                    
+                    // Check if state is not too old (7 days)
+                    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+                    if (parsedState.timestamp && (Date.now() - parsedState.timestamp) < maxAge) {
+                        console.log('Loaded typeform state from localStorage');
+                        return parsedState;
+                    } else {
+                        console.log('Saved state is too old, ignoring');
+                        this.clearTypeformState();
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load typeform state:', error);
+            }
+            return null;
+        },
+        
+        // Clear typeform state from localStorage
+        clearTypeformState: function() {
+            try {
+                localStorage.removeItem('labModeTypeformState');
+                console.log('Cleared typeform state from localStorage');
+            } catch (error) {
+                console.error('Failed to clear typeform state:', error);
+            }
+        },
+        
+        // Clear saved progress and restart with fresh state
+        clearAndRestart: function() {
+            // Clear saved state
+            this.clearTypeformState();
+            
+            // Reinitialize with clean state
+            const mi = this.profileData.mi_results || [];
+            const cdt = this.profileData.cdt_results || [];
+            const topMI = mi.slice(0, 3);
+            const bottomCDT = cdt.slice(-2);
+            
+            this.initializeTypeform(topMI, bottomCDT, true); // Force clear existing
+        },
+        
+        // Resume from saved progress (go to the saved question index)
+        resumeFromSavedProgress: function() {
+            if (this.typeformState.savedQuestionIndex && this.typeformState.savedQuestionIndex > 0) {
+                // Safety check - don't go past the last question
+                const maxIndex = this.typeformState.questions.length - 1;
+                const targetIndex = Math.min(this.typeformState.savedQuestionIndex, maxIndex);
+                
+                console.log('Resuming from saved progress at question:', targetIndex);
+                this.typeformState.currentQuestionIndex = targetIndex;
+                this.renderTypeform();
+            } else {
+                // No saved progress, just go to first real question
+                this.typeformState.currentQuestionIndex = 1;
+                this.renderTypeform();
+            }
         },
         
         // Build the question flow based on user data
@@ -362,10 +464,49 @@
         
         // Render welcome screen
         renderWelcomeScreen: function(question) {
+            const hasExistingAnswers = this.typeformState.answers && Object.keys(this.typeformState.answers).length > 0;
+            const savedQuestionIndex = this.typeformState.savedQuestionIndex;
+            
+            let progressMessage = '';
+            let clearButton = '';
+            let resumeButton = '';
+            
+            if (hasExistingAnswers && savedQuestionIndex > 0) {
+                const answeredCount = Object.keys(this.typeformState.answers).length;
+                const totalQuestions = this.typeformState.questions.length - 1; // Exclude welcome screen
+                
+                progressMessage = `
+                    <div class="saved-progress-indicator">
+                        <div class="progress-icon">💾</div>
+                        <div class="progress-info">
+                            <p><strong>Previous answers restored!</strong></p>
+                            <p class="progress-detail">${answeredCount} answers saved • You were on question ${savedQuestionIndex} of ${totalQuestions}</p>
+                        </div>
+                    </div>
+                `;
+                
+                clearButton = `
+                    <button class="lab-btn lab-btn-tertiary clear-progress-btn" onclick="LabModeApp.clearAndRestart()">
+                        🗑️ Start Fresh
+                    </button>
+                `;
+                
+                resumeButton = `
+                    <button class="lab-btn lab-btn-secondary resume-progress-btn" onclick="LabModeApp.resumeFromSavedProgress()">
+                        ▶️ Continue Where I Left Off
+                    </button>
+                `;
+            }
+            
             return `
                 <div class="lab-welcome-screen">
                     <h1>${question.title}</h1>
                     <p>${question.subtitle}</p>
+                    ${progressMessage}
+                    <div class="welcome-actions">
+                        ${resumeButton}
+                        ${clearButton}
+                    </div>
                 </div>
             `;
         },
@@ -525,7 +666,7 @@
         
         // Initialize current question (setup event listeners, etc.)
         initializeCurrentQuestion: function(question) {
-            // Set textarea value safely after DOM is ready
+            // Set values safely after DOM is ready
             setTimeout(() => {
                 if (question.type === 'textarea') {
                     const textarea = document.getElementById(question.id);
@@ -533,6 +674,47 @@
                         const currentValue = this.typeformState.answers[question.id] || '';
                         console.log('Setting textarea value for', question.id, ':', currentValue);
                         textarea.value = currentValue;
+                    }
+                } else if (question.type === 'multiple_input') {
+                    // Restore multiple input values
+                    question.inputs.forEach(input => {
+                        const inputElement = document.getElementById(input.id);
+                        if (inputElement) {
+                            const currentValue = this.typeformState.answers[input.id] || '';
+                            console.log('Setting input value for', input.id, ':', currentValue);
+                            inputElement.value = currentValue;
+                        }
+                    });
+                } else if (question.type === 'slider') {
+                    // Initialize slider with default value if no saved answer
+                    const sliderElement = document.getElementById(question.id);
+                    const sliderDisplay = document.getElementById(`slider-display-${question.id}`);
+                    if (sliderElement && sliderDisplay) {
+                        let currentValue = this.typeformState.answers[question.id];
+                        
+                        // If no saved answer, use the default value from the question
+                        if (currentValue === undefined) {
+                            currentValue = question.value || 50; // Use question's default value
+                            this.typeformState.answers[question.id] = currentValue; // Save default to answers
+                            console.log('Initializing slider with default value for', question.id, ':', currentValue);
+                        } else {
+                            console.log('Setting slider value for', question.id, ':', currentValue);
+                        }
+                        
+                        sliderElement.value = currentValue;
+                        const prefix = question.valuePrefix || '';
+                        const suffix = question.valueSuffix || '';
+                        sliderDisplay.textContent = prefix + currentValue + suffix;
+                    }
+                } else if (question.type === 'multiple_choice') {
+                    // Restore multiple choice selection
+                    const currentValue = this.typeformState.answers[question.id];
+                    if (currentValue) {
+                        const selectedOption = document.querySelector(`[data-question-id="${question.id}"][data-option="${currentValue}"]`);
+                        if (selectedOption) {
+                            console.log('Setting multiple choice selection for', question.id, ':', currentValue);
+                            selectedOption.classList.add('selected');
+                        }
                     }
                 }
                 
@@ -565,18 +747,33 @@
             
             // Check if this is the last question
             if (this.typeformState.currentQuestionIndex === this.typeformState.questions.length - 1) {
-                this.submitTypeformData();
+                // Validate all required questions before submitting
+                const isFormComplete = this.validateAllQuestions();
+                if (isFormComplete) {
+                    this.submitTypeformData();
+                } else {
+                    console.warn('Form validation failed - some required questions not answered');
+                    // Find first incomplete question and go there
+                    const firstIncomplete = this.findFirstIncompleteQuestion();
+                    if (firstIncomplete !== -1) {
+                        this.typeformState.currentQuestionIndex = firstIncomplete;
+                        this.renderTypeform();
+                        alert('Please complete all required questions before generating experiments.');
+                    }
+                }
                 return;
             }
             
             // Move to next question
             this.typeformState.currentQuestionIndex++;
+            this.saveTypeformState();
             this.renderTypeform();
         },
         
         goToPreviousQuestion: function() {
             if (this.typeformState.currentQuestionIndex > 0) {
                 this.typeformState.currentQuestionIndex--;
+                this.saveTypeformState();
                 this.renderTypeform();
             }
         },
@@ -585,6 +782,9 @@
         updateAnswer: function(questionId, value) {
             this.typeformState.answers[questionId] = value;
             this.updateNextButton();
+            
+            // Auto-save state when answers change
+            this.saveTypeformState();
         },
         
         // Select choice for multiple choice questions
@@ -598,6 +798,9 @@
             event.target.classList.add('selected');
             
             this.updateNextButton();
+            
+            // Save state after selection
+            this.saveTypeformState();
         },
         
         // Update slider value
@@ -605,6 +808,9 @@
             this.typeformState.answers[questionId] = parseInt(value);
             document.getElementById(`slider-display-${questionId}`).textContent = prefix + value + suffix;
             this.updateNextButton();
+            
+            // Save state after slider change
+            this.saveTypeformState();
         },
         
         // Add example to textarea
@@ -692,7 +898,8 @@
                     });
                     
                 case 'slider':
-                    return this.typeformState.answers[currentQuestion.id] !== undefined;
+                    // Sliders always have a value (either saved or default), so always valid
+                    return true;
                     
                 default:
                     return true;
@@ -703,8 +910,78 @@
         updateNextButton: function() {
             const nextBtn = document.getElementById('next-btn');
             if (nextBtn) {
-                const isValid = this.validateCurrentQuestion();
-                nextBtn.disabled = !isValid;
+                const currentQuestion = this.typeformState.questions[this.typeformState.currentQuestionIndex];
+                const isLastQuestion = this.typeformState.currentQuestionIndex === this.typeformState.questions.length - 1;
+                
+                if (isLastQuestion) {
+                    // For last question, check if all required questions are complete
+                    const isFormComplete = this.validateAllQuestions();
+                    nextBtn.disabled = !isFormComplete;
+                } else {
+                    // For other questions, just check current question
+                    const isValid = this.validateCurrentQuestion();
+                    nextBtn.disabled = !isValid;
+                }
+            }
+        },
+        
+        // Validate all questions in the form
+        validateAllQuestions: function() {
+            for (let i = 0; i < this.typeformState.questions.length; i++) {
+                const question = this.typeformState.questions[i];
+                if (question.type === 'welcome') continue; // Skip welcome screen
+                
+                if (question.required || question.type === 'multiple_input') {
+                    const isValid = this.validateSpecificQuestion(question);
+                    if (!isValid) {
+                        console.log('Question validation failed:', question.id, question.title);
+                        return false;
+                    }
+                }
+            }
+            return true;
+        },
+        
+        // Find first incomplete required question
+        findFirstIncompleteQuestion: function() {
+            for (let i = 0; i < this.typeformState.questions.length; i++) {
+                const question = this.typeformState.questions[i];
+                if (question.type === 'welcome') continue;
+                
+                if (question.required || question.type === 'multiple_input') {
+                    const isValid = this.validateSpecificQuestion(question);
+                    if (!isValid) {
+                        return i;
+                    }
+                }
+            }
+            return -1;
+        },
+        
+        // Validate a specific question by its object
+        validateSpecificQuestion: function(question) {
+            switch (question.type) {
+                case 'textarea':
+                    const textValue = this.typeformState.answers[question.id];
+                    return !question.required || (textValue && textValue.trim().length > 0);
+                    
+                case 'multiple_choice':
+                    const choiceValue = this.typeformState.answers[question.id];
+                    return !question.required || (choiceValue && choiceValue.length > 0);
+                    
+                case 'multiple_input':
+                    const requiredInputs = question.inputs.filter(input => input.required);
+                    return requiredInputs.every(input => {
+                        const value = this.typeformState.answers[input.id];
+                        return value && value.trim().length > 0;
+                    });
+                    
+                case 'slider':
+                    // Sliders always have a value (either saved or default), so always valid
+                    return true;
+                    
+                default:
+                    return true;
             }
         },
         
@@ -1002,35 +1279,48 @@
         // Get CDT challenge options (3 focused choices per dimension)
         getCDTChallengeOptions: function(cdtKey) {
             const options = {
-                // Self-Confrontation Capacity variations
-                'self-confrontation': [
-                    "I struggle to acknowledge when I'm wrong or have made a mistake",
-                    "I find it difficult to receive constructive criticism without getting defensive",
-                    "I avoid examining my own biases and assumptions about situations"
-                ],
-                'self-confrontation-capacity': [
-                    "I struggle to acknowledge when I'm wrong or have made a mistake",
-                    "I find it difficult to receive constructive criticism without getting defensive",
-                    "I avoid examining my own biases and assumptions about situations"
-                ],
-                // Value Conflict Navigation variations
-                'value-conflict': [
-                    "I find it hard to work with people whose values differ significantly from mine",
-                    "I struggle to find common ground when facing opposing viewpoints",
-                    "I tend to avoid or shut down conversations that involve conflicting beliefs"
+                // Current CDT dimensions from the quiz
+                'ambiguity-tolerance': [
+                    "I need all the details figured out before I can start working",
+                    "I feel uncomfortable when requirements or expectations are unclear", 
+                    "I struggle with open-ended tasks that don't have obvious solutions"
                 ],
                 'value-conflict-navigation': [
                     "I find it hard to work with people whose values differ significantly from mine",
                     "I struggle to find common ground when facing opposing viewpoints",
                     "I tend to avoid or shut down conversations that involve conflicting beliefs"
                 ],
-                // Intellectual Humility variations
+                'self-confrontation-capacity': [
+                    "I struggle to acknowledge when I'm wrong or have made a mistake",
+                    "I find it difficult to receive constructive criticism without getting defensive",
+                    "I avoid examining my own biases and assumptions about situations"
+                ],
+                'discomfort-regulation': [
+                    "I struggle to stay calm when conversations get heated or tense",
+                    "I tend to shut down or withdraw when facing difficult emotions",
+                    "I find it hard to work through conflict without getting overwhelmed"
+                ],
+                'growth-orientation': [
+                    "I prefer to stick with methods I already know rather than learn new ones",
+                    "I focus on immediate results rather than building long-term capabilities",
+                    "I resist trying new approaches that might slow me down initially"
+                ],
+                // Legacy variations for backward compatibility
+                'self-confrontation': [
+                    "I struggle to acknowledge when I'm wrong or have made a mistake",
+                    "I find it difficult to receive constructive criticism without getting defensive",
+                    "I avoid examining my own biases and assumptions about situations"
+                ],
+                'value-conflict': [
+                    "I find it hard to work with people whose values differ significantly from mine",
+                    "I struggle to find common ground when facing opposing viewpoints",
+                    "I tend to avoid or shut down conversations that involve conflicting beliefs"
+                ],
                 'intellectual-humility': [
                     "I find it difficult to admit when I don't know something",
                     "I struggle to change my mind even when presented with compelling evidence",
                     "I have trouble asking for help or guidance from others"
                 ],
-                // Perspective Integration variations
                 'perspective-integration': [
                     "I struggle to see situations from multiple viewpoints simultaneously",
                     "I find it hard to synthesize different approaches into a cohesive solution",
@@ -1265,7 +1555,12 @@
                 },
                 success: (response) => {
                     if (response.success) {
-                        this.experiments = response.data.experiments;
+                        const raw = response.data.experiments || [];
+                        console.log('Raw experiments from backend:', raw);
+                        console.log('Current constraints:', this.qualifiers?.curiosity?.constraints);
+                        // Apply client-side constraint calibration to ensure visible impact
+                        this.experiments = this.applyConstraintsToExperiments(raw);
+                        console.log('Calibrated experiments:', this.experiments);
                         this.experimentSource = response.data.source || 'Unknown';
                         this.usingMock = response.data.using_mock || false;
                         this.showExperiments();
@@ -1306,15 +1601,17 @@
                                 </div>
                                 
                                 <div class="experiment-body">
+                                    <div class="experiment-description">
+                                        <h4>What You'll Do:</h4>
+                                        <p class="experiment-summary">${this.generateEngagingDescription(exp)}</p>
+                                    </div>
+                                    
                                     <div class="experiment-connection">
-                                        <h4>Why This Experiment For You:</h4>
+                                        <h4>Why This Fits You:</h4>
                                         <p class="connection-text">${this.generatePersonalizedConnection(exp, index)}</p>
                                     </div>
                                     
-                                    <div class="experiment-rationale">
-                                        <h4>The Approach:</h4>
-                                        <p>${exp.rationale}</p>
-                                    </div>
+                                    ${exp._calibrationNotes ? `<div class="experiment-calibration"><small class="calibration-note">${exp._calibrationNotes}</small></div>` : ''}
                                     
                                     <div class="experiment-steps">
                                         <h4>Steps:</h4>
@@ -1342,6 +1639,52 @@
                                 <div class="experiment-actions">
                                     <button class="lab-btn lab-btn-primary lab-start-experiment-btn" data-experiment-id="${index}">Start</button>
                                     <button class="lab-btn lab-btn-secondary lab-regenerate-variant-btn" data-experiment-id="${index}">Regenerate Variant</button>
+                                    <button class="lab-btn lab-btn-tertiary lab-debug-toggle-btn" data-experiment-id="${index}">🔍 Debug</button>
+                                </div>
+                                
+                                <div class="experiment-debug" id="debug-${index}" style="display: none;">
+                                    <div class="debug-header">
+                                        <h4>🛠️ Debug Information</h4>
+                                        <small>Technical details for troubleshooting</small>
+                                    </div>
+                                    
+                                    <div class="debug-section">
+                                        <h5>AI Prompt Sent:</h5>
+                                        <div class="debug-code">
+                                            <pre><code>${this.formatDebugPrompt()}</code></pre>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="debug-section">
+                                        <h5>Raw Experiment Data:</h5>
+                                        <div class="debug-code">
+                                            <pre><code>${JSON.stringify(exp, null, 2)}</code></pre>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="debug-section">
+                                        <h5>User Profile Data:</h5>
+                                        <div class="debug-code">
+                                            <pre><code>${JSON.stringify({
+                                                topMI: this.profileData?.mi_results?.slice(0, 3) || [],
+                                                constraints: this.qualifiers?.curiosity?.constraints || {},
+                                                curiosities: this.qualifiers?.curiosity?.curiosities || [],
+                                                roleModels: this.qualifiers?.curiosity?.roleModels || [],
+                                                bottomCDT: this.profileData?.cdt_results?.slice(-2) || []
+                                            }, null, 2)}</code></pre>
+                                        </div>
+                                    </div>
+                                    
+                                    ${this.experimentSource ? `
+                                        <div class="debug-section">
+                                            <h5>Generation Source:</h5>
+                                            <div class="debug-info">
+                                                <strong>Source:</strong> ${this.experimentSource}<br>
+                                                <strong>Using Mock:</strong> ${this.usingMock ? 'Yes' : 'No'}<br>
+                                                <strong>Calibrated:</strong> ${exp._calibrated ? 'Yes' : 'No'}
+                                            </div>
+                                        </div>
+                                    ` : ''}
                                 </div>
                             </div>
                         `).join('')}
@@ -1355,6 +1698,141 @@
             
             $('#lab-mode-app').html(html);
             this.currentStep = 'experiments';
+            
+            // Setup debug toggle event listeners
+            this.setupDebugToggles();
+        },
+        
+        // Setup debug toggle functionality
+        setupDebugToggles: function() {
+            $(document).off('click.debug').on('click.debug', '.lab-debug-toggle-btn', function(e) {
+                e.preventDefault();
+                const experimentId = $(this).data('experiment-id');
+                const debugSection = $(`#debug-${experimentId}`);
+                const button = $(this);
+                
+                if (debugSection.is(':visible')) {
+                    debugSection.slideUp(200);
+                    button.text('🔍 Debug');
+                } else {
+                    debugSection.slideDown(200);
+                    button.text('🔍 Hide Debug');
+                }
+            });
+        },
+        
+        // Format the AI prompt for debugging
+        formatDebugPrompt: function() {
+            if (!this.qualifiers || !this.profileData) {
+                return 'No prompt data available (using mock/fallback experiments)';
+            }
+            
+            const mi = this.profileData.mi_results || [];
+            const cdt = this.profileData.cdt_results || [];
+            const topMI = mi.slice(0, 3);
+            const bottomCDT = cdt.slice(-2);
+            const constraints = this.qualifiers.curiosity?.constraints || {};
+            const curiosities = this.qualifiers.curiosity?.curiosities || [];
+            const roleModels = this.qualifiers.curiosity?.roleModels || [];
+            
+            return `SYSTEM PROMPT:
+Role: You generate personalized "minimum viable experiments" (MVEs) for self-discovery.
+
+Inputs you will receive: A JSON payload with: MI top 3 (with scores), CDT subscale scores (plus strongest & growth edge), optional interests/context; and user-selected filters (cost, time, energy, variety), the brainstorming lenses to use (Curiosity, Role Models, Opposites, Adjacency), and a quantity target.
+
+Task: Produce a diverse set of safe, low-stakes MVEs that the user can try within 7 days. Respect filters; tie each idea back to MI/CDT.
+
+Constraints:
+– Specific, runnable steps (3–5), not generic advice.
+– Calibrate cost/time/energy/variety to sliders; don't exceed ±1 unless you add a tradeoff note.
+– All ideas must be safe, legal, age-appropriate, and low-risk.
+– Keep language warm, concrete, and non-judgmental.
+
+USER PROMPT:
+Profile+filters JSON: {
+  "user": {
+    "mi_top3": ${JSON.stringify(topMI.map(mi => ({ label: mi.label, score: mi.score })))},
+    "cdt_bottom2": ${JSON.stringify(bottomCDT.map(cdt => ({ label: cdt.label, score: cdt.score })))},
+    "curiosities": ${JSON.stringify(curiosities)},
+    "roleModels": ${JSON.stringify(roleModels)}
+  },
+  "constraints": {
+    "timePerWeek": ${constraints.timePerWeekHours || 3},
+    "budget": ${constraints.budget || 50},
+    "risk": ${constraints.risk || 50},
+    "soloToGroup": ${constraints.soloToGroup || 50}
+  }
+}
+
+Generate 3-5 personalized experiments that combine the user's MI strengths, address their CDT growth areas, incorporate their curiosities, and respect their constraints.`;
+        },
+        
+        // Generate Mi Approach based on user's profile
+        generateMiApproach: function(experiment) {
+            if (!this.profileData?.mi_results) {
+                return 'Use your natural learning style to approach this experiment in a way that feels authentic to you.';
+            }
+            
+            const topMI = this.profileData.mi_results.slice(0, 3);
+            const primaryMI = topMI[0];
+            const secondaryMI = topMI[1];
+            
+            const approaches = {
+                'linguistic': 'Document your process through writing, talking through ideas, or teaching concepts to others. Use words and language as tools for processing and understanding.',
+                'logical-mathematical': 'Break down the experiment into logical steps, analyze patterns and connections, and use systematic approaches to track progress and outcomes.',
+                'spatial': 'Create visual representations, use diagrams or mind maps, and pay attention to spatial relationships and visual patterns in your learning.',
+                'bodily-kinesthetic': 'Learn through hands-on action, physical movement, and direct experience. Trust your bodily sensations and kinesthetic feedback.',
+                'musical': 'Use rhythm, patterns, and musical elements to structure your learning. Consider background music or rhythmic approaches to organization.',
+                'interpersonal': 'Involve others in your learning process through discussion, collaboration, teaching, or getting feedback from people you trust.',
+                'intrapersonal': 'Engage in deep self-reflection, connect the learning to your personal goals and values, and create quiet space for internal processing.',
+                'naturalistic': 'Look for patterns and connections, organize information systematically, and connect learning to broader systems and natural processes.'
+            };
+            
+            const primaryApproach = approaches[primaryMI?.key] || 'Approach this experiment in a way that feels natural to your learning style.';
+            
+            let miApproach = primaryApproach;
+            
+            // Add secondary MI if available
+            if (secondaryMI && approaches[secondaryMI.key]) {
+                const secondaryApproach = approaches[secondaryMI.key];
+                miApproach += ` Additionally, since ${secondaryMI.label} is also a strength, consider ${secondaryApproach.toLowerCase()}`;
+            }
+            
+            return miApproach;
+        },
+        
+        // Generate engaging description for what the user will do
+        generateEngagingDescription: function(experiment) {
+            // Clean up the rationale by removing calibration notes
+            let description = experiment.description || experiment.rationale || '';
+            
+            // Remove calibration notes if they're embedded
+            description = description.replace(/\[Calibrated:.*?\]/g, '').trim();
+            
+            // If we still don't have a good description, create one based on the title and steps
+            if (!description || description.length < 20) {
+                const title = experiment.title || 'This experiment';
+                const firstStep = experiment.steps && experiment.steps[0] ? experiment.steps[0] : '';
+                
+                // Create engaging descriptions based on common experiment patterns
+                if (title.toLowerCase().includes('mindfulness')) {
+                    description = `Create a small mindfulness gathering where you share simple practices with friends or colleagues. You'll guide others through calming exercises while building community connections.`;
+                } else if (title.toLowerCase().includes('interview')) {
+                    description = `Have genuine conversations with interesting people about topics you're curious about. You'll learn by asking questions and discovering new perspectives.`;
+                } else if (title.toLowerCase().includes('research')) {
+                    description = `Dive deep into something that fascinates you by talking to experts and gathering insights. Turn your curiosity into actionable knowledge.`;
+                } else if (title.toLowerCase().includes('creative') || title.toLowerCase().includes('art')) {
+                    description = `Express your ideas through a creative medium that speaks to you. Experiment with new forms of artistic expression.`;
+                } else if (title.toLowerCase().includes('skill') || title.toLowerCase().includes('learn')) {
+                    description = `Pick up a new skill that connects to your interests and try it out in a low-pressure way. Focus on exploration over perfection.`;
+                } else if (firstStep) {
+                    description = `${firstStep} This hands-on experiment lets you explore while building practical experience.`;
+                } else {
+                    description = `A focused experiment designed to help you explore new possibilities while building on your existing strengths.`;
+                }
+            }
+            
+            return description;
         },
         
         // Generate personalized connection explaining why this experiment was chosen
@@ -1386,46 +1864,46 @@
                 };
                 
                 const miConnection = miConnections[primaryMI.key] || `builds on your ${primaryMI.label} strength`;
-                connections.push(`This ${miConnection}`);
+                connections.push(`It ${miConnection}`);
             }
             
             // Connect to curiosities
             if (curiosities.length > 0) {
                 const primaryCuriosity = curiosities[0];
                 if (experiment.title && experiment.title.toLowerCase().includes(primaryCuriosity.toLowerCase())) {
-                    connections.push(`directly explores your stated interest in ${primaryCuriosity}`);
+                    connections.push(`directly explores your interest in ${primaryCuriosity}`);
                 } else {
-                    connections.push(`provides a structured way to explore interests like ${primaryCuriosity}`);
+                    connections.push(`connects to interests like ${primaryCuriosity}`);
                 }
             }
             
             // Connect to constraints
             if (constraints.timePerWeekHours <= 2) {
-                connections.push("fits your limited time availability with focused, efficient activities");
+                connections.push("fits your limited time with focused, efficient activities");
             } else if (constraints.timePerWeekHours >= 6) {
-                connections.push("takes advantage of your generous time commitment for deeper exploration");
+                connections.push("uses your generous time availability for deeper exploration");
             }
             
             if (constraints.risk <= 30) {
-                connections.push("offers a safe, low-risk way to try something new");
+                connections.push("offers a safe, low-risk approach");
             } else if (constraints.risk >= 70) {
-                connections.push("embraces your comfort with bold, experimental approaches");
+                connections.push("matches your comfort with bold experiments");
             }
             
             if (constraints.soloToGroup <= 30) {
-                connections.push("respects your preference for independent, self-directed learning");
+                connections.push("supports independent, self-directed learning");
             } else if (constraints.soloToGroup >= 70) {
-                connections.push("incorporates the social and collaborative elements you enjoy");
+                connections.push("includes social and collaborative elements");
             }
             
             // Connect to role models if mentioned
             if (roleModels.length > 0) {
-                connections.push(`draws inspiration from thought leaders like those you admire (${roleModels[0]})`);
+                connections.push(`draws inspiration from creators like ${roleModels[0]}`);
             }
             
             // Fallback if no specific connections found
             if (connections.length === 0) {
-                return "This experiment is designed to match your unique combination of strengths, interests, and preferences.";
+                return "This experiment matches your unique combination of strengths, interests, and preferences.";
             }
             
             // Combine connections into a natural sentence
@@ -1439,6 +1917,100 @@
             }
         },
         
+        // Map raw slider constraints to normalized targets used for calibration (0..4)
+        mapConstraintsToTargets: function() {
+            const c = this.qualifiers?.curiosity?.constraints || {};
+            // Budget slider may be 0..200; map to 0..4
+            const cost = Math.max(0, Math.min(4, Math.round((Number(c.budget ?? 50) / 200) * 4)));
+            // Time per week 1..10; map to 0..4
+            const tpw = Number(c.timePerWeekHours ?? 3);
+            const time = tpw <= 2 ? 0 : tpw <= 3 ? 1 : tpw <= 5 ? 2 : tpw <= 7 ? 3 : 4;
+            // Risk 0..100 — use as proxy for energy tolerance 0..4
+            const energy = Math.max(0, Math.min(4, Math.round((Number(c.risk ?? 50) / 100) * 4)));
+            // Variety unavailable directly; approximate from energy for now
+            const variety = energy;
+            return { cost, time, energy, variety };
+        },
+
+        // Adjust generated experiments client-side to visibly reflect constraints
+        applyConstraintsToExperiments: function(experiments) {
+            const targets = this.mapConstraintsToTargets();
+            const c = this.qualifiers?.curiosity?.constraints || {};
+            const tpw = Number(c.timePerWeekHours ?? 3);
+            const maxBudget = Number(c.budget ?? 50);
+            
+            console.log('Applying constraints - targets:', targets, 'constraints:', c);
+
+            const calibrated = (experiments || []).map(exp => {
+                const e = { ...exp };
+                
+                // Initialize effort object if missing (common for mock/fallback experiments)
+                if (!e.effort) {
+                    e.effort = {
+                        timeHours: Math.floor(Math.random() * 3) + 1, // Random 1-3 hours
+                        budgetUSD: Math.floor(Math.random() * 50)     // Random 0-49 dollars
+                    };
+                }
+                
+                let timeH = Number(e.effort.timeHours ?? 1);
+                let budget = Number(e.effort.budgetUSD ?? 0);
+                const originalTime = timeH;
+                const originalBudget = budget;
+
+                // If user time is low, cap time; if high, allow more time
+                if (targets.time <= 1) {
+                    timeH = Math.min(timeH, Math.max(1, Math.ceil(tpw / 2))); // keep short
+                } else if (targets.time >= 3) {
+                    timeH = Math.max(timeH, Math.min(10, Math.ceil(tpw * 0.8))); // deepen more aggressively
+                }
+
+                // Budget calibration: if user allows high spend, bump minimal budgets; else clamp
+                if (targets.cost <= 1) {
+                    budget = Math.min(budget, Math.max(0, Math.floor(maxBudget * 0.2)));
+                } else if (targets.cost >= 3) {
+                    const floor = Math.max(50, Math.floor(maxBudget * 0.4));
+                    budget = Math.max(budget, floor);
+                }
+
+                // Always annotate rationale to show calibration happened
+                const notes = [];
+                if (timeH !== originalTime) {
+                    notes.push(`time adjusted from ${originalTime}h to ${timeH}h based on your ${targets.time <= 1 ? 'limited' : 'generous'} availability`);
+                }
+                if (budget !== originalBudget) {
+                    notes.push(`budget adjusted from $${originalBudget} to $${budget} for ${targets.cost >= 3 ? 'higher investment' : 'budget-conscious'} approach`);
+                }
+                
+                // Add a calibration note even if no changes (to show system is working)
+                if (notes.length === 0) {
+                    notes.push(`calibrated for ${timeH}h/${budget} budget based on your constraints`);
+                }
+                
+                if (notes.length) {
+                    e._calibrationNotes = `Calibrated: ${notes.join('; ')}`;
+                }
+
+                e.effort.timeHours = timeH;
+                e.effort.budgetUSD = budget;
+                e._calibrated = true;
+                return e;
+            });
+
+            // Sort by closeness to targets (time/budget proxy)
+            const dist = (e) => {
+                const t = Number(e.effort?.timeHours ?? 0);
+                const b = Number(e.effort?.budgetUSD ?? 0);
+                // Map to 0..4 to compare
+                const tScaled = t <= 2 ? 0 : t <= 3 ? 1 : t <= 5 ? 2 : t <= 7 ? 3 : 4;
+                const bScaled = Math.max(0, Math.min(4, Math.round((b / Math.max(1, maxBudget)) * 4)));
+                return Math.abs(tScaled - targets.time) + Math.abs(bScaled - targets.cost);
+            };
+            calibrated.sort((a,b) => dist(a) - dist(b));
+            
+            console.log('Calibration complete - first experiment:', calibrated[0]);
+            return calibrated;
+        },
+
         // Regenerate a variant of a specific experiment
         regenerateVariant: function(e) {
             e.preventDefault();
@@ -1479,6 +2051,17 @@
             // Get user data for personalization
             const topMI = this.profileData?.mi_results?.[0] || { label: 'your strengths' };
             const curiosity = this.qualifiers?.curiosity?.curiosities?.[0] || 'learning';
+
+            // Bias effort using current constraints
+            const targets = this.mapConstraintsToTargets();
+            // Base ranges before calibration
+            let timeHours = Math.floor(Math.random() * 3) + 1; // 1..3
+            let budgetUSD = Math.floor(Math.random() * 50);   // 0..49
+            // Nudge toward targets
+            if (targets.time >= 3) timeHours = Math.max(timeHours, 4 + Math.floor(Math.random()*3)); // 4..6
+            if (targets.time <= 1) timeHours = Math.min(timeHours, 2);
+            if (targets.cost >= 3) budgetUSD = Math.max(budgetUSD, 60 + Math.floor(Math.random()*140)); // 60..199
+            if (targets.cost <= 1) budgetUSD = Math.min(budgetUSD, 20);
             
             return {
                 ...originalExperiment,
@@ -1486,10 +2069,11 @@
                 rationale: variation.rationale.replace('{MI}', topMI.label),
                 steps: variation.steps.map(step => step.replace('{curiosity}', curiosity)),
                 effort: {
-                    timeHours: Math.floor(Math.random() * 3) + 1,
-                    budgetUSD: Math.floor(Math.random() * 50)
+                    timeHours,
+                    budgetUSD
                 },
-                riskLevel: ['Low', 'Medium', 'High'][Math.floor(Math.random() * 3)]
+                riskLevel: ['Low', 'Medium', 'High'][Math.floor(Math.random() * 3)],
+                _calibrated: true
             };
         },
         
@@ -1614,6 +2198,9 @@
         
         // Show running experiment interface
         showRunningExperiment: function(experiment, experimentId) {
+            // Generate personalized Mi Approach based on user's profile
+            const miApproach = this.generateMiApproach(experiment);
+            
             const html = `
                 <div class="lab-running-experiment">
                     <div class="experiment-header">
@@ -1622,7 +2209,15 @@
                     </div>
                     
                     <div class="experiment-details">
-                        <p class="experiment-rationale">${experiment.rationale}</p>
+                        <div class="experiment-overview">
+                            <h3>What You'll Do:</h3>
+                            <p class="experiment-description">${this.generateEngagingDescription(experiment)}</p>
+                        </div>
+                        
+                        <div class="experiment-mi-approach">
+                            <h3>Mi Approach:</h3>
+                            <p class="mi-approach-text">${miApproach}</p>
+                        </div>
                         
                         <div class="experiment-steps">
                             <h3>Steps to Complete:</h3>
@@ -1634,6 +2229,15 @@
                                     </li>
                                 `).join('')}
                             </ul>
+                        </div>
+                        
+                        <div class="experiment-effort">
+                            <h3>Time & Resources:</h3>
+                            <div class="effort-summary">
+                                <span class="effort-item">⏱️ ${experiment.effort?.timeHours || 0} hours</span>
+                                <span class="effort-item">💰 $${experiment.effort?.budgetUSD || 0}</span>
+                                <span class="effort-item risk-${(experiment.riskLevel || 'medium').toLowerCase()}">🎯 ${experiment.riskLevel || 'Medium'} Risk</span>
+                            </div>
                         </div>
                         
                         <div class="success-criteria">
