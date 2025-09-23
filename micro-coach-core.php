@@ -26,6 +26,9 @@ class Micro_Coach_Core {
         // AJAX endpoint for enhanced flow - mark AI coach as unlocked
         add_action('wp_ajax_mc_mark_ai_unlocked', [$this, 'ajax_mark_ai_unlocked']);
         
+        // AJAX endpoint to check if all assessments are complete
+        add_action('wp_ajax_mc_check_all_assessments_complete', [$this, 'ajax_check_all_assessments_complete']);
+        
         // Add body class for enhanced flow (early hook)
         add_filter('body_class', [$this, 'add_enhanced_flow_body_class']);
         
@@ -2153,6 +2156,45 @@ class Micro_Coach_Core {
         update_user_meta($user_id, 'ai_coach_unlocked', 1);
         
         wp_send_json_success('AI Coach unlocked successfully!');
+    }
+    
+    /**
+     * AJAX endpoint to check if all assessments are complete.
+     */
+    public function ajax_check_all_assessments_complete() {
+        // Use same nonce as MI quiz for consistency
+        if (!wp_verify_nonce($_POST['_ajax_nonce'] ?? '', 'miq_nonce')) {
+            wp_send_json_error('Invalid nonce.');
+        }
+        
+        if (!is_user_logged_in()) {
+            wp_send_json_error('User must be logged in.');
+        }
+        
+        $user_id = get_current_user_id();
+        $quizzes = self::get_quizzes();
+        $all_complete = true;
+        $completed_assessments = [];
+        $missing_assessments = [];
+        
+        foreach ($quizzes as $quiz_id => $quiz) {
+            if (!empty($quiz['results_meta_key'])) {
+                $results = get_user_meta($user_id, $quiz['results_meta_key'], true);
+                if (!empty($results)) {
+                    $completed_assessments[] = $quiz['title'];
+                } else {
+                    $all_complete = false;
+                    $missing_assessments[] = $quiz['title'];
+                }
+            }
+        }
+        
+        wp_send_json_success([
+            'all_complete' => $all_complete,
+            'completed_assessments' => $completed_assessments,
+            'missing_assessments' => $missing_assessments,
+            'total_assessments' => count($quizzes)
+        ]);
     }
     
     /**
