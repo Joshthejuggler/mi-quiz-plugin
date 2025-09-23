@@ -328,21 +328,37 @@ class Micro_Coach_Core {
                     $pt_slug_map = ['explorer', 'achiever', 'socializer', 'strategist'];
                     foreach ($pt_slug_map as $i => $slug) { $pt_chart_data[13 + $i] = round(($bartle_scores_by_slug[$slug] ?? 0) / 50 * 100); }
                 ?>
-                    <div class="dashboard-tabs">
+                <div class="dashboard-tabs">
+                    <?php
+                    // Check if Lab Mode is available (all assessments complete)
+                    $custom_tabs = apply_filters('mc_dashboard_custom_tabs', []);
+                    $lab_mode_available = isset($custom_tabs['tab-lab']);
+                    ?>
+                    <?php if ($lab_mode_available): ?>
+                        <button class="tab-link active" data-tab="tab-lab">🧪 Lab Mode</button>
+                        <button class="tab-link" data-tab="tab-composite">🧩 Your Self-Discovery Profile</button>
+                    <?php else: ?>
                         <button class="tab-link active" data-tab="tab-composite">🧩 Your Self-Discovery Profile</button>
-                        <button class="tab-link" data-tab="tab-path">📊 Detailed Results</button>
-                        <button class="tab-link" data-tab="tab-ai">🤖 AI Coach</button>
-                        <?php
-                        // Allow plugins to add custom tabs
-                        $custom_tabs = apply_filters('mc_dashboard_custom_tabs', []);
-                        foreach ($custom_tabs as $tab_id => $tab_label) {
+                    <?php endif; ?>
+                    <button class="tab-link" data-tab="tab-path">📊 Detailed Results</button>
+                    <button class="tab-link" data-tab="tab-ai">🤖 AI Coach</button>
+                    <?php
+                    // Add other custom tabs (excluding lab which we handled above)
+                    foreach ($custom_tabs as $tab_id => $tab_label) {
+                        if ($tab_id !== 'tab-lab') {
                             echo '<button class="tab-link" data-tab="' . esc_attr($tab_id) . '">' . esc_html($tab_label) . '</button>';
                         }
-                        ?>
-                        <button class="tab-link" data-tab="tab-saved">❤️ Saved</button>
-                    </div>
-                    <div class="tab-content-wrapper">
+                    }
+                    ?>
+                    <button class="tab-link" data-tab="tab-saved">❤️ Saved</button>
+                </div>
+                <div class="tab-content-wrapper">
+                    <?php if ($lab_mode_available): ?>
+                        <div id="tab-lab" class="tab-content active"><?php do_action('mc_dashboard_custom_tab_content', 'tab-lab'); ?></div>
+                        <div id="tab-composite" class="tab-content">
+                    <?php else: ?>
                         <div id="tab-composite" class="tab-content active">
+                    <?php endif; ?>
                             <?php
                                 // Prepare dynamic values for the card
                                 $pt_slug = $primary_bartle_slug ?: '';

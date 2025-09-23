@@ -161,15 +161,19 @@
                     setTimeout(() => aiPreview.remove(), 300);
                 }
 
-                // Switch to AI Coach tab
+                // Switch to Lab Mode tab if available, otherwise AI Coach
+                const labTabButton = document.querySelector('[data-tab="tab-lab"]');
                 const aiTabButton = document.querySelector('[data-tab="tab-ai"]');
-                if (aiTabButton) {
+                if (labTabButton) {
+                    labTabButton.click();
+                } else if (aiTabButton) {
                     aiTabButton.click();
                 }
 
                 // Add some visual feedback
                 const message = document.createElement('div');
-                message.textContent = '✅ AI Coach unlocked! Welcome to your personalized experiment generator.';
+                const targetTab = labTabButton ? 'Lab Mode' : 'AI Coach';
+                message.textContent = `✅ AI Coach unlocked! Welcome to ${targetTab} - your personalized experiment generator.`;
                 message.style.cssText = `
                     position: fixed;
                     top: 20px;
