@@ -2127,6 +2127,9 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             if (targets.cost >= 3) budgetUSD = Math.max(budgetUSD, 60 + Math.floor(Math.random()*140)); // 60..199
             if (targets.cost <= 1) budgetUSD = Math.min(budgetUSD, 20);
             
+            // Generate new success criteria that match the new steps and archetype
+            const newSuccessCriteria = this.generateSuccessCriteria(archetype, variation.steps, curiosity);
+            
             return {
                 ...originalExperiment,
                 title: variation.title.replace('{curiosity}', curiosity).replace('{MI}', topMI.label),
@@ -2137,8 +2140,73 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     budgetUSD
                 },
                 riskLevel: ['Low', 'Medium', 'High'][Math.floor(Math.random() * 3)],
+                successCriteria: newSuccessCriteria,
                 _calibrated: true
             };
+        },
+        
+        // Generate appropriate success criteria based on archetype and steps
+        generateSuccessCriteria: function(archetype, steps, curiosity) {
+            const criteriaTemplates = {
+                'Discover': [
+                    "Completed all research activities within the planned timeframe",
+                    "Gathered insights from at least 3 different sources", 
+                    "Documented key findings and unexpected discoveries",
+                    "Identified at least one actionable next step"
+                ],
+                'Build': [
+                    "Created a working prototype or tangible output",
+                    "Tested the creation with at least one real person",
+                    "Received and incorporated feedback from others",
+                    "Documented lessons learned from the building process"
+                ],
+                'Share': [
+                    "Successfully shared with the intended audience",
+                    "Received specific feedback from at least 2 people",
+                    "Asked meaningful follow-up questions",
+                    "Reflected on the impact and next steps"
+                ],
+                'Express': [
+                    "Completed the creative expression within time limits",
+                    "Experimented with new techniques or approaches", 
+                    "Shared the creation with at least one person",
+                    "Reflected on what the process revealed"
+                ],
+                'Connect': [
+                    "Successfully connected with new people or communities",
+                    "Engaged in meaningful conversations about the topic",
+                    "Exchanged contact information or follow-up plans",
+                    "Reflected on what was learned from the interactions"
+                ],
+                'Reflect': [
+                    "Set aside dedicated time for reflection",
+                    "Documented insights and patterns discovered",
+                    "Connected learnings to broader goals or interests",
+                    "Identified specific next steps or areas for growth"
+                ]
+            };
+            
+            // Get base criteria for the archetype
+            const baseCriteria = criteriaTemplates[archetype] || criteriaTemplates['Discover'];
+            
+            // Customize criteria based on the specific steps
+            const customCriteria = [];
+            
+            // Add step-specific criteria
+            if (steps.length > 0) {
+                customCriteria.push(`Completed all ${steps.length} planned steps`);
+            }
+            
+            // Add curiosity-specific criteria
+            if (curiosity) {
+                customCriteria.push(`Applied learnings to your interest in ${curiosity}`);
+            }
+            
+            // Combine custom and template criteria, taking first 3-4 total
+            const allCriteria = [...customCriteria, ...baseCriteria];
+            const selectedCriteria = allCriteria.slice(0, Math.min(4, allCriteria.length));
+            
+            return selectedCriteria;
         },
         
         // Get variant templates for each archetype
