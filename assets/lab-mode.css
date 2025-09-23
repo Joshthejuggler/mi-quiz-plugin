@@ -244,10 +244,20 @@
     color: #92400e;
     font-size: 0.875rem;
     line-height: 1.5;
-    margin: 0;
+    margin: 0 0 0.75rem 0;
 }
 
-.lab-notice-content strong:last-child {
+.lab-notice-content p:last-child {
+    margin-bottom: 0;
+}
+
+.lab-notice-content strong {
+    color: #92400e;
+    font-weight: 600;
+}
+
+/* Specific styling for AI Coach text emphasis */
+.lab-notice-content p strong {
     color: #1f2937;
     font-weight: 700;
 }
