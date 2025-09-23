@@ -2628,19 +2628,40 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                             <div class="no-experiments">
                                 <p>No experiments yet. <a href="#" onclick="LabModeApp.startProfileInputs(event)">Create your first experiment</a>.</p>
                             </div>
-                        ` : experiments.map(exp => `
-                            <div class="history-item status-${exp.status.toLowerCase()}">
+                        ` : experiments.map((exp, index) => {
+                            const hasReflection = exp.feedback && exp.feedback.length > 0;
+                            const canReflect = exp.status === 'Active' || exp.status === 'Completed';
+                            
+                            return `
+                            <div class="history-item status-${exp.status.toLowerCase()}" data-experiment-id="${exp.id}">
                                 <div class="history-header">
-                                    <h3>${exp.experiment_data.title}</h3>
+                                    <h3 class="clickable-title" onclick="LabModeApp.viewExperimentFromHistory(${exp.id})">${exp.experiment_data.title}</h3>
                                     <div class="history-meta">
                                         <span class="status-badge status-${exp.status.toLowerCase()}">${exp.status}</span>
                                         <span class="archetype-badge">${exp.archetype}</span>
                                         <span class="date">${new Date(exp.created_at).toLocaleDateString()}</span>
                                     </div>
                                 </div>
-                                <p class="history-rationale">${exp.experiment_data.rationale}</p>
+                                <p class="history-rationale">${exp.experiment_data.rationale || exp.experiment_data.description || 'No description available.'}</p>
+                                
+                                <div class="history-item-actions">
+                                    <button class="lab-btn lab-btn-small lab-btn-secondary" onclick="LabModeApp.viewExperimentFromHistory(${exp.id})">View Details</button>
+                                    ${canReflect && !hasReflection ? `
+                                        <button class="lab-btn lab-btn-small lab-btn-primary" onclick="LabModeApp.showReflectionFormFromHistory(${exp.id})">Complete & Reflect</button>
+                                    ` : ''}
+                                    ${hasReflection ? `
+                                        <span class="reflection-status">✅ Reflected</span>
+                                    ` : ''}
+                                </div>
+                                
+                                ${hasReflection ? `
+                                    <div class="reflection-summary">
+                                        <strong>Your reflection:</strong> ${exp.feedback[0].notes || 'No notes provided'}
+                                    </div>
+                                ` : ''}
                             </div>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </div>
                     
                     <div class="history-actions">
@@ -2651,6 +2672,39 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             
             $('#lab-mode-app').html(html);
             this.currentStep = 'history';
+        },
+        
+        // View experiment from history
+        viewExperimentFromHistory: function(experimentId) {
+            this.showLoading('Loading experiment details...');
+            
+            // Get experiment data from server
+            $.ajax({
+                url: labMode.ajaxUrl,
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    action: 'mc_lab_get_experiment',
+                    nonce: labMode.nonce,
+                    experiment_id: experimentId
+                },
+                success: (response) => {
+                    if (response.success && response.data) {
+                        const experiment = response.data.experiment_data;
+                        this.showRunningExperiment(experiment, experimentId);
+                    } else {
+                        this.showError('Failed to load experiment details');
+                    }
+                },
+                error: () => {
+                    this.showError('Network error while loading experiment');
+                }
+            });
+        },
+        
+        // Show reflection form for experiment from history
+        showReflectionFormFromHistory: function(experimentId) {
+            this.showReflectionForm({ preventDefault: () => {}, target: { dataset: { experimentId: experimentId } } });
         }
     };
 

@@ -2723,6 +2723,56 @@ body.lab-mode-active {
     line-height: 1.5;
 }
 
+/* Clickable experiment title */
+.clickable-title {
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.clickable-title:hover {
+    color: var(--lab-primary);
+}
+
+/* History item actions */
+.history-item-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.lab-btn-small {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    border-radius: 6px;
+}
+
+/* Reflection status indicator */
+.reflection-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: var(--lab-success);
+    font-weight: 500;
+}
+
+/* Reflection summary */
+.reflection-summary {
+    background: var(--lab-surface);
+    border: 1px solid var(--lab-border);
+    border-radius: var(--lab-radius);
+    padding: 12px 16px;
+    margin-top: 12px;
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+.reflection-summary strong {
+    color: var(--lab-text);
+}
+
 .no-experiments {
     text-align: center;
     padding: 40px 20px;

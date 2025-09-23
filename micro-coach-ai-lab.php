@@ -38,6 +38,7 @@ class Micro_Coach_AI_Lab {
         add_action('wp_ajax_mc_lab_start_experiment', [$this, 'ajax_start_experiment']);
         add_action('wp_ajax_mc_lab_submit_reflection', [$this, 'ajax_submit_reflection']);
         add_action('wp_ajax_mc_lab_get_history', [$this, 'ajax_get_history']);
+        add_action('wp_ajax_mc_lab_get_experiment', [$this, 'ajax_get_experiment']);
         add_action('wp_ajax_mc_lab_recalibrate', [$this, 'ajax_recalibrate']);
         add_action('wp_ajax_mc_lab_debug_user_data', [$this, 'ajax_debug_user_data']);
         add_action('wp_ajax_mc_lab_test_save_qualifiers', [$this, 'ajax_test_save_qualifiers']);
@@ -1094,19 +1095,76 @@ class Micro_Coach_AI_Lab {
         }
         
         global $wpdb;
-        $table = $wpdb->prefix . self::TABLE_LAB_EXPERIMENTS;
+        $experiments_table = $wpdb->prefix . self::TABLE_LAB_EXPERIMENTS;
+        $feedback_table = $wpdb->prefix . self::TABLE_LAB_FEEDBACK;
         
+        // Get experiments with feedback information
         $experiments = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM `$table` WHERE user_id = %d ORDER BY created_at DESC",
+            "SELECT e.*, 
+                    GROUP_CONCAT(
+                        CONCAT('{\"difficulty\":', f.difficulty, ',\"fit\":', f.fit, ',\"learning\":', f.learning, ',\"notes\":\"', REPLACE(IFNULL(f.notes, ''), '\"', '\\\"'), '\"}') 
+                        SEPARATOR '|'
+                    ) as feedback_json
+             FROM `$experiments_table` e 
+             LEFT JOIN `$feedback_table` f ON e.id = f.experiment_id 
+             WHERE e.user_id = %d 
+             GROUP BY e.id 
+             ORDER BY e.created_at DESC",
             $user_id
         ), ARRAY_A);
         
         $formatted_experiments = array_map(function($exp) {
             $exp['experiment_data'] = json_decode($exp['experiment_data'], true);
+            
+            // Parse feedback data
+            if (!empty($exp['feedback_json'])) {
+                $feedback_strings = explode('|', $exp['feedback_json']);
+                $exp['feedback'] = array_map(function($feedback_str) {
+                    return json_decode($feedback_str, true);
+                }, $feedback_strings);
+            } else {
+                $exp['feedback'] = [];
+            }
+            unset($exp['feedback_json']);
+            
             return $exp;
         }, $experiments);
         
         wp_send_json_success($formatted_experiments);
+    }
+    
+    /**
+     * AJAX: Get single experiment by ID
+     */
+    public function ajax_get_experiment() {
+        check_ajax_referer('mc_lab_nonce', 'nonce');
+        
+        $user_id = get_current_user_id();
+        if (!$user_id || !$this->user_can_access_lab_mode()) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $experiment_id = intval($_POST['experiment_id'] ?? 0);
+        if (!$experiment_id) {
+            wp_send_json_error('Invalid experiment ID');
+        }
+        
+        global $wpdb;
+        $table = $wpdb->prefix . self::TABLE_LAB_EXPERIMENTS;
+        
+        $experiment = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM `$table` WHERE id = %d AND user_id = %d",
+            $experiment_id,
+            $user_id
+        ), ARRAY_A);
+        
+        if (!$experiment) {
+            wp_send_json_error('Experiment not found');
+        }
+        
+        $experiment['experiment_data'] = json_decode($experiment['experiment_data'], true);
+        
+        wp_send_json_success($experiment);
     }
     
     /**
