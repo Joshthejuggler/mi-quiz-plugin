@@ -1339,8 +1339,34 @@ class Micro_Coach_AI_Lab {
         $original_experiment = json_decode(stripslashes($_POST['original_experiment'] ?? ''), true);
         $prompt_data = json_decode(stripslashes($_POST['prompt_data'] ?? ''), true);
         
+        // Enhanced debugging
+        error_log('Lab Mode AI Variant - Original experiment received: ' . (is_array($original_experiment) ? 'valid array' : 'invalid'));
+        error_log('Lab Mode AI Variant - Prompt data received: ' . (is_array($prompt_data) ? 'valid array' : 'invalid'));
+        
+        if ($prompt_data) {
+            error_log('Lab Mode AI Variant - Prompt system length: ' . strlen($prompt_data['system'] ?? ''));
+            error_log('Lab Mode AI Variant - Prompt user length: ' . strlen($prompt_data['user'] ?? ''));
+        }
+        
         if (!$original_experiment || !$prompt_data) {
-            wp_send_json_error('Invalid experiment or prompt data');
+            $error_details = [];
+            if (!$original_experiment) $error_details[] = 'missing original experiment';
+            if (!$prompt_data) $error_details[] = 'missing prompt data';
+            
+            error_log('Lab Mode AI Variant - Validation failed: ' . implode(', ', $error_details));
+            wp_send_json_error('Invalid data: ' . implode(', ', $error_details));
+        }
+        
+        // Validate prompt data structure
+        if (!isset($prompt_data['system']) || !isset($prompt_data['user'])) {
+            error_log('Lab Mode AI Variant - Prompt data missing system or user fields');
+            wp_send_json_error('Prompt data is missing required fields (system/user)');
+        }
+        
+        // Check for empty prompts
+        if (empty(trim($prompt_data['system'])) || empty(trim($prompt_data['user']))) {
+            error_log('Lab Mode AI Variant - Empty prompt system or user content');
+            wp_send_json_error('Prompt data contains empty system or user content');
         }
         
         try {
@@ -1349,7 +1375,12 @@ class Micro_Coach_AI_Lab {
             
             wp_send_json_success([
                 'variant' => $variant,
-                'source' => 'AI Generated Variant'
+                'source' => 'AI Generated Variant',
+                'debug_info' => [
+                    'prompt_system_length' => strlen($prompt_data['system']),
+                    'prompt_user_length' => strlen($prompt_data['user']),
+                    'original_title' => $original_experiment['title'] ?? 'No title'
+                ]
             ]);
             
         } catch (Exception $e) {

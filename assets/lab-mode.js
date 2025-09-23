@@ -2267,6 +2267,15 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             // Create a custom prompt for variant generation
             const variantPrompt = this.buildVariantPrompt(experiment);
             
+            // Debug logging
+            console.log('AI Variant Generation Debug:');
+            console.log('- Experiment:', experiment.title || 'No title');
+            console.log('- Profile data available:', !!this.profileData);
+            console.log('- Qualifiers available:', !!this.qualifiers);
+            console.log('- Variant prompt system length:', variantPrompt.system?.length || 0);
+            console.log('- Variant prompt user length:', variantPrompt.user?.length || 0);
+            console.log('- Full variant prompt:', variantPrompt);
+            
             $.ajax({
                 url: labMode.ajaxUrl,
                 type: 'POST', 
@@ -2278,6 +2287,8 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     prompt_data: JSON.stringify(variantPrompt)
                 },
                 success: (response) => {
+                    console.log('AI Variant Response:', response);
+                    
                     if (response.success && response.data.variant) {
                         // Replace the experiment with the AI-generated variant
                         this.experiments[experimentIndex] = {
@@ -2295,10 +2306,12 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                                 .get(0)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         }, 100);
                     } else {
-                        this.showError('AI variant generation failed. Please try again.');
+                        console.error('AI variant generation failed:', response);
+                        this.showError(response.data || 'AI variant generation failed. Please try again.');
                     }
                 },
-                error: () => {
+                error: (xhr, status, error) => {
+                    console.error('AI variant AJAX error:', { xhr, status, error });
                     this.showError('Network error while generating AI variant. Please check your connection and try again.');
                 }
             });
@@ -2306,14 +2319,56 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
         
         // Build AI prompt for variant generation
         buildVariantPrompt: function(originalExperiment) {
-            const topMI = this.profileData?.mi_results?.slice(0, 3) || [];
-            const curiosities = this.qualifiers?.curiosity?.curiosities || [];
-            const roleModels = this.qualifiers?.curiosity?.roleModels || [];
-            const constraints = this.qualifiers?.curiosity?.constraints || {};
+            // Get profile data - use cached data if available, otherwise create fallback
+            let topMI = [];
+            let curiosities = [];
+            let roleModels = [];
+            let constraints = {};
+            
+            // Try to use existing profile data
+            if (this.profileData?.mi_results) {
+                topMI = this.profileData.mi_results.slice(0, 3);
+            }
+            
+            if (this.qualifiers?.curiosity) {
+                curiosities = this.qualifiers.curiosity.curiosities || [];
+                roleModels = this.qualifiers.curiosity.roleModels || [];
+                constraints = this.qualifiers.curiosity.constraints || {};
+            }
+            
+            // Create meaningful fallbacks if no profile data is available
+            if (topMI.length === 0) {
+                topMI = [
+                    { label: 'Creative Intelligence' },
+                    { label: 'Problem-Solving' },
+                    { label: 'Learning' }
+                ];
+            }
+            
+            if (curiosities.length === 0) {
+                curiosities = ['personal growth', 'skill development', 'creative expression'];
+            }
+            
+            if (roleModels.length === 0) {
+                roleModels = ['innovative thinkers', 'skilled practitioners', 'growth-minded individuals'];
+            }
+            
+            // Set reasonable constraint defaults
+            const timePerWeek = constraints.timePerWeekHours || 3;
+            const budget = constraints.budget || 50;
+            const risk = constraints.risk || 50;
+            
+            // Build a rich prompt even with fallback data
+            const profileSummary = [
+                `Top strengths: ${topMI.map(mi => mi.label).join(', ')}`,
+                `Interests: ${curiosities.join(', ')}`,
+                `Inspiration: ${roleModels.join(', ')}`,
+                `Constraints: ${timePerWeek}h/week, $${budget} budget, ${risk}/100 risk tolerance`
+            ].join('\n- ');
             
             return {
                 system: 'Generate a creative variant of the given experiment. Keep the same archetype but change the approach, steps, and success criteria. Make it fresh and engaging while staying true to the user\'s profile. Return only valid JSON with the same structure as the original experiment.',
-                user: `Original experiment: ${JSON.stringify(originalExperiment)}\n\nUser profile:\n- Top MI: ${topMI.map(mi => mi.label).join(', ')}\n- Curiosities: ${curiosities.join(', ')}\n- Role models: ${roleModels.join(', ')}\n- Time: ${constraints.timePerWeekHours || 3}h/week\n- Budget: $${constraints.budget || 50}\n- Risk: ${constraints.risk || 50}/100\n\nCreate a variant that feels different but maintains the same archetype and core intent. Focus on making it more engaging and personally relevant.`
+                user: `Original experiment: ${JSON.stringify(originalExperiment)}\n\nUser profile:\n- ${profileSummary}\n\nCreate a variant that feels different but maintains the same archetype and core intent. Focus on making it more engaging and personally relevant based on their strengths and interests.`
             };
         },
         
