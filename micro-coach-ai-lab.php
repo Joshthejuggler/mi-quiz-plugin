@@ -207,13 +207,39 @@ class Micro_Coach_AI_Lab {
         // Enqueue Lab Mode assets
         $this->enqueue_lab_mode_assets();
         
-        // Render the Lab Mode interface directly (not wrapped in tab-content div since that's handled by core)
-        echo '<div id="lab-mode-app">';
-        echo '<div class="lab-mode-loading">';
-        echo '<p>Loading Lab Mode...</p>';
-        echo '<div class="loading-spinner"></div>';
-        echo '</div>';
-        echo '</div>';
+        // Render empty container - JavaScript will populate it immediately
+        echo '<div id="lab-mode-app"></div>
+        <script>
+        // Force Lab Mode initialization when this content loads
+        jQuery(document).ready(function($) {
+            console.log("Lab Mode PHP inline script running...");
+            
+            // Try the global initialization function first
+            if (typeof window.initializeLabMode === "function") {
+                console.log("Using global initializeLabMode function");
+                window.initializeLabMode();
+            } else if (typeof window.LabModeApp !== "undefined" && !window.LabModeAppInitialized) {
+                console.log("Using direct LabModeApp.init()");
+                window.LabModeApp.init();
+            } else {
+                console.log("Waiting for Lab Mode to load...");
+                // Wait for Lab Mode to load
+                var attempts = 0;
+                var initInterval = setInterval(function() {
+                    attempts++;
+                    if (typeof window.initializeLabMode === "function") {
+                        console.log("Lab Mode loaded, initializing...");
+                        window.initializeLabMode();
+                        clearInterval(initInterval);
+                    } else if (attempts > 30) {
+                        console.error("Lab Mode failed to load");
+                        $("#lab-mode-app").html('<div class="lab-mode-error"><h3>Lab Mode Loading Error</h3><p>Lab Mode assets failed to load. Please refresh the page.</p><button class="lab-btn lab-btn-primary" onclick="location.reload()">Refresh Page</button></div>');
+                        clearInterval(initInterval);
+                    }
+                }, 100);
+            }
+        });
+        </script>';
     }
     
     /**
@@ -224,15 +250,15 @@ class Micro_Coach_AI_Lab {
             'lab-mode-js',
             plugins_url('assets/lab-mode.js', __FILE__),
             ['jquery'],
-            '1.0.0',
-            true
+            time(),  // Use timestamp for cache busting during development
+            false  // Load in header instead of footer
         );
         
         wp_enqueue_style(
             'lab-mode-css',
             plugins_url('assets/lab-mode.css', __FILE__),
             [],
-            '1.0.0'
+            time()  // Use timestamp for cache busting during development
         );
         
         // Localize script with AJAX URL and nonce

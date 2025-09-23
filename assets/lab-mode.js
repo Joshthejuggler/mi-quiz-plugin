@@ -2583,33 +2583,32 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
         }
     };
 
-    // Initialize when document is ready and when tabs are clicked
-    $(document).ready(function() {
-        if ($('#lab-mode-app').length > 0) {
+    // Initialize Lab Mode when called
+    function initializeLabMode() {
+        if ($('#lab-mode-app').length > 0 && !window.LabModeAppInitialized) {
+            console.log('Initializing Lab Mode...');
             LabModeApp.init();
+            return true;
         }
+        return false;
+    }
+    
+    // Make initialization function globally available
+    window.initializeLabMode = initializeLabMode;
+    
+    // Auto-initialize when document is ready
+    $(document).ready(function() {
+        initializeLabMode();
         
-        // Also initialize when Lab Mode tab is clicked (for dynamic loading)
+        // Also try when Lab Mode tab is clicked
         $(document).on('click', '[data-tab="tab-lab"]', function() {
-            // Small delay to ensure tab content is visible
-            setTimeout(function() {
-                if ($('#lab-mode-app').length > 0) {
-                    // Only initialize if not already initialized
-                    if (!window.LabModeAppInitialized) {
-                        LabModeApp.init();
-                        window.LabModeAppInitialized = true;
-                    }
-                }
-            }, 100);
+            setTimeout(initializeLabMode, 100);
         });
     });
     
-    // Also try to initialize on window load as a fallback
+    // Fallback initialization on window load
     $(window).on('load', function() {
-        if ($('#lab-mode-app').length > 0 && !window.LabModeAppInitialized) {
-            LabModeApp.init();
-            window.LabModeAppInitialized = true;
-        }
+        initializeLabMode();
     });
 
 })(jQuery);
