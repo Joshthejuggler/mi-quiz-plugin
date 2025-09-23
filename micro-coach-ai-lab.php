@@ -204,41 +204,116 @@ class Micro_Coach_AI_Lab {
         
         if (!$all_complete) return;
         
-        // Enqueue Lab Mode assets
-        $this->enqueue_lab_mode_assets();
-        
-        // Render empty container - JavaScript will populate it immediately
+        // Render empty container - assets will load when tab becomes active
         echo '<div id="lab-mode-app"></div>';
         ?>
         <script>
-        // Force Lab Mode initialization when this content loads
+        // Load Lab Mode assets and initialize only when the tab becomes active
         jQuery(document).ready(function($) {
             console.log("Lab Mode PHP inline script running...");
             
-            // Try the global initialization function first
-            if (typeof window.initializeLabMode === "function") {
-                console.log("Using global initializeLabMode function");
-                window.initializeLabMode();
-            } else if (typeof window.LabModeApp !== "undefined" && !window.LabModeAppInitialized) {
-                console.log("Using direct LabModeApp.init()");
-                window.LabModeApp.init();
-            } else {
-                console.log("Waiting for Lab Mode to load...");
-                // Wait for Lab Mode to load
-                var attempts = 0;
-                var initInterval = setInterval(function() {
-                    attempts++;
-                    if (typeof window.initializeLabMode === "function") {
-                        console.log("Lab Mode loaded, initializing...");
-                        window.initializeLabMode();
-                        clearInterval(initInterval);
-                    } else if (attempts > 30) {
-                        console.error("Lab Mode failed to load");
-                        $("#lab-mode-app").html('<div class="lab-mode-error"><h3>Lab Mode Loading Error</h3><p>Lab Mode assets failed to load. Please refresh the page.</p><button class="lab-btn lab-btn-primary" onclick="location.reload()">Refresh Page</button></div>');
-                        clearInterval(initInterval);
-                    }
-                }, 100);
+            // Flags to prevent multiple loads/initializations
+            window.labModeAssetsLoaded = false;
+            window.labModeInitialized = false;
+            
+            // Function to load Lab Mode assets dynamically
+            function loadLabModeAssets() {
+                if (window.labModeAssetsLoaded) {
+                    console.log("Lab Mode assets already loaded, skipping...");
+                    return Promise.resolve();
+                }
+                
+                console.log("Loading Lab Mode assets...");
+                window.labModeAssetsLoaded = true;
+                
+                return new Promise(function(resolve, reject) {
+                    // Load CSS first
+                    var css = document.createElement('link');
+                    css.rel = 'stylesheet';
+                    css.href = '<?php echo esc_url_raw(plugins_url('assets/lab-mode.css', __FILE__)); ?>?ver=' + Date.now();
+                    document.head.appendChild(css);
+                    
+                    // Load JavaScript
+                    var script = document.createElement('script');
+                    script.src = '<?php echo esc_url_raw(plugins_url('assets/lab-mode.js', __FILE__)); ?>?ver=' + Date.now();
+                    script.onload = function() {
+                        console.log("Lab Mode assets loaded successfully");
+                        // Set up localized data
+                        window.labMode = {
+                            ajaxUrl: '<?php echo esc_url_raw(admin_url('admin-ajax.php')); ?>',
+                            nonce: '<?php echo wp_create_nonce('mc_lab_nonce'); ?>',
+                            userId: <?php echo get_current_user_id(); ?>,
+                            restUrl: '<?php echo esc_url_raw(rest_url('wp/v2/')); ?>',
+                            isAdmin: <?php echo current_user_can('manage_options') ? 'true' : 'false'; ?>,
+                            defaultModel: '<?php echo class_exists('Micro_Coach_AI') ? Micro_Coach_AI::get_selected_model() : 'gpt-4o-mini'; ?>'
+                        };
+                        resolve();
+                    };
+                    script.onerror = function() {
+                        console.error("Failed to load Lab Mode JavaScript");
+                        reject(new Error('Failed to load Lab Mode assets'));
+                    };
+                    document.head.appendChild(script);
+                });
             }
+            
+            // Function to initialize Lab Mode
+            function initializeLabModeOnce() {
+                if (window.labModeInitialized) {
+                    console.log("Lab Mode already initialized, skipping...");
+                    return;
+                }
+                
+                console.log("Initializing Lab Mode for the first time...");
+                window.labModeInitialized = true;
+                
+                // First load assets, then initialize
+                loadLabModeAssets().then(function() {
+                    // Wait a bit for scripts to be fully loaded and parsed
+                    setTimeout(function() {
+                        // Try the global initialization function first
+                        if (typeof window.initializeLabMode === "function") {
+                            console.log("Using global initializeLabMode function");
+                            window.initializeLabMode();
+                        } else if (typeof window.LabModeApp !== "undefined" && !window.LabModeAppInitialized) {
+                            console.log("Using direct LabModeApp.init()");
+                            window.LabModeApp.init();
+                        } else {
+                            console.log("Waiting for Lab Mode to load...");
+                            // Wait for Lab Mode to load
+                            var attempts = 0;
+                            var initInterval = setInterval(function() {
+                                attempts++;
+                                if (typeof window.initializeLabMode === "function") {
+                                    console.log("Lab Mode loaded, initializing...");
+                                    window.initializeLabMode();
+                                    clearInterval(initInterval);
+                                } else if (attempts > 30) {
+                                    console.error("Lab Mode failed to load");
+                                    $("#lab-mode-app").html('<div class="lab-mode-error"><h3>Lab Mode Loading Error</h3><p>Lab Mode assets failed to load. Please refresh the page.</p><button class="lab-btn lab-btn-primary" onclick="location.reload()">Refresh Page</button></div>');
+                                    clearInterval(initInterval);
+                                }
+                            }, 100);
+                        }
+                    }, 200);
+                }).catch(function(error) {
+                    console.error("Failed to load Lab Mode assets:", error);
+                    $("#lab-mode-app").html('<div class="lab-mode-error"><h3>Lab Mode Loading Error</h3><p>Failed to load Lab Mode assets. Please refresh the page.</p><button class="lab-btn lab-btn-primary" onclick="location.reload()">Refresh Page</button></div>');
+                });
+            }
+            
+            // Check if Lab Mode tab is currently active (should not be with our changes)
+            var labTab = $('#tab-lab');
+            if (labTab.hasClass('active')) {
+                console.log("Lab Mode tab is active, initializing immediately...");
+                initializeLabModeOnce();
+            }
+            
+            // Listen for tab clicks to initialize Lab Mode when its tab becomes active
+            $(document).on('click', '[data-tab="tab-lab"]', function() {
+                console.log("Lab Mode tab clicked, initializing...");
+                setTimeout(initializeLabModeOnce, 100); // Small delay to let tab content show
+            });
         });
         </script>
         <?php

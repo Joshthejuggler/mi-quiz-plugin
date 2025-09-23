@@ -114,7 +114,51 @@ Test the enhanced flow in:
 - Should show appropriate error message
 - Should not break the interface
 
-### 6. Performance Testing
+### 6. AI Coach Generation Error Messages
+
+#### Testing OpenAI API Issues
+1. **Invalid API Key Test:**
+   - Go to Quiz Platform → Settings → AI Integration
+   - Set OpenAI API Key to invalid value (e.g., "sk-invalid123")
+   - Navigate to AI Coach tab and click "Show experiments that fit my settings"
+   - Should display warning banner: ⚠️ "OpenAI API key not configured. Using backup experiment generator."
+   - Banner should have yellow/amber styling (warning class)
+   - Experiments should still generate using fallback system
+
+2. **Missing API Key Test:**
+   - Clear the OpenAI API Key field completely
+   - Click "Show experiments that fit my settings" 
+   - Should display warning banner with appropriate error message
+   - Fallback experiments should still be generated
+
+3. **Network Timeout Test:**
+   - Use a valid API key but simulate network issues
+   - Should display warning banner: ⚠️ "OpenAI request timed out. Using backup experiment generator."
+   - Should use shorter timeout (15 seconds) to prevent UI freezing
+   - Fallback to backup experiments should work seamlessly
+
+4. **API Service Unavailable Test:**
+   - When OpenAI API returns 500+ server errors
+   - Should display warning banner: ⚠️ "OpenAI temporarily unavailable. Using backup experiment generator."
+   - Should show retry behavior with longer timeout on second attempt
+   - Eventually fall back to backup experiments if retry fails
+
+#### Banner Visual Verification
+- Warning banners should have amber/yellow background (`#fef3c7`)
+- Warning text should be dark amber (`#92400e`)
+- Info banners should have blue background (`#eff6ff`) 
+- Banner should appear prominently above experiment results
+- Banner should be dismissible by scrolling or interaction
+- Multiple attempts should update banner message appropriately
+
+#### Error Message User Experience
+- Error messages should be friendly and non-technical
+- Should clearly indicate that experiments are still available (using backup)
+- Should not block the user from proceeding
+- Should provide context about why AI generation failed
+- Should encourage the user that they still get value from backup experiments
+
+### 7. Performance Testing
 
 #### Script Loading
 - Verify `dashboard-enhanced.js` only loads for enhanced flow users

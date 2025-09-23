@@ -428,245 +428,97 @@ TXT;
      * AJAX: record heart/rating.
      */
     public function ajax_ai_feedback(){
-        try {
-            // Security validation
-            $security_check = MC_Security::verify_ajax_request('mc_ai_feedback', 'read');
-            if (is_wp_error($security_check)) {
-                MC_Security::log_security_event('ai_feedback_security_fail', $security_check->get_error_message());
-                wp_send_json_error(['message' => 'Security validation failed'], 403);
-            }
-            
-            if (!is_user_logged_in()) {
-                wp_send_json_error(['message'=>'Please sign in.'], 401);
-            }
-            
-            $user_id = get_current_user_id();
-            
-            // Rate limiting check
-            if (!MC_Security::check_rate_limit($user_id, 'ai_feedback', 20, 3600)) {
-                wp_send_json_error(['message' => 'Too many requests. Please try again later.'], 429);
-            }
-            
-            // Validate and sanitize input data
-            $title = sanitize_text_field($_POST['title'] ?? '');
-            $lens  = sanitize_text_field($_POST['lens'] ?? '');
-            $micro = sanitize_textarea_field($_POST['micro'] ?? '');
-            
-            if (empty($title) || empty($lens)) {
-                wp_send_json_error(['message' => 'Title and lens are required'], 400);
-            }
-            
-            // Validate JSON fields
-            $tags_raw = stripslashes($_POST['tags'] ?? '[]');
-            $tags = json_decode($tags_raw, true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                wp_send_json_error(['message' => 'Invalid tags format'], 400);
-            }
-            $tags = is_array($tags) ? array_map('sanitize_text_field', $tags) : [];
-            
-            $liked = intval($_POST['liked'] ?? 0) ? 1 : 0;
-            $rating = isset($_POST['rating']) ? max(0, min(5, intval($_POST['rating']))) : null;
-            
-            $meta = [
-                'why_this_fits_you' => sanitize_textarea_field($_POST['why'] ?? ''),
-                'prompt_to_start' => sanitize_textarea_field($_POST['prompt'] ?? ''),
-                'signal_to_watch_for' => sanitize_textarea_field($_POST['signal'] ?? ''),
-                'safety_notes' => sanitize_textarea_field($_POST['safety'] ?? ''),
-            ];
-            
-            // Validate and sanitize steps array
-            $steps_raw = stripslashes($_POST['steps'] ?? '[]');
-            $steps = json_decode($steps_raw, true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                wp_send_json_error(['message' => 'Invalid steps format'], 400);
-            }
-            if (is_array($steps)) {
-                $meta['steps'] = array_values(array_map('sanitize_text_field', $steps));
-            }
-            
-            // Validate and sanitize reflection questions array
-            $reflect_raw = stripslashes($_POST['reflect'] ?? '[]');
-            $reflect = json_decode($reflect_raw, true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                wp_send_json_error(['message' => 'Invalid reflection format'], 400);
-            }
-            if (is_array($reflect)) {
-                $meta['reflection_questions'] = array_values(array_map('sanitize_text_field', $reflect));
-            }
-            
-            // Validate numeric filters
-            $filters = [
-                'cost' => max(0, min(10, intval($_POST['cost'] ?? 0))),
-                'time' => max(0, min(10, intval($_POST['time'] ?? 0))),
-                'energy' => max(0, min(10, intval($_POST['energy'] ?? 0))),
-                'variety' => max(0, min(10, intval($_POST['variety'] ?? 0))),
-            ];
-            
-            // Validate lenses array
-            $lenses_raw = stripslashes($_POST['lenses'] ?? '[]');
-            $lenses = json_decode($lenses_raw, true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                wp_send_json_error(['message' => 'Invalid lenses format'], 400);
-            }
-            $filters['lenses'] = is_array($lenses) ? array_map('sanitize_text_field', $lenses) : [];
-            
-            // Get user profile data with caching
-            $profile_data = MC_Cache::get_user_profile($user_id);
-            $mi_results = $profile_data['mi_results'] ?? [];
-            $cdt_results = $profile_data['cdt_results'] ?? [];
-            $pt_results = $profile_data['bartle_results'] ?? [];
-            
-            $profile = [
-                'mi_top3' => $mi_results['top3'] ?? [],
-                'cdt_top' => isset($cdt_results['sortedScores'][0][0]) ? $cdt_results['sortedScores'][0][0] : null,
-                'pt' => isset($pt_results['sortedScores'][0][0]) ? $pt_results['sortedScores'][0][0] : null
-            ];
-            
-            $hash = self::idea_hash($title, $lens);
-            
-            // Ensure tables exist
-            $this->maybe_create_tables();
-            
-            // Save experiment and feedback
-            $this->upsert_experiment($hash, $title, $lens, $micro, $tags, $meta);
-            $this->save_feedback_row($hash, $user_id, $liked, $rating, $profile, $filters);
-            
-            // Clear relevant caches
-            MC_Cache::clear_user_profile($user_id);
-            
-            wp_send_json_success(['hash' => $hash]);
-            
-        } catch (Exception $e) {
-            error_log('MC_AI ajax_ai_feedback error: ' . $e->getMessage());
-            wp_send_json_error(['message' => 'An error occurred while saving feedback'], 500);
-        }
+        if (!is_user_logged_in()) wp_send_json_error(['message'=>'Please sign in.'], 401);
+        $user_id = get_current_user_id();
+        $title = sanitize_text_field($_POST['title'] ?? '');
+        $lens  = sanitize_text_field($_POST['lens'] ?? '');
+        $micro = sanitize_textarea_field($_POST['micro'] ?? '');
+        $tags  = json_decode(stripslashes($_POST['tags'] ?? '[]'), true) ?: [];
+        $liked = intval($_POST['liked'] ?? 0) ? 1 : 0;
+        $rating= isset($_POST['rating']) ? max(0, min(5, intval($_POST['rating']))) : null;
+        $meta = [
+            'why_this_fits_you' => sanitize_textarea_field($_POST['why'] ?? ''),
+            'prompt_to_start' => sanitize_textarea_field($_POST['prompt'] ?? ''),
+            'signal_to_watch_for' => sanitize_textarea_field($_POST['signal'] ?? ''),
+            'safety_notes' => sanitize_textarea_field($_POST['safety'] ?? ''),
+        ];
+        // Steps + reflection can be arrays via JSON
+        $steps = json_decode(stripslashes($_POST['steps'] ?? '[]'), true);
+        $reflect = json_decode(stripslashes($_POST['reflect'] ?? '[]'), true);
+        if (is_array($steps)) $meta['steps'] = array_values(array_map('sanitize_text_field', $steps));
+        if (is_array($reflect)) $meta['reflection_questions'] = array_values(array_map('sanitize_text_field', $reflect));
+        $filters = [
+            'cost'=>intval($_POST['cost'] ?? 0), 'time'=>intval($_POST['time'] ?? 0), 'energy'=>intval($_POST['energy'] ?? 0), 'variety'=>intval($_POST['variety'] ?? 0),
+            'lenses'=>json_decode(stripslashes($_POST['lenses'] ?? '[]'), true) ?: []
+        ];
+        $mi_results  = get_user_meta($user_id, 'miq_quiz_results', true) ?: [];
+        $cdt_results = get_user_meta($user_id, 'cdt_quiz_results', true) ?: [];
+        $pt_results  = get_user_meta($user_id, 'bartle_quiz_results', true) ?: [];
+        $profile = [ 'mi_top3' => $mi_results['top3'] ?? [], 'cdt_top' => $cdt_results['sortedScores'][0][0] ?? null, 'pt' => $pt_results['sortedScores'][0][0] ?? null];
+        $hash = self::idea_hash($title, $lens);
+        $this->maybe_create_tables();
+        $this->upsert_experiment($hash, $title, $lens, $micro, $tags, $meta);
+        $this->save_feedback_row($hash, $user_id, $liked, $rating, $profile, $filters);
+        wp_send_json_success(['hash'=>$hash]);
     }
 
     /**
      * AJAX: return saved (liked) experiments for current user
      */
     public function ajax_ai_saved_list(){
-        try {
-            // Security validation
-            $security_check = MC_Security::verify_ajax_request('mc_ai_saved_list', 'read');
-            if (is_wp_error($security_check)) {
-                MC_Security::log_security_event('ai_saved_list_security_fail', $security_check->get_error_message());
-                wp_send_json_error(['message' => 'Security validation failed'], 403);
-            }
-            
-            if (!is_user_logged_in()) {
-                wp_send_json_error(['message'=>'Please sign in.'], 401);
-            }
-            
-            $user_id = get_current_user_id();
-            
-            // Rate limiting check
-            if (!MC_Security::check_rate_limit($user_id, 'ai_saved_list', 30, 3600)) {
-                wp_send_json_error(['message' => 'Too many requests. Please try again later.'], 429);
-            }
-            
-            // Check cache first
-            $cache_key = "ai_saved_list_{$user_id}";
-            $cached_result = wp_cache_get($cache_key, MC_Cache::CACHE_GROUP);
-            if (false !== $cached_result) {
-                wp_send_json_success($cached_result);
-            }
-            
-            $this->maybe_create_tables();
-            
-            global $wpdb;
-            $exp = $wpdb->prefix . self::TABLE_EXPERIMENTS;
-            $fb = $wpdb->prefix . self::TABLE_FEEDBACK;
-            
-            // Use prepared statement with proper escaping
-            $rows = $wpdb->get_results($wpdb->prepare(
-                "SELECT e.hash,e.title,e.lens,e.micro,e.tags,e.meta,
-                        f.updated_at as last_saved,
-                        f.filters as last_filters
-                 FROM `$exp` e
-                 INNER JOIN (
-                    SELECT x.* FROM `$fb` x
-                    INNER JOIN (
-                        SELECT hash, MAX(updated_at) AS latest
-                        FROM `$fb`
-                        WHERE user_id=%d
-                        GROUP BY hash
-                    ) l ON l.hash=x.hash AND l.latest=x.updated_at
-                    WHERE x.user_id=%d AND x.liked=1
-                 ) f ON f.hash=e.hash
-                 WHERE e.hidden=0
-                 ORDER BY f.updated_at DESC
-                 LIMIT 300",
-                 $user_id, $user_id
-            ), ARRAY_A);
-            
-            $items = [];
-            $hashes = [];
-            
-            foreach ($rows as $r) {
-                // Validate JSON data before decoding
-                $filters = [];
-                if (!empty($r['last_filters'])) {
-                    $filters = json_decode($r['last_filters'], true);
-                    if (json_last_error() !== JSON_ERROR_NONE) {
-                        $filters = [];
-                    }
-                }
-                
-                $meta = [];
-                if (!empty($r['meta'])) {
-                    $meta = json_decode($r['meta'], true);
-                    if (json_last_error() !== JSON_ERROR_NONE) {
-                        $meta = [];
-                    }
-                }
-                
-                $tags = [];
-                if (!empty($r['tags'])) {
-                    $tags = json_decode($r['tags'], true);
-                    if (json_last_error() !== JSON_ERROR_NONE) {
-                        $tags = [];
-                    }
-                }
-                
-                $items[] = [
-                    'title' => sanitize_text_field($r['title']),
-                    'lens'  => sanitize_text_field($r['lens']),
-                    'micro_description' => sanitize_textarea_field($r['micro']),
-                    'tags'  => array_map('sanitize_text_field', $tags),
-                    'estimated_cost' => max(0, intval($filters['cost'] ?? 0)),
-                    'estimated_time' => max(0, intval($filters['time'] ?? 0)),
-                    'estimated_energy' => max(0, intval($filters['energy'] ?? 0)),
-                    'estimated_variety' => max(0, intval($filters['variety'] ?? 0)),
-                    'hash' => sanitize_text_field($r['hash']),
-                    'why_this_fits_you' => sanitize_textarea_field($meta['why_this_fits_you'] ?? ''),
-                    'prompt_to_start' => sanitize_textarea_field($meta['prompt_to_start'] ?? ''),
-                    'steps' => is_array($meta['steps'] ?? null) ? array_map('sanitize_text_field', $meta['steps']) : [],
-                    'signal_to_watch_for' => sanitize_textarea_field($meta['signal_to_watch_for'] ?? ''),
-                    'reflection_questions' => is_array($meta['reflection_questions'] ?? null) ? array_map('sanitize_text_field', $meta['reflection_questions']) : [],
-                    'safety_notes' => sanitize_textarea_field($meta['safety_notes'] ?? ''),
-                ];
-                $hashes[] = $r['hash'];
-            }
-            
-            $stats = $this->experiment_stats_for_hashes($hashes, $user_id);
-            foreach ($items as &$item) {
-                $h = $item['hash'];
-                $item['_stats'] = $stats[$h] ?? ['like_count'=>0,'avg_rating'=>0];
-            }
-            unset($item);
-            
-            $result = ['items' => $items];
-            
-            // Cache the result for 15 minutes
-            wp_cache_set($cache_key, $result, MC_Cache::CACHE_GROUP, 900);
-            
-            wp_send_json_success($result);
-            
-        } catch (Exception $e) {
-            error_log('MC_AI ajax_ai_saved_list error: ' . $e->getMessage());
-            wp_send_json_error(['message' => 'An error occurred while retrieving saved experiments'], 500);
+        if (!is_user_logged_in()) wp_send_json_error(['message'=>'Please sign in.'], 401);
+        $user_id = get_current_user_id();
+        $this->maybe_create_tables();
+        global $wpdb; $exp = $wpdb->prefix . self::TABLE_EXPERIMENTS; $fb = $wpdb->prefix . self::TABLE_FEEDBACK;
+        // Only include items whose latest feedback row for this user is liked=1
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT e.hash,e.title,e.lens,e.micro,e.tags,e.meta,
+                    f.updated_at as last_saved,
+                    f.filters as last_filters
+             FROM `$exp` e
+             INNER JOIN (
+                SELECT x.* FROM `$fb` x
+                INNER JOIN (
+                    SELECT hash, MAX(updated_at) AS latest
+                    FROM `$fb`
+                    WHERE user_id=%d
+                    GROUP BY hash
+                ) l ON l.hash=x.hash AND l.latest=x.updated_at
+                WHERE x.user_id=%d AND x.liked=1
+             ) f ON f.hash=e.hash
+             WHERE e.hidden=0
+             ORDER BY f.updated_at DESC
+             LIMIT 300",
+             $user_id, $user_id
+        ), ARRAY_A);
+        $items = [];
+        $hashes = [];
+        foreach ($rows as $r){
+            $filters = json_decode($r['last_filters'] ?: '{}', true) ?: [];
+            $meta = json_decode($r['meta'] ?: '{}', true) ?: [];
+            $items[] = [
+                'title' => $r['title'],
+                'lens'  => $r['lens'],
+                'micro_description' => $r['micro'],
+                'tags'  => (json_decode($r['tags'] ?: '[]', true) ?: []),
+                'estimated_cost' => isset($filters['cost']) ? intval($filters['cost']) : 0,
+                'estimated_time' => isset($filters['time']) ? intval($filters['time']) : 0,
+                'estimated_energy' => isset($filters['energy']) ? intval($filters['energy']) : 0,
+                'estimated_variety' => isset($filters['variety']) ? intval($filters['variety']) : 0,
+                'hash' => $r['hash'],
+                'why_this_fits_you' => $meta['why_this_fits_you'] ?? '',
+                'prompt_to_start' => $meta['prompt_to_start'] ?? '',
+                'steps' => $meta['steps'] ?? [],
+                'signal_to_watch_for' => $meta['signal_to_watch_for'] ?? '',
+                'reflection_questions' => $meta['reflection_questions'] ?? [],
+                'safety_notes' => $meta['safety_notes'] ?? '',
+            ];
+            $hashes[] = $r['hash'];
         }
+        $stats = $this->experiment_stats_for_hashes($hashes, $user_id);
+        foreach ($items as &$it){ $h=$it['hash']; $it['_stats']=$stats[$h] ?? ['like_count'=>0,'avg_rating'=>0]; }
+        unset($it);
+        wp_send_json_success(['items'=>$items]);
     }
 
     /**

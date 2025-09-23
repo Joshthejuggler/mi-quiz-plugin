@@ -335,13 +335,13 @@ class Micro_Coach_Core {
                     $lab_mode_available = isset($custom_tabs['tab-lab']);
                     ?>
                     <?php if ($lab_mode_available): ?>
-                        <button class="tab-link active" data-tab="tab-lab">🧪 Lab Mode</button>
+                        <button class="tab-link" data-tab="tab-lab">🧪 Lab Mode</button>
                         <button class="tab-link" data-tab="tab-composite">🧩 Your Self-Discovery Profile</button>
                     <?php else: ?>
-                        <button class="tab-link active" data-tab="tab-composite">🧩 Your Self-Discovery Profile</button>
+                        <button class="tab-link" data-tab="tab-composite">🧩 Your Self-Discovery Profile</button>
                     <?php endif; ?>
                     <button class="tab-link" data-tab="tab-path">📊 Detailed Results</button>
-                    <button class="tab-link" data-tab="tab-ai">🤖 AI Coach</button>
+                    <button class="tab-link active" data-tab="tab-ai">🤖 AI Coach</button>
                     <?php
                     // Add other custom tabs (excluding lab which we handled above)
                     foreach ($custom_tabs as $tab_id => $tab_label) {
@@ -354,7 +354,7 @@ class Micro_Coach_Core {
                 </div>
                 <div class="tab-content-wrapper">
                     <?php if ($lab_mode_available): ?>
-                        <div id="tab-lab" class="tab-content active"><?php do_action('mc_dashboard_custom_tab_content', 'tab-lab'); ?></div>
+                        <div id="tab-lab" class="tab-content"><?php do_action('mc_dashboard_custom_tab_content', 'tab-lab'); ?></div>
                         <div id="tab-composite" class="tab-content">
                     <?php else: ?>
                         <div id="tab-composite" class="tab-content active">
@@ -669,7 +669,7 @@ class Micro_Coach_Core {
                             </div>
                         </div>
                         <!-- AI Coach Tab -->
-                        <div id="tab-ai" class="tab-content">
+                        <div id="tab-ai" class="tab-content active">
                             <?php 
                                 if (class_exists('Micro_Coach_AI')) {
                                     (new Micro_Coach_AI())->render_ai_coach_tab();
@@ -1385,6 +1385,8 @@ class Micro_Coach_Core {
             .ai-alert{ background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
             .ai-filters{ background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px; margin-bottom:16px; box-shadow: 0 6px 14px rgba(15,23,42,.06); }
             .ai-banner{ background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; padding:10px 12px; border-radius:8px; margin-bottom:12px; }
+            .ai-banner.warning{ background:#fef3c7; border:1px solid #f59e0b; color:#92400e; }
+            .ai-banner.info{ background:#eff6ff; border:1px solid #60a5fa; color:#1e40af; }
             .ai-section-sub{ margin:4px 0 10px; color:#475569; font-size:13px; }
             .ai-debug{ background:#fff7ed; border:1px solid #fed7aa; color:#7c2d12; padding:10px 12px; border-radius:8px; margin:12px 0; }
             .ai-debug summary{ cursor:pointer; font-weight:600; }
@@ -1978,20 +1980,39 @@ class Micro_Coach_Core {
                     const modelSel = document.getElementById('ai-model');
                     if (modelSel && modelSel.value) body.append('model', modelSel.value);
                     fetch(ajaxUrl, { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body })
-                        .then(r=>r.json())
-                        .then(j=>{
-                            const banner = document.getElementById('ai-banner');
-                            if (j && j.success && j.data){
+                        .then(r=>{
+                            console.log('AI Coach AJAX response status:', r.status);
+                            return r.text(); // Get raw text first
+                        })
+                        .then(rawText=>{
+                            console.log('AI Coach AJAX raw response:', rawText);
+                            try {
+                                const j = JSON.parse(rawText);
+                                console.log('AI Coach AJAX parsed response:', j);
+                                
+                                const banner = document.getElementById('ai-banner');
+                                if (j && j.success && j.data){
                                 const shortlist = j.data.shortlist||[]; const more = j.data.more||[];
                                 aiAllIdeas = [...shortlist, ...more];
                                 renderIdeas(shortlistEl, shortlist);
                                 if (Array.isArray(more) && more.length){ if (moreWrap) moreWrap.style.display='block'; renderIdeas(moreEl, more); } else { if (moreWrap) moreWrap.style.display='none'; if (moreEl) moreEl.innerHTML=''; }
                                 if (banner) {
-                                    if (j.data.used_fallback) {
+                                    // Check for error message first (user-friendly)
+                                    if (j.data.error && j.data.error.trim()) {
                                         banner.style.display='block';
+                                        banner.className = 'ai-banner warning';
+                                        banner.innerHTML = '⚠️ ' + j.data.error;
+                                    } else if (j.data.used_fallback) {
+                                        // Fallback to technical reason if no user-friendly error message
+                                        banner.style.display='block';
+                                        banner.className = 'ai-banner info';
                                         const reason = j.data.fallback_reason || 'unknown';
-                                        banner.textContent = 'Using placeholders — ' + reason.replace(/_/g,' ');
-                                    } else { banner.style.display='none'; banner.textContent=''; }
+                                        banner.textContent = 'Using backup generator — ' + reason.replace(/_/g,' ');
+                                    } else { 
+                                        banner.style.display='none'; 
+                                        banner.textContent=''; 
+                                        banner.className = 'ai-banner';
+                                    }
                                 }
                                 // Debug render (admins only)
                                 const dbgEl = document.getElementById('ai-debug');
@@ -2014,10 +2035,17 @@ class Micro_Coach_Core {
                                 }
                             }
                             else {
+                                console.log('AI Coach AJAX response indicates failure:', j);
                                 if (shortlistEl) shortlistEl.innerHTML = '<div class="ai-card">We could not generate ideas just now.</div>';
                                 if (moreEl) moreEl.innerHTML = '';
                                 if (moreWrap) moreWrap.style.display='none';
                                 if (banner) { banner.style.display='block'; banner.textContent='Request failed — please try again.'; }
+                            }
+                            } catch (parseError) {
+                                console.error('AI Coach AJAX JSON parse error:', parseError);
+                                console.log('Failed to parse response:', rawText);
+                                if (shortlistEl) shortlistEl.innerHTML = '<div class="ai-card">Response parsing error. Check console for details.</div>';
+                                if (banner) { banner.style.display='block'; banner.textContent='Response parsing error — check console.'; }
                             }
                         })
                         .catch(()=>{ shortlistEl.innerHTML = '<div class="ai-card">Network error. Please try again.</div>'; if (moreEl) moreEl.innerHTML=''; if (moreWrap) moreWrap.style.display='none'; })
