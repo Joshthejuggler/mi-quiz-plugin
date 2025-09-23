@@ -1844,6 +1844,9 @@
             $('#lab-mode-app').html(html);
             this.currentStep = 'experiments';
             
+            // Scroll to top after showing experiments
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
             // Setup debug toggle event listeners
             this.setupDebugToggles();
         },
@@ -2317,6 +2320,81 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             });
         },
         
+        // Build specialized prompt for evolution based on user's specific feedback
+        buildEvolutionPrompt: function(originalExperiment, reflection) {
+            // Get profile data
+            let topMI = [];
+            let curiosities = [];
+            let roleModels = [];
+            let constraints = {};
+            
+            if (this.profileData?.mi_results) {
+                topMI = this.profileData.mi_results.slice(0, 3);
+            }
+            
+            if (this.qualifiers?.curiosity) {
+                curiosities = this.qualifiers.curiosity.curiosities || [];
+                roleModels = this.qualifiers.curiosity.roleModels || [];
+                constraints = this.qualifiers.curiosity.constraints || {};
+            }
+            
+            // Create meaningful fallbacks if no profile data
+            if (topMI.length === 0) {
+                topMI = [{ label: 'Creative Intelligence' }, { label: 'Problem-Solving' }, { label: 'Learning' }];
+            }
+            if (curiosities.length === 0) {
+                curiosities = ['personal growth', 'skill development', 'creative expression'];
+            }
+            if (roleModels.length === 0) {
+                roleModels = ['innovative thinkers', 'skilled practitioners', 'growth-minded individuals'];
+            }
+            
+            const timePerWeek = constraints.timePerWeekHours || 3;
+            const budget = constraints.budget || 50;
+            const risk = constraints.risk || 50;
+            
+            // Build detailed evolution context
+            const evolutionContext = [];
+            
+            if (reflection.evolve_notes) {
+                evolutionContext.push(`SPECIFIC USER REQUEST: "${reflection.evolve_notes}"`);
+            }
+            
+            if (reflection.difficulty) {
+                if (reflection.difficulty >= 4) {
+                    evolutionContext.push('User found the original experiment too challenging - make it more accessible');
+                } else if (reflection.difficulty <= 2) {
+                    evolutionContext.push('User found the original experiment too easy - increase the challenge level');
+                }
+            }
+            
+            if (reflection.fit <= 2) {
+                evolutionContext.push('User felt poor fit with original - improve personalization and relevance');
+            }
+            
+            if (reflection.learning <= 2) {
+                evolutionContext.push('User felt low learning value - enhance practical learning outcomes');
+            }
+            
+            const profileSummary = [
+                `Top strengths: ${topMI.map(mi => mi.label).join(', ')}`,
+                `Interests: ${curiosities.join(', ')}`,
+                `Inspiration: ${roleModels.join(', ')}`,
+                `Constraints: ${timePerWeek}h/week, $${budget} budget, ${risk}/100 risk tolerance`
+            ].join('\n- ');
+            
+            const evolutionPrompt = `You are evolving an experiment based on specific user feedback. The user tried the original experiment and wants it evolved with their specific changes.
+
+IMPORTANT: Focus heavily on the user's specific evolution request. This is not a general variant - it's a targeted improvement based on their experience.
+
+Return only valid JSON with the same structure as the original experiment.`;
+            
+            return {
+                system: evolutionPrompt,
+                user: `Original experiment: ${JSON.stringify(originalExperiment)}\n\nUser profile:\n- ${profileSummary}\n\nEVOLUTION FEEDBACK:\n${evolutionContext.join('\n')}\n\nCreate an evolved version that specifically addresses the user's feedback, especially their specific request: "${reflection.evolve_notes || 'General improvements requested'}". Keep the same archetype but modify the approach, steps, and details to match their request.`
+            };
+        },
+        
         // Build AI prompt for variant generation with reflection feedback
         buildVariantPrompt: function(originalExperiment) {
             // Get profile data - use cached data if available, otherwise create fallback
@@ -2426,13 +2504,46 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             
             if (!experiment) return;
             
+            // Store as current experiment for potential evolution
+            this.currentExperiment = experiment;
+            
             this.showLoading('Starting experiment...');
             
-            // In a real implementation, this would save the experiment as 'Active' in the database
-            // For now, just show the run & reflect interface
-            setTimeout(() => {
-                this.showRunningExperiment(experiment, experimentIndex);
-            }, 1000);
+            // First, save the experiment to database if it doesn't have a database ID
+            if (!experiment.database_id) {
+                this.saveExperimentToDatabase(experiment, experimentIndex);
+            } else {
+                this.showRunningExperiment(experiment, experiment.database_id);
+            }
+        },
+        
+        // Save experiment to database and get database ID
+        saveExperimentToDatabase: function(experiment, experimentIndex) {
+            $.ajax({
+                url: labMode.ajaxUrl,
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    action: 'mc_lab_save_experiment',
+                    nonce: labMode.nonce,
+                    experiment_data: JSON.stringify(experiment),
+                    archetype: experiment.archetype || 'Discover'
+                },
+                success: (response) => {
+                    if (response.success && response.data.experiment_id) {
+                        // Store the database ID in the experiment
+                        this.experiments[experimentIndex].database_id = response.data.experiment_id;
+                        
+                        // Now show the running experiment with the database ID
+                        this.showRunningExperiment(experiment, response.data.experiment_id);
+                    } else {
+                        this.showError('Failed to save experiment to database');
+                    }
+                },
+                error: () => {
+                    this.showError('Network error while saving experiment');
+                }
+            });
         },
         
         // Show running experiment interface
@@ -2612,6 +2723,9 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 evolve_notes: formData.get('evolve_notes') || ''
             };
             
+            // Store the reflection data for potential evolution use
+            this.lastReflection = reflection;
+            
             this.showLoading('Submitting reflection and recalibrating...');
             
             $.ajax({
@@ -2625,7 +2739,12 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 },
                 success: (response) => {
                     if (response.success) {
-                        this.showRecalibrationSummary(response.data.recalibration);
+                        // If user chose 'Evolve' and provided specific notes, customize the recalibration actions
+                        if (reflection.next_action === 'Evolve') {
+                            this.showEvolutionOptions(response.data.recalibration, reflection);
+                        } else {
+                            this.showRecalibrationSummary(response.data.recalibration);
+                        }
                     } else {
                         this.showError(response.data || 'Failed to submit reflection');
                     }
@@ -2634,6 +2753,44 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     this.showError('Network error while submitting reflection');
                 }
             });
+        },
+        
+        // Show evolution options when user chose to evolve
+        showEvolutionOptions: function(recalibration, reflection) {
+            const evolveNotesText = reflection.evolve_notes ? 
+                `<div class="evolution-feedback">
+                    <h4>Your Evolution Request:</h4>
+                    <p class="user-feedback">"${reflection.evolve_notes}"</p>
+                </div>` : '';
+            
+            const html = `
+                <div class="lab-recalibration evolution-mode">
+                    <h2>Evolution Ready</h2>
+                    <div class="recalibration-summary">
+                        <h3>Preferences Updated</h3>
+                        <p>${recalibration.summary}</p>
+                        
+                        ${evolveNotesText}
+                        
+                        <div class="recalibration-details">
+                            <h4>Updated Preferences:</h4>
+                            <ul>
+                                <li>Risk Bias: ${recalibration.risk_bias}</li>
+                                <li>Solo/Group Bias: ${recalibration.solo_group_bias}</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="recalibration-actions">
+                        <button class="lab-btn lab-btn-primary" onclick="LabModeApp.generateEvolvedExperiment()">Generate Evolved Experiment</button>
+                        <button class="lab-btn lab-btn-secondary" onclick="LabModeApp.generateNextIteration()">Generate Fresh Experiments</button>
+                        <button class="lab-btn lab-btn-secondary" onclick="LabModeApp.showHistory()">View History</button>
+                    </div>
+                </div>
+            `;
+            
+            $('#lab-mode-app').html(html);
+            this.currentStep = 'evolution';
         },
         
         // Show recalibration summary
@@ -2664,6 +2821,51 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             
             $('#lab-mode-app').html(html);
             this.currentStep = 'recalibration';
+        },
+        
+        // Generate evolved experiment based on user's specific feedback
+        generateEvolvedExperiment: function() {
+            if (!this.lastReflection || !this.currentExperiment) {
+                this.showError('Missing reflection data for evolution. Please try again.');
+                return;
+            }
+            
+            this.showLoading('Generating evolved experiment based on your specific feedback...');
+            
+            // Use AI to evolve the current experiment with specific feedback
+            const evolutionPrompt = this.buildEvolutionPrompt(this.currentExperiment, this.lastReflection);
+            
+            $.ajax({
+                url: labMode.ajaxUrl,
+                type: 'POST', 
+                dataType: 'json',
+                data: {
+                    action: 'mc_lab_generate_ai_variant',
+                    nonce: labMode.nonce,
+                    original_experiment: JSON.stringify(this.currentExperiment),
+                    prompt_data: JSON.stringify(evolutionPrompt)
+                },
+                success: (response) => {
+                    if (response.success && response.data.variant) {
+                        // Replace current experiments with the evolved version
+                        this.experiments = [{
+                            ...response.data.variant,
+                            _aiGenerated: true,
+                            _evolvedFrom: this.currentExperiment.title,
+                            _evolutionNotes: this.lastReflection.evolve_notes
+                        }];
+                        
+                        this.showExperiments();
+                    } else {
+                        console.error('Evolution failed:', response);
+                        this.showError(response.data || 'Evolution failed. Please try again.');
+                    }
+                },
+                error: (xhr, status, error) => {
+                    console.error('Evolution AJAX error:', { xhr, status, error });
+                    this.showError('Network error while evolving experiment. Please try again.');
+                }
+            });
         },
         
         // Generate next iteration of experiments

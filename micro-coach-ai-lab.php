@@ -39,6 +39,7 @@ class Micro_Coach_AI_Lab {
         add_action('wp_ajax_mc_lab_submit_reflection', [$this, 'ajax_submit_reflection']);
         add_action('wp_ajax_mc_lab_get_history', [$this, 'ajax_get_history']);
         add_action('wp_ajax_mc_lab_get_experiment', [$this, 'ajax_get_experiment']);
+        add_action('wp_ajax_mc_lab_save_experiment', [$this, 'ajax_save_experiment']);
         add_action('wp_ajax_mc_lab_recalibrate', [$this, 'ajax_recalibrate']);
         add_action('wp_ajax_mc_lab_debug_user_data', [$this, 'ajax_debug_user_data']);
         add_action('wp_ajax_mc_lab_test_save_qualifiers', [$this, 'ajax_test_save_qualifiers']);
@@ -79,13 +80,13 @@ class Micro_Coach_AI_Lab {
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         
         // Experiments table
-        $sql1 = "CREATE TABLE IF NOT EXISTS `$experiments_table` (
+        $sql1 = "CREATE TABLE `$experiments_table` (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             user_id BIGINT UNSIGNED NOT NULL,
             experiment_data LONGTEXT NOT NULL,
             profile_data LONGTEXT NOT NULL,
-            archetype ENUM('Discover', 'Build', 'Share') NOT NULL,
-            status ENUM('Draft', 'Active', 'Completed', 'Archived') DEFAULT 'Draft',
+            archetype VARCHAR(20) NOT NULL DEFAULT 'Discover',
+            status VARCHAR(20) NOT NULL DEFAULT 'Draft',
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
@@ -95,28 +96,27 @@ class Micro_Coach_AI_Lab {
         ) $charset;";
         
         // Feedback table
-        $sql2 = "CREATE TABLE IF NOT EXISTS `$feedback_table` (
+        $sql2 = "CREATE TABLE `$feedback_table` (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             experiment_id BIGINT UNSIGNED NOT NULL,
             user_id BIGINT UNSIGNED NOT NULL,
             difficulty TINYINT(1) NOT NULL,
             fit TINYINT(1) NOT NULL,
             learning TINYINT(1) NOT NULL,
-            notes TEXT NULL,
-            next_action ENUM('Repeat', 'Evolve', 'Archive') NOT NULL,
-            evolve_notes TEXT NULL,
+            notes TEXT,
+            next_action VARCHAR(20) NOT NULL,
+            evolve_notes TEXT,
             submitted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY experiment_id (experiment_id),
-            KEY user_id (user_id),
-            FOREIGN KEY (experiment_id) REFERENCES `$experiments_table`(id) ON DELETE CASCADE
+            KEY user_id (user_id)
         ) $charset;";
         
         // User preferences table for recalibration
-        $sql3 = "CREATE TABLE IF NOT EXISTS `$preferences_table` (
+        $sql3 = "CREATE TABLE `$preferences_table` (
             id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             user_id BIGINT UNSIGNED NOT NULL,
-            contexts LONGTEXT NOT NULL DEFAULT '{}',
+            contexts LONGTEXT NOT NULL,
             risk_bias DECIMAL(3,2) DEFAULT 0.00,
             solo_group_bias DECIMAL(3,2) DEFAULT 0.00,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1066,66 +1066,122 @@ class Micro_Coach_AI_Lab {
      * Recalibrate user preferences based on feedback
      */
     private function recalibrate_user_preferences($user_id, $feedback) {
+        // Ensure tables exist first
+        $this->maybe_create_tables();
+        
         global $wpdb;
         $table = $wpdb->prefix . self::TABLE_LAB_USER_PREFERENCES;
         
         // Get current preferences
         $current = $wpdb->get_row($wpdb->prepare("SELECT * FROM `$table` WHERE user_id = %d", $user_id), ARRAY_A);
         
-        $contexts = !empty($current['contexts']) ? json_decode($current['contexts'], true) : [];
+        // Initialize with defaults if no preferences exist
+        $contexts = [];
+        if (!empty($current['contexts'])) {
+            $decoded_contexts = json_decode($current['contexts'], true);
+            $contexts = is_array($decoded_contexts) ? $decoded_contexts : [];
+        }
         $risk_bias = floatval($current['risk_bias'] ?? 0);
         $solo_group_bias = floatval($current['solo_group_bias'] ?? 0);
         
-        // Apply recalibration logic based on feedback
-        if ($feedback['fit'] <= 2) {
-            // Decrease weight of contexts used
-            // This would require experiment context data to implement fully
-        }
+        $changes = [];
+        $old_risk_bias = $risk_bias;
+        $old_solo_group_bias = $solo_group_bias;
         
-        if ($feedback['learning'] >= 4 && $feedback['difficulty'] >= 3 && $feedback['difficulty'] <= 4) {
-            // Mark as "sweet spot" - increase similar constraints
-        }
+        error_log("Lab Mode Recalibration - Starting values: risk_bias=$risk_bias, solo_group_bias=$solo_group_bias");
         
+        // Apply comprehensive recalibration logic based on feedback
+        
+        // Difficulty-based adjustments
         if ($feedback['difficulty'] >= 5) {
-            // Reduce risk level
-            $risk_bias = max(-1.0, $risk_bias - 0.2);
+            // Too difficult - reduce risk level
+            $risk_bias = max(-1.0, $risk_bias - 0.3);
+            $changes[] = 'reduced complexity due to high difficulty';
+        } elseif ($feedback['difficulty'] <= 2) {
+            // Too easy - increase risk level
+            $risk_bias = min(1.0, $risk_bias + 0.2);
+            $changes[] = 'increased complexity due to low difficulty';
         }
+        
+        // Fit-based adjustments
+        if ($feedback['fit'] <= 2) {
+            // Poor fit - adjust context preferences
+            if ($solo_group_bias > 0) {
+                $solo_group_bias = max(-1.0, $solo_group_bias - 0.2);
+                $changes[] = 'adjusted towards group activities due to poor fit';
+            } else {
+                $solo_group_bias = min(1.0, $solo_group_bias + 0.2);
+                $changes[] = 'adjusted towards solo activities due to poor fit';
+            }
+        } elseif ($feedback['fit'] >= 4) {
+            // Great fit - reinforce current preferences
+            if ($feedback['learning'] >= 4) {
+                $changes[] = 'reinforced current preferences due to great fit and learning';
+            }
+        }
+        
+        // Learning-based adjustments
+        if ($feedback['learning'] <= 2) {
+            // Low learning - try different approach
+            $solo_group_bias = -$solo_group_bias * 0.5; // Flip and reduce
+            $changes[] = 'adjusted approach due to low learning';
+        }
+        
+        // Sweet spot detection
+        if ($feedback['learning'] >= 4 && $feedback['difficulty'] >= 3 && $feedback['difficulty'] <= 4 && $feedback['fit'] >= 4) {
+            // Perfect zone - small reinforcement
+            $risk_bias = $risk_bias * 1.1; // Slight amplification
+            $risk_bias = max(-1.0, min(1.0, $risk_bias)); // Keep in bounds
+            $changes[] = 'fine-tuned preferences (sweet spot detected)';
+        }
+        
+        // Ensure values stay within bounds
+        $risk_bias = max(-1.0, min(1.0, $risk_bias));
+        $solo_group_bias = max(-1.0, min(1.0, $solo_group_bias));
+        
+        error_log("Lab Mode Recalibration - New values: risk_bias=$risk_bias, solo_group_bias=$solo_group_bias");
         
         // Save updated preferences
-        $wpdb->replace($table, [
+        $result = $wpdb->replace($table, [
             'user_id' => $user_id,
-            'contexts' => wp_json_encode($contexts),
+            'contexts' => wp_json_encode(empty($contexts) ? [] : $contexts),
             'risk_bias' => $risk_bias,
             'solo_group_bias' => $solo_group_bias
         ]);
         
+        if ($result === false) {
+            error_log('Lab Mode Recalibration - Failed to save preferences: ' . $wpdb->last_error);
+        } else {
+            error_log('Lab Mode Recalibration - Successfully saved preferences');
+        }
+        
         return [
             'contexts' => $contexts,
-            'risk_bias' => $risk_bias,
-            'solo_group_bias' => $solo_group_bias,
-            'summary' => $this->generate_recalibration_summary($feedback, $risk_bias)
+            'risk_bias' => round($risk_bias, 2),
+            'solo_group_bias' => round($solo_group_bias, 2),
+            'summary' => $this->generate_recalibration_summary($feedback, $changes, $old_risk_bias, $old_solo_group_bias, $risk_bias, $solo_group_bias)
         ];
     }
     
     /**
      * Generate human-readable recalibration summary
      */
-    private function generate_recalibration_summary($feedback, $risk_bias) {
-        $changes = [];
-        
-        if ($feedback['difficulty'] >= 5) {
-            $changes[] = "reduce experiment complexity";
-        }
-        
-        if ($feedback['fit'] <= 2) {
-            $changes[] = "adjust context preferences";
-        }
-        
+    private function generate_recalibration_summary($feedback, $changes, $old_risk_bias, $old_solo_group_bias, $new_risk_bias, $new_solo_group_bias) {
         if (empty($changes)) {
             return "Your preferences are well-calibrated. We'll continue with similar experiments.";
         }
         
-        return "Based on your feedback, we'll " . implode(' and ', $changes) . " in future suggestions.";
+        $summary = "Based on your feedback, we " . implode(', ', $changes) . ".";
+        
+        // Add specific value changes if significant
+        $risk_change = abs($new_risk_bias - $old_risk_bias);
+        $group_change = abs($new_solo_group_bias - $old_solo_group_bias);
+        
+        if ($risk_change > 0.1 || $group_change > 0.1) {
+            $summary .= " Your updated preference profile will guide future experiment selection.";
+        }
+        
+        return $summary;
     }
     
     /**
@@ -1210,6 +1266,65 @@ class Micro_Coach_AI_Lab {
         $experiment['experiment_data'] = json_decode($experiment['experiment_data'], true);
         
         wp_send_json_success($experiment);
+    }
+    
+    /**
+     * AJAX: Save individual experiment to database
+     */
+    public function ajax_save_experiment() {
+        check_ajax_referer('mc_lab_nonce', 'nonce');
+        
+        $user_id = get_current_user_id();
+        if (!$user_id || !$this->user_can_access_lab_mode()) {
+            error_log('Lab Mode Save Experiment - Insufficient permissions for user ID: ' . $user_id);
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $experiment_data = json_decode(stripslashes($_POST['experiment_data'] ?? ''), true);
+        $archetype = sanitize_text_field($_POST['archetype'] ?? 'Discover');
+        
+        if (!$experiment_data) {
+            error_log('Lab Mode Save Experiment - Invalid experiment data');
+            wp_send_json_error('Invalid experiment data');
+        }
+        
+        // Ensure tables exist
+        $this->maybe_create_tables();
+        
+        // Get user profile data for context
+        $profile_data = $this->get_user_profile_data($user_id);
+        if (!$profile_data) {
+            $profile_data = ['note' => 'Profile data not available at save time'];
+        }
+        
+        // Save to database
+        global $wpdb;
+        $table = $wpdb->prefix . self::TABLE_LAB_EXPERIMENTS;
+        
+        $insert_data = [
+            'user_id' => $user_id,
+            'experiment_data' => wp_json_encode($experiment_data),
+            'profile_data' => wp_json_encode($profile_data),
+            'archetype' => $archetype,
+            'status' => 'Active'
+        ];
+        
+        error_log('Lab Mode Save Experiment - Attempting to insert: ' . wp_json_encode($insert_data));
+        
+        $result = $wpdb->insert($table, $insert_data);
+        
+        if ($result === false) {
+            error_log('Lab Mode Save Experiment - Database insert failed. Error: ' . $wpdb->last_error);
+            wp_send_json_error('Failed to save experiment: ' . $wpdb->last_error);
+        }
+        
+        $experiment_id = $wpdb->insert_id;
+        error_log('Lab Mode Save Experiment - Successfully saved with ID: ' . $experiment_id);
+        
+        wp_send_json_success([
+            'experiment_id' => $experiment_id,
+            'message' => 'Experiment saved successfully'
+        ]);
     }
     
     /**
