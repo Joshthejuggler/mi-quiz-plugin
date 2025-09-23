@@ -57,14 +57,51 @@
         loadLandingView: function() {
             const html = `
                 <div class="lab-mode-landing">
-                    <h2>Welcome to Lab Mode</h2>
-                    <p class="lab-intro">Add a few details and we'll craft small, meaningful challenges that match your strengths. Each one is designed to be tried within a week and refined with your feedback.</p>
+                    <div class="lab-mode-hero">
+                        <div class="lab-hero-icon">🧪</div>
+                        <h2>Lab Mode</h2>
+                        <div class="lab-beta-badge">Beta Testing</div>
+                    </div>
+                    
+                    <div class="lab-intro-content">
+                        <p class="lab-intro-main">Create personalized experiments based on your unique strengths, curiosities, and growth areas.</p>
+                        
+                        <div class="lab-features">
+                            <div class="lab-feature">
+                                <div class="lab-feature-icon">🎯</div>
+                                <div class="lab-feature-text">
+                                    <strong>Tailored to You</strong><br>
+                                    <span>Based on your assessment results</span>
+                                </div>
+                            </div>
+                            <div class="lab-feature">
+                                <div class="lab-feature-icon">⏱️</div>
+                                <div class="lab-feature-text">
+                                    <strong>Quick & Focused</strong><br>
+                                    <span>Designed for 1-week experiments</span>
+                                </div>
+                            </div>
+                            <div class="lab-feature">
+                                <div class="lab-feature-icon">🔄</div>
+                                <div class="lab-feature-text">
+                                    <strong>Iterative Learning</strong><br>
+                                    <span>Refine based on your feedback</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="lab-testing-notice">
+                            <div class="lab-notice-icon">⚠️</div>
+                            <div class="lab-notice-content">
+                                <strong>Currently in Beta Testing</strong><br>
+                                <p>Lab Mode is experimental and may have rough edges. For full functionality, please use the <strong>AI Coach</strong> tab instead.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="lab-landing-actions">
-                        <button class="lab-start-btn lab-btn lab-btn-primary">Start</button>
+                        <button class="lab-start-btn lab-btn lab-btn-primary">Try Beta Version</button>
                         <button class="lab-view-history-btn lab-btn lab-btn-secondary">View Past Experiments</button>
-                        <button class="lab-debug-btn lab-btn lab-btn-tertiary" onclick="LabModeApp.debugUserData()">Debug Data</button>
-                        <button class="lab-test-save-btn lab-btn lab-btn-tertiary" onclick="LabModeApp.testSaveQualifiers()">Test Save</button>
-                        <button class="lab-test-ai-btn lab-btn lab-btn-tertiary" onclick="LabModeApp.testAI()">Test AI</button>
                     </div>
                 </div>
             `;
