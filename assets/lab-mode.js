@@ -2317,7 +2317,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             });
         },
         
-        // Build AI prompt for variant generation
+        // Build AI prompt for variant generation with reflection feedback
         buildVariantPrompt: function(originalExperiment) {
             // Get profile data - use cached data if available, otherwise create fallback
             let topMI = [];
@@ -2358,6 +2358,45 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             const budget = constraints.budget || 50;
             const risk = constraints.risk || 50;
             
+            // Try to get recent reflection feedback for context
+            let reflectionContext = '';
+            if (this.recentFeedback && this.recentFeedback.length > 0) {
+                const feedback = this.recentFeedback[0]; // Most recent feedback
+                const feedbackSummary = [];
+                
+                if (feedback.difficulty) {
+                    if (feedback.difficulty >= 4) {
+                        feedbackSummary.push('prefers less challenging experiments');
+                    } else if (feedback.difficulty <= 2) {
+                        feedbackSummary.push('wants more challenging experiments');
+                    }
+                }
+                
+                if (feedback.fit) {
+                    if (feedback.fit <= 2) {
+                        feedbackSummary.push('needs better personalization');
+                    } else if (feedback.fit >= 4) {
+                        feedbackSummary.push('good fit with current approach');
+                    }
+                }
+                
+                if (feedback.learning) {
+                    if (feedback.learning >= 4) {
+                        feedbackSummary.push('values high learning content');
+                    } else if (feedback.learning <= 2) {
+                        feedbackSummary.push('needs more practical learning outcomes');
+                    }
+                }
+                
+                if (feedback.evolve_notes) {
+                    feedbackSummary.push(`specific request: "${feedback.evolve_notes}"`);
+                }
+                
+                if (feedbackSummary.length > 0) {
+                    reflectionContext = `\n\nRecent feedback: ${feedbackSummary.join(', ')}.`;
+                }
+            }
+            
             // Build a rich prompt even with fallback data
             const profileSummary = [
                 `Top strengths: ${topMI.map(mi => mi.label).join(', ')}`,
@@ -2366,10 +2405,17 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 `Constraints: ${timePerWeek}h/week, $${budget} budget, ${risk}/100 risk tolerance`
             ].join('\n- ');
             
+            const enhancedSystemPrompt = 'Generate a creative variant of the given experiment. Keep the same archetype but change the approach, steps, and success criteria. Make it fresh and engaging while staying true to the user\'s profile. If recent feedback is provided, incorporate those insights to improve the variant. Return only valid JSON with the same structure as the original experiment.';
+            
             return {
-                system: 'Generate a creative variant of the given experiment. Keep the same archetype but change the approach, steps, and success criteria. Make it fresh and engaging while staying true to the user\'s profile. Return only valid JSON with the same structure as the original experiment.',
-                user: `Original experiment: ${JSON.stringify(originalExperiment)}\n\nUser profile:\n- ${profileSummary}\n\nCreate a variant that feels different but maintains the same archetype and core intent. Focus on making it more engaging and personally relevant based on their strengths and interests.`
+                system: enhancedSystemPrompt,
+                user: `Original experiment: ${JSON.stringify(originalExperiment)}\n\nUser profile:\n- ${profileSummary}${reflectionContext}\n\nCreate a variant that feels different but maintains the same archetype and core intent. Focus on making it more engaging and personally relevant based on their strengths, interests, and any feedback provided.`
             };
+        },
+        
+        // Set recent feedback data for AI variant generation
+        setRecentFeedback: function(feedbackData) {
+            this.recentFeedback = feedbackData;
         },
         
         // Start an experiment
@@ -2673,6 +2719,24 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
         
         // Display experiment history
         displayHistory: function(experiments) {
+            // Extract recent feedback for AI variant generation
+            const recentFeedbackData = [];
+            experiments.forEach(exp => {
+                if (exp.feedback && exp.feedback.length > 0) {
+                    recentFeedbackData.push(...exp.feedback);
+                }
+            });
+            
+            // Sort by most recent and store for AI variant generation
+            recentFeedbackData.sort((a, b) => {
+                const dateA = new Date(a.submitted_at || 0);
+                const dateB = new Date(b.submitted_at || 0);
+                return dateB - dateA;
+            });
+            
+            // Set recent feedback for AI variant generation
+            this.setRecentFeedback(recentFeedbackData.slice(0, 3)); // Keep last 3 feedback entries
+            
             const html = `
                 <div class="lab-history">
                     <h2>Experiment History</h2>
@@ -2712,6 +2776,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                                 ${hasReflection ? `
                                     <div class="reflection-summary">
                                         <strong>Your reflection:</strong> ${exp.feedback[0].notes || 'No notes provided'}
+                                        ${exp.feedback[0].evolve_notes ? `<br><strong>Evolution notes:</strong> ${exp.feedback[0].evolve_notes}` : ''}
                                     </div>
                                 ` : ''}
                             </div>

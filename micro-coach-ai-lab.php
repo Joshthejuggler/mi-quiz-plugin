@@ -971,19 +971,41 @@ class Micro_Coach_AI_Lab {
         
         $user_id = get_current_user_id();
         if (!$user_id || !$this->user_can_access_lab_mode()) {
+            error_log('Lab Mode Reflection - Insufficient permissions for user ID: ' . $user_id);
             wp_send_json_error('Insufficient permissions');
         }
         
         $reflection_data = json_decode(stripslashes($_POST['reflection'] ?? ''), true);
+        error_log('Lab Mode Reflection - Raw reflection data: ' . ($_POST['reflection'] ?? 'empty'));
+        
         if (!$reflection_data) {
-            wp_send_json_error('Invalid reflection data');
+            error_log('Lab Mode Reflection - Failed to decode reflection data');
+            wp_send_json_error('Invalid reflection data - could not parse JSON');
         }
+        
+        // Validate required fields
+        $required_fields = ['experiment_id', 'difficulty', 'fit', 'learning', 'next_action'];
+        $missing_fields = [];
+        
+        foreach ($required_fields as $field) {
+            if (!isset($reflection_data[$field]) || $reflection_data[$field] === '') {
+                $missing_fields[] = $field;
+            }
+        }
+        
+        if (!empty($missing_fields)) {
+            error_log('Lab Mode Reflection - Missing required fields: ' . implode(', ', $missing_fields));
+            wp_send_json_error('Missing required fields: ' . implode(', ', $missing_fields));
+        }
+        
+        // Ensure tables exist
+        $this->maybe_create_tables();
         
         // Save feedback to database
         global $wpdb;
         $table = $wpdb->prefix . self::TABLE_LAB_FEEDBACK;
         
-        $result = $wpdb->insert($table, [
+        $insert_data = [
             'experiment_id' => intval($reflection_data['experiment_id']),
             'user_id' => $user_id,
             'difficulty' => intval($reflection_data['difficulty']),
@@ -992,15 +1014,22 @@ class Micro_Coach_AI_Lab {
             'notes' => sanitize_textarea_field($reflection_data['notes'] ?? ''),
             'next_action' => sanitize_text_field($reflection_data['next_action']),
             'evolve_notes' => sanitize_textarea_field($reflection_data['evolve_notes'] ?? '')
-        ]);
+        ];
+        
+        error_log('Lab Mode Reflection - Attempting to insert: ' . wp_json_encode($insert_data));
+        
+        $result = $wpdb->insert($table, $insert_data);
         
         if ($result === false) {
-            wp_send_json_error('Failed to save reflection');
+            error_log('Lab Mode Reflection - Database insert failed. Error: ' . $wpdb->last_error);
+            wp_send_json_error('Failed to save reflection: ' . $wpdb->last_error);
         }
+        
+        error_log('Lab Mode Reflection - Successfully inserted feedback with ID: ' . $wpdb->insert_id);
         
         // Update experiment status
         $experiments_table = $wpdb->prefix . self::TABLE_LAB_EXPERIMENTS;
-        $wpdb->update($experiments_table, [
+        $update_result = $wpdb->update($experiments_table, [
             'status' => 'Completed',
             'updated_at' => current_time('mysql')
         ], [
@@ -1008,11 +1037,27 @@ class Micro_Coach_AI_Lab {
             'user_id' => $user_id
         ]);
         
+        if ($update_result === false) {
+            error_log('Lab Mode Reflection - Failed to update experiment status. Error: ' . $wpdb->last_error);
+            // Don't fail the whole request for this
+        }
+        
         // Trigger recalibration
-        $recalibration = $this->recalibrate_user_preferences($user_id, $reflection_data);
+        try {
+            $recalibration = $this->recalibrate_user_preferences($user_id, $reflection_data);
+        } catch (Exception $e) {
+            error_log('Lab Mode Reflection - Recalibration failed: ' . $e->getMessage());
+            // Still return success since the reflection was saved
+            $recalibration = [
+                'summary' => 'Your feedback has been recorded. Recalibration will be applied to future experiments.',
+                'risk_bias' => 0,
+                'solo_group_bias' => 0,
+                'contexts' => []
+            ];
+        }
         
         wp_send_json_success([
-            'message' => 'Reflection submitted',
+            'message' => 'Reflection submitted successfully',
             'recalibration' => $recalibration
         ]);
     }
