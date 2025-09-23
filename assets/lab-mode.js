@@ -26,7 +26,6 @@
             $(document).on('click', '.lab-generate-experiments-btn', this.generateExperiments.bind(this));
             $(document).on('click', '.lab-start-experiment-btn', this.startExperiment.bind(this));
             $(document).on('click', '.lab-reflect-btn', this.showReflectionForm.bind(this));
-            $(document).on('click', '.lab-regenerate-variant-btn', this.regenerateVariant.bind(this));
             $(document).on('click', '.lab-regenerate-ai-btn', this.regenerateAiVariant.bind(this));
             $(document).on('submit', '.lab-qualifiers-form', this.saveQualifiers.bind(this));
             $(document).on('submit', '.lab-reflection-form', this.submitReflection.bind(this));
@@ -1639,8 +1638,7 @@
                                 
                                 <div class="experiment-actions">
                                     <button class="lab-btn lab-btn-primary lab-start-experiment-btn" data-experiment-id="${index}">Start</button>
-                                    <button class="lab-btn lab-btn-secondary lab-regenerate-variant-btn" data-experiment-id="${index}" title="Quick template-based variant">⚡ Quick Variant</button>
-                                    <button class="lab-btn lab-btn-secondary lab-regenerate-ai-btn" data-experiment-id="${index}" title="AI-powered personalized variant">🤖 AI Variant</button>
+                                    <button class="lab-btn lab-btn-secondary lab-regenerate-ai-btn" data-experiment-id="${index}" title="Generate a new AI-powered variant">Regenerate Variant</button>
                                     <button class="lab-btn lab-btn-tertiary lab-debug-toggle-btn" data-experiment-id="${index}">🔍 Debug</button>
                                 </div>
                                 
@@ -2077,89 +2075,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             return calibrated;
         },
 
-        // Regenerate a variant of a specific experiment
-        regenerateVariant: function(e) {
-            e.preventDefault();
-            const experimentIndex = parseInt($(e.target).data('experiment-id'));
-            const experiment = this.experiments[experimentIndex];
-            
-            if (!experiment) return;
-            
-            this.showLoading('Generating a new variant of this experiment...');
-            
-            // Create a modified version of the current experiment using local variations
-            setTimeout(() => {
-                const variant = this.generateLocalVariant(experiment);
-                
-                // Replace the experiment in the array
-                this.experiments[experimentIndex] = variant;
-                
-                // Re-render experiments to show the new variant
-                this.showExperiments();
-                
-                // Scroll to the updated experiment
-                setTimeout(() => {
-                    $(`.experiment-card[data-archetype="${variant.archetype}"]`).eq(experimentIndex)
-                        .get(0)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 100);
-            }, 800);
-        },
-        
-        // Generate a local variant without AI
-        generateLocalVariant: function(originalExperiment) {
-            const archetype = originalExperiment.archetype;
-            const templates = this.getVariantTemplates();
-            const variations = templates[archetype] || templates['Discover'];
-            
-            // Pick a random variation
-            const variation = variations[Math.floor(Math.random() * variations.length)];
-            
-            // Get user data for personalization
-            const topMI = this.profileData?.mi_results?.[0] || { label: 'your strengths' };
-            const curiosity = this.qualifiers?.curiosity?.curiosities?.[0] || 'learning';
-
-            // Bias effort using current constraints
-            const targets = this.mapConstraintsToTargets();
-            // Base ranges before calibration
-            let timeHours = Math.floor(Math.random() * 3) + 1; // 1..3
-            let budgetUSD = Math.floor(Math.random() * 50);   // 0..49
-            // Nudge toward targets
-            if (targets.time >= 3) timeHours = Math.max(timeHours, 4 + Math.floor(Math.random()*3)); // 4..6
-            if (targets.time <= 1) timeHours = Math.min(timeHours, 2);
-            if (targets.cost >= 3) budgetUSD = Math.max(budgetUSD, 60 + Math.floor(Math.random()*140)); // 60..199
-            if (targets.cost <= 1) budgetUSD = Math.min(budgetUSD, 20);
-            
-            // Generate new success criteria that match the new steps and archetype
-            const newSuccessCriteria = this.generateSuccessCriteria(archetype, variation.steps, curiosity);
-            
-            console.log('🔄 Regenerating Variant:', {
-                originalArchetype: originalExperiment.archetype,
-                newArchetype: archetype,
-                originalSuccessCriteria: originalExperiment.successCriteria,
-                newSuccessCriteria: newSuccessCriteria,
-                variation: variation.title
-            });
-            
-            const newVariant = {
-                ...originalExperiment,
-                title: variation.title.replace('{curiosity}', curiosity).replace('{MI}', topMI.label),
-                rationale: variation.rationale.replace('{MI}', topMI.label),
-                steps: variation.steps.map(step => step.replace('{curiosity}', curiosity)),
-                effort: {
-                    timeHours,
-                    budgetUSD
-                },
-                riskLevel: ['Low', 'Medium', 'High'][Math.floor(Math.random() * 3)],
-                successCriteria: newSuccessCriteria,
-                _calibrated: true,
-                _variantGenerated: Date.now() // Add timestamp to force refresh
-            };
-            
-            console.log('✅ Generated new variant:', newVariant);
-            return newVariant;
-        },
-        
-        // Regenerate a variant using AI (more personalized than local templates)
+        // Regenerate a variant using AI
         regenerateAiVariant: function(e) {
             e.preventDefault();
             const experimentIndex = parseInt($(e.target).data('experiment-id'));
@@ -2200,15 +2116,11 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                                 .get(0)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         }, 100);
                     } else {
-                        // Fallback to local variant if AI fails
-                        console.log('AI variant failed, falling back to local variant');
-                        this.regenerateVariant(e);
+                        this.showError('AI variant generation failed. Please try again.');
                     }
                 },
                 error: () => {
-                    // Fallback to local variant if AI request fails
-                    console.log('AI request failed, falling back to local variant');
-                    this.regenerateVariant(e);
+                    this.showError('Network error while generating AI variant. Please check your connection and try again.');
                 }
             });
         },
@@ -2223,172 +2135,6 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             return {
                 system: 'Generate a creative variant of the given experiment. Keep the same archetype but change the approach, steps, and success criteria. Make it fresh and engaging while staying true to the user\'s profile. Return only valid JSON with the same structure as the original experiment.',
                 user: `Original experiment: ${JSON.stringify(originalExperiment)}\n\nUser profile:\n- Top MI: ${topMI.map(mi => mi.label).join(', ')}\n- Curiosities: ${curiosities.join(', ')}\n- Role models: ${roleModels.join(', ')}\n- Time: ${constraints.timePerWeekHours || 3}h/week\n- Budget: $${constraints.budget || 50}\n- Risk: ${constraints.risk || 50}/100\n\nCreate a variant that feels different but maintains the same archetype and core intent. Focus on making it more engaging and personally relevant.`
-            };
-        },
-        
-        // Generate appropriate success criteria based on archetype and steps
-        generateSuccessCriteria: function(archetype, steps, curiosity) {
-            const criteriaTemplates = {
-                'Discover': [
-                    "Completed all research activities within the planned timeframe",
-                    "Gathered insights from at least 3 different sources", 
-                    "Documented key findings and unexpected discoveries",
-                    "Identified at least one actionable next step"
-                ],
-                'Build': [
-                    "Created a working prototype or tangible output",
-                    "Tested the creation with at least one real person",
-                    "Received and incorporated feedback from others",
-                    "Documented lessons learned from the building process"
-                ],
-                'Share': [
-                    "Successfully shared with the intended audience",
-                    "Received specific feedback from at least 2 people",
-                    "Asked meaningful follow-up questions",
-                    "Reflected on the impact and next steps"
-                ],
-                'Express': [
-                    "Completed the creative expression within time limits",
-                    "Experimented with new techniques or approaches", 
-                    "Shared the creation with at least one person",
-                    "Reflected on what the process revealed"
-                ],
-                'Connect': [
-                    "Successfully connected with new people or communities",
-                    "Engaged in meaningful conversations about the topic",
-                    "Exchanged contact information or follow-up plans",
-                    "Reflected on what was learned from the interactions"
-                ],
-                'Reflect': [
-                    "Set aside dedicated time for reflection",
-                    "Documented insights and patterns discovered",
-                    "Connected learnings to broader goals or interests",
-                    "Identified specific next steps or areas for growth"
-                ]
-            };
-            
-            // Get base criteria for the archetype
-            const baseCriteria = criteriaTemplates[archetype] || criteriaTemplates['Discover'];
-            
-            // Customize criteria based on the specific steps
-            const customCriteria = [];
-            
-            // Add step-specific criteria
-            if (steps.length > 0) {
-                customCriteria.push(`Completed all ${steps.length} planned steps`);
-            }
-            
-            // Add curiosity-specific criteria
-            if (curiosity) {
-                customCriteria.push(`Applied learnings to your interest in ${curiosity}`);
-            }
-            
-            // Combine custom and template criteria, taking first 3-4 total
-            const allCriteria = [...customCriteria, ...baseCriteria];
-            const selectedCriteria = allCriteria.slice(0, Math.min(4, allCriteria.length));
-            
-            return selectedCriteria;
-        },
-        
-        // Get variant templates for each archetype
-        getVariantTemplates: function() {
-            return {
-                'Discover': [
-                    {
-                        title: "Research {curiosity} through interviews",
-                        rationale: "Gain insights by talking to people who know about this topic.",
-                        steps: [
-                            "Identify 3-5 people who have experience with {curiosity}",
-                            "Prepare 5-7 open-ended questions", 
-                            "Conduct 15-minute informal interviews",
-                            "Synthesize common themes and surprises"
-                        ]
-                    },
-                    {
-                        title: "Explore {curiosity} through hands-on experimentation",
-                        rationale: "Learn by doing rather than just reading about it.",
-                        steps: [
-                            "Find a small, low-risk way to try {curiosity}",
-                            "Document your experience as you go",
-                            "Note what feels natural vs. challenging",
-                            "Reflect on what you'd want to learn next"
-                        ]
-                    },
-                    {
-                        title: "Deep dive into {curiosity} resources",
-                        rationale: "Build comprehensive understanding through curated learning.",
-                        steps: [
-                            "Find 2-3 highly recommended resources about {curiosity}",
-                            "Set aside focused time for deep engagement",
-                            "Take notes using your {MI} approach",
-                            "Connect insights to your current interests"
-                        ]
-                    }
-                ],
-                'Build': [
-                    {
-                        title: "Create a mini-prototype for {curiosity}",
-                        rationale: "Build something small to test your interest and skills.",
-                        steps: [
-                            "Define the smallest possible version you could create",
-                            "Gather basic materials or tools needed",
-                            "Build iteratively, testing each piece",
-                            "Get feedback from one person who might use it"
-                        ]
-                    },
-                    {
-                        title: "Start a {curiosity} side project",
-                        rationale: "Commit to regular practice over a defined period.",
-                        steps: [
-                            "Set a specific, small goal for the project",
-                            "Schedule consistent work sessions",
-                            "Track progress and challenges",
-                            "Plan how to share or use what you build"
-                        ]
-                    },
-                    {
-                        title: "Collaborate on a {curiosity} challenge",
-                        rationale: "Learn by working with others who share this interest.",
-                        steps: [
-                            "Find a partner or small group interested in {curiosity}",
-                            "Choose a shared challenge or goal",
-                            "Divide tasks based on each person's strengths",
-                            "Meet regularly to share progress and help each other"
-                        ]
-                    }
-                ],
-                'Share': [
-                    {
-                        title: "Teach someone about {curiosity}",
-                        rationale: "Deepen your understanding by explaining it to others.",
-                        steps: [
-                            "Choose someone who's curious about {curiosity}",
-                            "Prepare a simple lesson or demonstration",
-                            "Focus on what's most interesting or useful",
-                            "Ask for their questions and feedback"
-                        ]
-                    },
-                    {
-                        title: "Document your {curiosity} journey",
-                        rationale: "Share your learning process to help others and reflect on progress.",
-                        steps: [
-                            "Choose a format that matches your {MI} strengths",
-                            "Document both successes and challenges",
-                            "Share in a community or platform where others might benefit",
-                            "Engage with comments and questions from your audience"
-                        ]
-                    },
-                    {
-                        title: "Host a {curiosity} discussion or meetup",
-                        rationale: "Build community around shared interests.",
-                        steps: [
-                            "Find 2-3 others interested in {curiosity}",
-                            "Plan a casual gathering (online or in-person)",
-                            "Prepare a few conversation starters or activities",
-                            "Follow up to see if people want to continue meeting"
-                        ]
-                    }
-                ]
             };
         },
         
