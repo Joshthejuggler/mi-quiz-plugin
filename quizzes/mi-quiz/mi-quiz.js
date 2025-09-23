@@ -312,69 +312,6 @@
     if (percentage >= 20) return 15;
     return 10;
   }
-  
-  // Cache for assessment completion status to avoid multiple AJAX calls
-  let assessmentCompletionCache = null;
-  let assessmentCompletionPromise = null;
-  
-  function areAllAssessmentsComplete() {
-    // Check if user is logged in first
-    if (!isLoggedIn) {
-        return false;
-    }
-    
-    // Return cached result if available
-    if (assessmentCompletionCache !== null) {
-        return assessmentCompletionCache;
-    }
-    
-    // For synchronous check, return false by default
-    // The async version will update the UI when the result comes back
-    return false;
-  }
-  
-  function checkAllAssessmentsCompleteAsync() {
-    // Return existing promise if already checking
-    if (assessmentCompletionPromise) {
-        return assessmentCompletionPromise;
-    }
-    
-    // Check if user is logged in first
-    if (!isLoggedIn) {
-        assessmentCompletionCache = false;
-        return Promise.resolve(false);
-    }
-    
-    // Return cached result if available
-    if (assessmentCompletionCache !== null) {
-        return Promise.resolve(assessmentCompletionCache);
-    }
-    
-    // Make AJAX call to check assessment completion
-    assessmentCompletionPromise = fetch(ajaxUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            action: 'mc_check_all_assessments_complete',
-            _ajax_nonce: ajaxNonce
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        assessmentCompletionCache = data.success && data.data.all_complete;
-        return assessmentCompletionCache;
-    })
-    .catch(error => {
-        console.error('Error checking assessment completion:', error);
-        assessmentCompletionCache = false;
-        return false;
-    })
-    .finally(() => {
-        assessmentCompletionPromise = null;
-    });
-    
-    return assessmentCompletionPromise;
-  }
 
   function showResults(p2Steps){
     detailed={};
@@ -667,49 +604,8 @@
     });
     actionsContainer.appendChild(downloadBtn);
 
-    // Lab Mode Button - check asynchronously and update UI
-    // Initially show loading state
-    const labModeLoadingBtn = createActionButton('🧪 Lab Mode...', 'mi-quiz-button mi-quiz-button-secondary', () => {});
-    labModeLoadingBtn.disabled = true;
-    labModeLoadingBtn.style.opacity = '0.7';
-    actionsContainer.appendChild(labModeLoadingBtn);
-    
-    // Check assessment completion asynchronously
-    checkAllAssessmentsCompleteAsync().then(allComplete => {
-        // Remove the loading button
-        labModeLoadingBtn.remove();
-        
-        if (allComplete) {
-            const labModeBtn = createActionButton('🧪 Lab Mode', 'mi-quiz-button mi-quiz-button-primary', () => {
-                console.log('Lab Mode button clicked!');
-                try {
-                    initializeLabMode();
-                } catch (error) {
-                    console.error('Error initializing Lab Mode:', error);
-                }
-            });
-            actionsContainer.appendChild(labModeBtn);
-        } else {
-            // Show a message about completing other assessments
-            const labModeDisabledBtn = createActionButton('🧪 Lab Mode (Complete All Assessments)', 'mi-quiz-button mi-quiz-button-disabled', () => {
-                alert('Please complete all assessments (MI Quiz, CDT Quiz, and Bartle Quiz) to access Lab Mode.');
-            });
-            labModeDisabledBtn.disabled = true;
-            labModeDisabledBtn.style.opacity = '0.6';
-            labModeDisabledBtn.style.cursor = 'not-allowed';
-            actionsContainer.appendChild(labModeDisabledBtn);
-        }
-    }).catch(error => {
-        console.error('Error checking assessment completion:', error);
-        // Remove the loading button and show error state
-        labModeLoadingBtn.remove();
-        const labModeErrorBtn = createActionButton('🧪 Lab Mode (Error)', 'mi-quiz-button mi-quiz-button-disabled', () => {
-            alert('Error checking assessment completion. Please refresh the page.');
-        });
-        labModeErrorBtn.disabled = true;
-        labModeErrorBtn.style.opacity = '0.6';
-        actionsContainer.appendChild(labModeErrorBtn);
-    });
+    // Lab Mode is only available from the main dashboard after all assessments are complete
+    // No Lab Mode button should appear on individual quiz results pages
 
     // --- Add Logged-In User Buttons ---
     if (isLoggedIn) {
