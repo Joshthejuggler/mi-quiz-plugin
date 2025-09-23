@@ -64,6 +64,7 @@ function mc_quiz_platform_init() {
     // Instantiate the core platform and AI services.
     new Micro_Coach_Core();
     new Micro_Coach_AI();
+    new Micro_Coach_AI_Lab();
 
     // Instantiate each quiz module.
     new MI_Quiz_Plugin_AI();

@@ -59,7 +59,9 @@ class Micro_Coach_AI_Lab {
      * Check if Lab Mode is enabled via feature flag
      */
     private function is_lab_mode_enabled() {
-        return get_option(self::OPT_LAB_MODE_ENABLED, '0') === '1';
+        // Temporarily enable by default for testing
+        return true;
+        // Original code: return get_option(self::OPT_LAB_MODE_ENABLED, '0') === '1';
     }
     
     /**
@@ -178,7 +180,12 @@ class Micro_Coach_AI_Lab {
     /**
      * Render Lab Mode content in the dashboard
      */
-    public function render_lab_mode_content() {
+    public function render_lab_mode_content($tab_id) {
+        // Only render for the lab tab
+        if ($tab_id !== 'tab-lab') {
+            return;
+        }
+        
         $user_id = get_current_user_id();
         if (!$user_id) return;
         
@@ -200,12 +207,11 @@ class Micro_Coach_AI_Lab {
         // Enqueue Lab Mode assets
         $this->enqueue_lab_mode_assets();
         
-        echo '<div id="tab-lab" class="tab-content">';
+        // Render the Lab Mode interface directly (not wrapped in tab-content div since that's handled by core)
         echo '<div id="lab-mode-app">';
         echo '<div class="lab-mode-loading">';
         echo '<p>Loading Lab Mode...</p>';
         echo '<div class="loading-spinner"></div>';
-        echo '</div>';
         echo '</div>';
         echo '</div>';
     }
