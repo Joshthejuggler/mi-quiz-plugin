@@ -208,7 +208,8 @@ class Micro_Coach_AI_Lab {
         $this->enqueue_lab_mode_assets();
         
         // Render empty container - JavaScript will populate it immediately
-        echo '<div id="lab-mode-app"></div>
+        echo '<div id="lab-mode-app"></div>';
+        ?>
         <script>
         // Force Lab Mode initialization when this content loads
         jQuery(document).ready(function($) {
@@ -239,7 +240,8 @@ class Micro_Coach_AI_Lab {
                 }, 100);
             }
         });
-        </script>';
+        </script>
+        <?php
     }
     
     /**
