@@ -232,7 +232,7 @@
     margin-top: 0.25rem;
 }
 
-.lab-notice-content strong {
+.lab-notice-content > strong {
     color: #92400e;
     font-weight: 600;
     font-size: 0.95rem;
@@ -251,15 +251,11 @@
     margin-bottom: 0;
 }
 
-.lab-notice-content strong {
-    color: #92400e;
-    font-weight: 600;
-}
-
-/* Specific styling for AI Coach text emphasis */
+/* Inline strong elements (like AI Coach) should flow naturally */
 .lab-notice-content p strong {
     color: #1f2937;
     font-weight: 700;
+    display: inline;
 }
 
 /* Admin Controls */
