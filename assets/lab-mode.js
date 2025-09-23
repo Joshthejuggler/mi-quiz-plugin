@@ -161,8 +161,7 @@
                             <div class="lab-notice-icon">⚠️</div>
                             <div class="lab-notice-content">
                                 <strong>Currently in Beta Testing</strong>
-                                <p>Lab Mode is experimental and may have rough edges.</p>
-                                <p>For full functionality, please use the <strong>AI Coach</strong> tab instead.</p>
+                                <p>Lab Mode is experimental and may have rough edges. For full functionality, please use the <strong>AI Coach</strong> tab instead.</p>
                             </div>
                         </div>
                     </div>
