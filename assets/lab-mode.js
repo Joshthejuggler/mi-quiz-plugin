@@ -1815,33 +1815,81 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
         
         // Generate engaging description for what the user will do
         generateEngagingDescription: function(experiment) {
-            // Clean up the rationale by removing calibration notes
-            let description = experiment.description || experiment.rationale || '';
+            if (!this.qualifiers || !this.profileData) {
+                return experiment.description || experiment.rationale || 'An engaging experiment tailored to your interests.';
+            }
             
-            // Remove calibration notes if they're embedded
-            description = description.replace(/\[Calibrated:.*?\]/g, '').trim();
+            const mi = this.profileData.mi_results || [];
+            const cdt = this.profileData.cdt_results || [];
+            const topMI = mi.slice(0, 3);
+            const bottomCDT = cdt.slice(-2);
+            const curiosities = this.qualifiers.curiosity?.curiosities || [];
+            const roleModels = this.qualifiers.curiosity?.roleModels || [];
+            const constraints = this.qualifiers.curiosity?.constraints || {};
             
-            // If we still don't have a good description, create one based on the title and steps
-            if (!description || description.length < 20) {
-                const title = experiment.title || 'This experiment';
-                const firstStep = experiment.steps && experiment.steps[0] ? experiment.steps[0] : '';
-                
-                // Create engaging descriptions based on common experiment patterns
-                if (title.toLowerCase().includes('mindfulness')) {
-                    description = `Create a small mindfulness gathering where you share simple practices with friends or colleagues. You'll guide others through calming exercises while building community connections.`;
-                } else if (title.toLowerCase().includes('interview')) {
-                    description = `Have genuine conversations with interesting people about topics you're curious about. You'll learn by asking questions and discovering new perspectives.`;
-                } else if (title.toLowerCase().includes('research')) {
-                    description = `Dive deep into something that fascinates you by talking to experts and gathering insights. Turn your curiosity into actionable knowledge.`;
-                } else if (title.toLowerCase().includes('creative') || title.toLowerCase().includes('art')) {
-                    description = `Express your ideas through a creative medium that speaks to you. Experiment with new forms of artistic expression.`;
-                } else if (title.toLowerCase().includes('skill') || title.toLowerCase().includes('learn')) {
-                    description = `Pick up a new skill that connects to your interests and try it out in a low-pressure way. Focus on exploration over perfection.`;
-                } else if (firstStep) {
-                    description = `${firstStep} This hands-on experiment lets you explore while building practical experience.`;
-                } else {
-                    description = `A focused experiment designed to help you explore new possibilities while building on your existing strengths.`;
-                }
+            // Build natural, flowing description
+            let description = 'This experiment ';
+            
+            // Add MI connection
+            if (experiment.influences?.miUsed) {
+                description += `taps into your ${experiment.influences.miUsed} `;
+            } else if (topMI.length > 0) {
+                description += `taps into your ${topMI[0].label} `;
+            } else {
+                description += `leverages your natural strengths `;
+            }
+            
+            // Add curiosity connection
+            if (experiment.influences?.curiosityUsed) {
+                description += `and your curiosity for ${experiment.influences.curiosityUsed}, `;
+            } else if (curiosities.length > 0) {
+                description += `and your curiosity for ${curiosities[0]}, `;
+            } else {
+                description += `and your personal interests, `;
+            }
+            
+            // Add CDT growth connection
+            if (experiment.influences?.cdtEdge) {
+                description += `while nudging you to develop your ${experiment.influences.cdtEdge} skills `;
+            } else if (bottomCDT.length > 0) {
+                description += `while nudging you to develop your ${bottomCDT[0].label.toLowerCase()} skills `;
+            } else {
+                description += `while gently challenging you to grow `;
+            }
+            
+            // Add role model influence if present
+            if (experiment.influences?.roleModelUsed) {
+                description += `through approaches inspired by ${experiment.influences.roleModelUsed}. `;
+            } else if (roleModels.length > 0 && this.findRoleModelInfluences(experiment, roleModels).length > 0) {
+                description += `through approaches inspired by ${roleModels[0]}. `;
+            } else {
+                description += `in a way that feels natural to you. `;
+            }
+            
+            // Add practical constraints
+            const practicalDetails = [];
+            const timeHours = experiment.effort?.timeHours || 0;
+            const budget = experiment.effort?.budgetUSD || 0;
+            const risk = experiment.riskLevel || 'medium';
+            
+            if (budget === 0) {
+                practicalDetails.push('no-cost');
+            } else if (budget <= 20) {
+                practicalDetails.push('low-cost');
+            }
+            
+            if (timeHours <= 2) {
+                practicalDetails.push('time-efficient');
+            } else if (timeHours >= 4) {
+                practicalDetails.push('in-depth');
+            }
+            
+            if (risk.toLowerCase() === 'low') {
+                practicalDetails.push('low-risk');
+            }
+            
+            if (practicalDetails.length > 0) {
+                description += `It's a ${practicalDetails.join(', ')} activity that accommodates your preferences.`;
             }
             
             return description;
@@ -1853,106 +1901,127 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 return "This experiment aligns with your interests and learning preferences.";
             }
             
+            let connection = "Perfect for you because ";
+            
             // First check if the AI provided detailed influences
             if (experiment.influences) {
                 const influences = experiment.influences;
-                const connections = [];
+                const personalConnections = [];
                 
-                // Use AI-provided MI influence
-                if (influences.miUsed) {
-                    connections.push(`leverages your ${influences.miUsed} strength`);
-                }
-                
-                // Use AI-provided role model influence
+                // Role model connection with personal touch
                 if (influences.roleModelUsed) {
-                    connections.push(`draws from ${influences.roleModelUsed}'s approach`);
+                    personalConnections.push(`you're drawn to ${influences.roleModelUsed}'s methodology - this captures their essence`);
                 }
                 
-                // Use AI-provided curiosity
+                // MI connection with identity language
+                if (influences.miUsed) {
+                    personalConnections.push(`your ${influences.miUsed} nature shines in this type of work`);
+                }
+                
+                // Curiosity connection with passion language
                 if (influences.curiosityUsed) {
-                    connections.push(`explores your interest in ${influences.curiosityUsed}`);
+                    personalConnections.push(`your genuine fascination with ${influences.curiosityUsed} will keep you engaged`);
                 }
                 
-                // Use AI-provided CDT edge
+                // CDT growth with supportive framing
                 if (influences.cdtEdge) {
-                    connections.push(`gently develops your ${influences.cdtEdge} skills`);
+                    personalConnections.push(`it's a gentle way to strengthen your ${influences.cdtEdge} skills without pressure`);
                 }
                 
-                if (connections.length > 0) {
-                    return this.formatConnections(connections);
+                if (personalConnections.length > 0) {
+                    if (personalConnections.length === 1) {
+                        connection += personalConnections[0] + ".";
+                    } else if (personalConnections.length === 2) {
+                        connection += personalConnections[0] + " and " + personalConnections[1] + ".";
+                    } else {
+                        const last = personalConnections.pop();
+                        connection += personalConnections.join(", ") + ", and " + last + ".";
+                    }
+                    return connection;
                 }
             }
             
-            // Fallback to manual connection generation
+            // Fallback to manual connection generation with personal tone
             const mi = this.profileData.mi_results || [];
             const topMI = mi.slice(0, 3);
             const curiosities = this.qualifiers.curiosity?.curiosities || [];
             const roleModels = this.qualifiers.curiosity?.roleModels || [];
             const constraints = this.qualifiers.curiosity?.constraints || {};
             
-            const connections = [];
+            const personalConnections = [];
             
-            // Connect to top MI strength
+            // Connect to top MI strength with identity language
             if (topMI.length > 0) {
                 const primaryMI = topMI[0];
                 const miConnections = {
-                    'linguistic': 'leverages your strong verbal and written communication skills',
-                    'logical-mathematical': 'taps into your analytical thinking and problem-solving abilities', 
-                    'spatial': 'utilizes your visual-spatial intelligence and design thinking',
-                    'bodily-kinesthetic': 'engages your hands-on, experiential learning style',
-                    'musical': 'incorporates rhythm, pattern, and auditory learning approaches',
-                    'interpersonal': 'builds on your natural ability to work with and understand others',
-                    'intrapersonal': 'aligns with your self-reflective and independent learning style',
-                    'naturalistic': 'connects to your pattern recognition and systematic thinking'
+                    'linguistic': 'your love of words and communication makes this a natural fit',
+                    'logical-mathematical': 'your analytical mind will thrive in this structured approach', 
+                    'spatial': 'your visual intelligence and design sense will shine here',
+                    'bodily-kinesthetic': 'your hands-on learning style is perfectly matched',
+                    'musical': 'your ear for patterns and rhythm guides this approach',
+                    'interpersonal': 'your gift for understanding people is exactly what\'s needed',
+                    'intrapersonal': 'your self-reflective nature will find this deeply engaging',
+                    'naturalistic': 'your systematic thinking will make this feel intuitive'
                 };
                 
-                const miConnection = miConnections[primaryMI.key] || `builds on your ${primaryMI.label} strength`;
-                connections.push(`It ${miConnection}`);
+                const miConnection = miConnections[primaryMI.key] || `your ${primaryMI.label} strength is perfectly suited for this`;
+                personalConnections.push(miConnection);
             }
             
-            // Enhanced role model connection - check experiment content for role model influences
+            // Enhanced role model connection with admiration language
             const roleModelMentions = this.findRoleModelInfluences(experiment, roleModels);
             if (roleModelMentions.length > 0) {
-                connections.push(`inspired by ${roleModelMentions[0]}'s philosophy`);
+                personalConnections.push(`it echoes ${roleModelMentions[0]}'s approach, which clearly resonates with you`);
             } else if (roleModels.length > 0) {
-                connections.push(`draws inspiration from creators like ${roleModels[0]}`);
+                personalConnections.push(`it channels the spirit of creators like ${roleModels[0]} who inspire you`);
             }
             
-            // Connect to curiosities
+            // Connect to curiosities with passion language
             if (curiosities.length > 0) {
                 const primaryCuriosity = curiosities[0];
                 if (experiment.title && experiment.title.toLowerCase().includes(primaryCuriosity.toLowerCase())) {
-                    connections.push(`directly explores your interest in ${primaryCuriosity}`);
+                    personalConnections.push(`it directly feeds your fascination with ${primaryCuriosity}`);
                 } else {
-                    connections.push(`connects to interests like ${primaryCuriosity}`);
+                    personalConnections.push(`your curiosity about ${primaryCuriosity} will find new expression here`);
                 }
             }
             
-            // Connect to constraints
+            // Connect to constraints with thoughtful accommodation
             if (constraints.timePerWeekHours <= 2) {
-                connections.push("fits your limited time with focused, efficient activities");
+                personalConnections.push("it respects your time constraints with focused, efficient activities");
             } else if (constraints.timePerWeekHours >= 6) {
-                connections.push("uses your generous time availability for deeper exploration");
+                personalConnections.push("it makes good use of your available time for deeper exploration");
             }
             
             if (constraints.risk <= 30) {
-                connections.push("offers a safe, low-risk approach");
+                personalConnections.push("it honors your preference for manageable, low-risk steps");
             } else if (constraints.risk >= 70) {
-                connections.push("matches your comfort with bold experiments");
+                personalConnections.push("it matches your appetite for bold, adventurous experiments");
             }
             
             if (constraints.soloToGroup <= 30) {
-                connections.push("supports independent, self-directed learning");
+                personalConnections.push("it supports your independent, self-directed style");
             } else if (constraints.soloToGroup >= 70) {
-                connections.push("includes social and collaborative elements");
+                personalConnections.push("it includes the social connection you value");
             }
             
             // Fallback if no specific connections found
-            if (connections.length === 0) {
-                return "This experiment matches your unique combination of strengths, interests, and preferences.";
+            if (personalConnections.length === 0) {
+                connection += "it's thoughtfully designed around your unique combination of strengths and interests.";
+                return connection;
             }
             
-            return this.formatConnections(connections);
+            // Format with personal touch
+            if (personalConnections.length === 1) {
+                connection += personalConnections[0] + ".";
+            } else if (personalConnections.length === 2) {
+                connection += personalConnections[0] + " and " + personalConnections[1] + ".";
+            } else {
+                const last = personalConnections.pop();
+                connection += personalConnections.join(", ") + ", and " + last + ".";
+            }
+            
+            return connection;
         },
         
         // Helper function to format connection strings
