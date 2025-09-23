@@ -269,6 +269,8 @@ class Micro_Coach_AI_Lab {
             'nonce' => wp_create_nonce('mc_lab_nonce'),
             'userId' => get_current_user_id(),
             'restUrl' => rest_url('wp/v2/'),
+            'isAdmin' => current_user_can('manage_options'),
+            'defaultModel' => class_exists('Micro_Coach_AI') ? Micro_Coach_AI::get_selected_model() : 'gpt-4o-mini',
         ]);
     }
     
@@ -432,6 +434,13 @@ class Micro_Coach_AI_Lab {
         $profile_data = $this->get_user_profile_data($user_id);
         $qualifiers = get_user_meta($user_id, 'mc_lab_qualifiers', true);
         
+        // Get model parameter from admin users (optional)
+        $selected_model = null;
+        if (current_user_can('manage_options') && !empty($_POST['model'])) {
+            $selected_model = sanitize_text_field($_POST['model']);
+            error_log('Lab Mode Debug - Admin selected model: ' . $selected_model);
+        }
+        
         // Debug logging
         error_log('Lab Mode Debug - Profile data: ' . (!empty($profile_data) ? 'found' : 'empty'));
         error_log('Lab Mode Debug - Qualifiers: ' . (!empty($qualifiers) ? 'found' : 'empty'));
@@ -446,7 +455,7 @@ class Micro_Coach_AI_Lab {
         
         $using_mock = false;
         try {
-            $experiments = $this->generate_experiments_with_ai($profile_data, $qualifiers);
+            $experiments = $this->generate_experiments_with_ai($profile_data, $qualifiers, $selected_model);
             error_log('Lab Mode Debug - AI experiments generated successfully');
         } catch (Exception $ai_error) {
             error_log('Lab Mode Debug - AI failed, using mock experiments: ' . $ai_error->getMessage());
@@ -619,7 +628,7 @@ class Micro_Coach_AI_Lab {
     /**
      * Generate experiments using AI based on profile and qualifiers
      */
-    private function generate_experiments_with_ai($profile_data, $qualifiers) {
+    private function generate_experiments_with_ai($profile_data, $qualifiers, $model = null) {
         // Load deterministic content libraries
         $archetype_templates = $this->get_archetype_templates();
         $cdt_dataset = $this->get_cdt_dataset();
@@ -637,7 +646,7 @@ class Micro_Coach_AI_Lab {
             throw new Exception('OpenAI API key not configured');
         }
         
-        $response = $this->call_openai_api($api_key, $prompt);
+        $response = $this->call_openai_api($api_key, $prompt, $model);
         
         // Debug logging
         error_log('Lab Mode Debug - AI API response: ' . print_r($response, true));
@@ -785,8 +794,11 @@ class Micro_Coach_AI_Lab {
     /**
      * Call OpenAI API with the generated prompt
      */
-    private function call_openai_api($api_key, $prompt_data) {
-        $model = Micro_Coach_AI::get_selected_model();
+    private function call_openai_api($api_key, $prompt_data, $override_model = null) {
+        // Use override model if provided (from admin), otherwise use default
+        $model = $override_model ?: Micro_Coach_AI::get_selected_model();
+        
+        error_log('Lab Mode Debug - Using model: ' . $model . ($override_model ? ' (admin override)' : ' (default)'));
         
         $payload = [
             'model' => $model,
