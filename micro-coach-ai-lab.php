@@ -44,6 +44,7 @@ class Micro_Coach_AI_Lab {
         add_action('wp_ajax_mc_lab_debug_user_data', [$this, 'ajax_debug_user_data']);
         add_action('wp_ajax_mc_lab_test_save_qualifiers', [$this, 'ajax_test_save_qualifiers']);
         add_action('wp_ajax_mc_lab_generate_ai_variant', [$this, 'ajax_generate_ai_variant']);
+        add_action('wp_ajax_mc_lab_iterate', [$this, 'ajax_iterate']);
         
         // Hook into the main dashboard to add Lab Mode tab
         add_filter('mc_dashboard_custom_tabs', [$this, 'add_lab_mode_tab']);
@@ -234,21 +235,35 @@ class Micro_Coach_AI_Lab {
                     css.href = '<?php echo esc_url_raw(plugins_url('assets/lab-mode.css', __FILE__)); ?>?ver=' + Date.now();
                     document.head.appendChild(css);
                     
-                    // Load JavaScript
+                    // Load main JavaScript first
                     var script = document.createElement('script');
                     script.src = '<?php echo esc_url_raw(plugins_url('assets/lab-mode.js', __FILE__)); ?>?ver=' + Date.now();
                     script.onload = function() {
-                        console.log("Lab Mode assets loaded successfully");
-                        // Set up localized data
-                        window.labMode = {
-                            ajaxUrl: '<?php echo esc_url_raw(admin_url('admin-ajax.php')); ?>',
-                            nonce: '<?php echo wp_create_nonce('mc_lab_nonce'); ?>',
-                            userId: <?php echo get_current_user_id(); ?>,
-                            restUrl: '<?php echo esc_url_raw(rest_url('wp/v2/')); ?>',
-                            isAdmin: <?php echo current_user_can('manage_options') ? 'true' : 'false'; ?>,
-                            defaultModel: '<?php echo class_exists('Micro_Coach_AI') ? Micro_Coach_AI::get_selected_model() : 'gpt-4o-mini'; ?>'
+                        console.log("Lab Mode main JS loaded");
+                        
+                        // Load iteration panel JavaScript
+                        var iterateScript = document.createElement('script');
+                        iterateScript.src = '<?php echo esc_url_raw(plugins_url('assets/lab-mode-iterate.js', __FILE__)); ?>?ver=' + Date.now();
+                        iterateScript.onload = function() {
+                            console.log("Lab Mode iterate JS loaded");
+                            console.log("Lab Mode assets loaded successfully");
+                            
+                            // Set up localized data
+                            window.labMode = {
+                                ajaxUrl: '<?php echo esc_url_raw(admin_url('admin-ajax.php')); ?>',
+                                nonce: '<?php echo wp_create_nonce('mc_lab_nonce'); ?>',
+                                userId: <?php echo get_current_user_id(); ?>,
+                                restUrl: '<?php echo esc_url_raw(rest_url('wp/v2/')); ?>',
+                                isAdmin: <?php echo current_user_can('manage_options') ? 'true' : 'false'; ?>,
+                                defaultModel: '<?php echo class_exists('Micro_Coach_AI') ? Micro_Coach_AI::get_selected_model() : 'gpt-4o-mini'; ?>'
+                            };
+                            resolve();
                         };
-                        resolve();
+                        iterateScript.onerror = function() {
+                            console.error("Failed to load Lab Mode Iterate JavaScript");
+                            reject(new Error('Failed to load Lab Mode iterate assets'));
+                        };
+                        document.head.appendChild(iterateScript);
                     };
                     script.onerror = function() {
                         console.error("Failed to load Lab Mode JavaScript");
@@ -1547,6 +1562,213 @@ class Micro_Coach_AI_Lab {
             error_log('Lab Mode Debug - AI variant generation failed: ' . $e->getMessage());
             wp_send_json_error('AI variant generation failed: ' . $e->getMessage());
         }
+    }
+    
+    /**
+     * AJAX: Iterate on an experiment with a single modifier
+     */
+    public function ajax_iterate() {
+        check_ajax_referer('mc_lab_nonce', 'nonce');
+        
+        $user_id = get_current_user_id();
+        if (!$user_id || !$this->user_can_access_lab_mode()) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        // Parse incoming data
+        $current_experiment = json_decode(stripslashes($_POST['currentExperiment'] ?? ''), true);
+        $modifier = json_decode(stripslashes($_POST['modifier'] ?? ''), true);
+        $user_context = json_decode(stripslashes($_POST['userContext'] ?? ''), true);
+        
+        error_log('Lab Mode Iterate - Current experiment: ' . print_r($current_experiment, true));
+        error_log('Lab Mode Iterate - Modifier: ' . print_r($modifier, true));
+        error_log('Lab Mode Iterate - User context: ' . print_r($user_context, true));
+        
+        // Validate required data
+        if (!$current_experiment || !$modifier || !$user_context) {
+            $missing = [];
+            if (!$current_experiment) $missing[] = 'current experiment';
+            if (!$modifier) $missing[] = 'modifier';
+            if (!$user_context) $missing[] = 'user context';
+            
+            wp_send_json_error('Missing required data: ' . implode(', ', $missing));
+        }
+        
+        // Validate modifier structure
+        if (!isset($modifier['kind']) || !isset($modifier['value'])) {
+            wp_send_json_error('Invalid modifier structure - missing kind or value');
+        }
+        
+        // Check if debug info is requested
+        $include_debug = !empty($_POST['includeDebug']);
+        
+        try {
+            // Generate the revised experiment with optional debug info
+            $result = $this->iterate_experiment($current_experiment, $modifier, $user_context, $include_debug);
+            
+            $revised_experiment = $result['experiment'];
+            $debug_info = $result['debug'] ?? null;
+            
+            // Calculate changed fields for diff highlighting
+            $changed_fields = $this->calculate_experiment_diff($current_experiment, $revised_experiment);
+            
+            // Extract calibration notes if available
+            $calibration_notes = $revised_experiment['_calibrationNotes'] ?? null;
+            unset($revised_experiment['_calibrationNotes']); // Remove internal field
+            
+            $response_data = [
+                'experiment' => $revised_experiment,
+                'calibrationNotes' => $calibration_notes,
+                'changedFields' => $changed_fields
+            ];
+            
+            // Include debug info if requested and available
+            if ($include_debug && $debug_info) {
+                $response_data['debug'] = $debug_info;
+            }
+            
+            wp_send_json_success($response_data);
+            
+        } catch (Exception $e) {
+            error_log('Lab Mode Iterate - Failed: ' . $e->getMessage());
+            wp_send_json_error('Failed to iterate experiment: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Iterate an experiment with a single modifier using AI
+     */
+    private function iterate_experiment($current_experiment, $modifier, $user_context, $include_debug = false) {
+        // Build system prompt for iteration
+        $system_prompt = 'You are an AI coach specializing in iterative refinement of a single experiment. The user will send the current experiment JSON and exactly one modifier. Return a revised version of the SAME experiment. Only change what the modifier requires; keep all other fields as stable as possible. Respect safety and user constraints. Be concrete and runnable. Keep steps (3–5), success criteria (2–3).\n\nReturn JSON with: archetype, title, rationale, steps (array), effort (object with timeHours and budgetUSD), riskLevel, successCriteria (array), linkedMI (array), linkedCDT (array), and optionally _calibrationNotes explaining what changed.';
+        
+        // Build user prompt with current experiment and modifier
+        $user_prompt = sprintf(
+            "Current Experiment: %s\n\nModifier to Apply: %s\n\nUser Context: %s\n\nApply exactly ONE modification as specified by the modifier. Return the full revised experiment as JSON.",
+            json_encode($current_experiment, JSON_PRETTY_PRINT),
+            json_encode($modifier, JSON_PRETTY_PRINT),
+            json_encode($user_context, JSON_PRETTY_PRINT)
+        );
+        
+        error_log('Lab Mode Iterate - System prompt: ' . substr($system_prompt, 0, 200) . '...');
+        error_log('Lab Mode Iterate - User prompt length: ' . strlen($user_prompt));
+        
+        // Call AI API
+        $api_key = Micro_Coach_AI::get_openai_api_key();
+        if (empty($api_key)) {
+            throw new Exception('OpenAI API key not configured');
+        }
+        
+        $model = Micro_Coach_AI::get_selected_model();
+        
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system_prompt],
+                ['role' => 'user', 'content' => $user_prompt]
+            ],
+            'temperature' => 0.7,
+            'max_tokens' => 800,
+            'response_format' => ['type' => 'json_object']
+        ];
+        
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+            'timeout' => 30,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json'
+            ],
+            'body' => wp_json_encode($payload)
+        ]);
+        
+        if (is_wp_error($response)) {
+            throw new Exception('API request failed: ' . $response->get_error_message());
+        }
+        
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code !== 200) {
+            $body = wp_remote_retrieve_body($response);
+            $error_data = json_decode($body, true);
+            throw new Exception('API returned status ' . $status_code . ': ' . ($error_data['error']['message'] ?? 'Unknown error'));
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if (!$data || !isset($data['choices'][0]['message']['content'])) {
+            throw new Exception('Invalid API response structure');
+        }
+        
+        $content = $data['choices'][0]['message']['content'];
+        error_log('Lab Mode Iterate - AI response: ' . $content);
+        
+        $revised_experiment = json_decode($content, true);
+        if (!$revised_experiment) {
+            throw new Exception('Failed to decode AI response as JSON: ' . $content);
+        }
+        
+        // Validate required fields in response
+        $required_fields = ['title', 'steps', 'successCriteria'];
+        foreach ($required_fields as $field) {
+            if (!isset($revised_experiment[$field])) {
+                // Fill missing fields from original
+                $revised_experiment[$field] = $current_experiment[$field] ?? null;
+            }
+        }
+        
+        // Ensure effort structure exists
+        if (!isset($revised_experiment['effort']) || !is_array($revised_experiment['effort'])) {
+            $revised_experiment['effort'] = $current_experiment['effort'] ?? ['timeHours' => 2, 'budgetUSD' => 0];
+        }
+        
+        // Prepare result with optional debug info
+        $result = ['experiment' => $revised_experiment];
+        
+        if ($include_debug) {
+            $result['debug'] = [
+                'systemPrompt' => $system_prompt,
+                'userPrompt' => $user_prompt,
+                'model' => $model,
+                'requestTime' => date('Y-m-d H:i:s'),
+                'tokenUsage' => $data['usage'] ?? null
+            ];
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Calculate which fields changed between two experiments
+     */
+    private function calculate_experiment_diff($original, $revised) {
+        $changed_fields = [];
+        
+        // Check top-level fields
+        $fields_to_check = ['title', 'rationale', 'riskLevel', 'archetype'];
+        foreach ($fields_to_check as $field) {
+            if (($original[$field] ?? null) !== ($revised[$field] ?? null)) {
+                $changed_fields[] = $field;
+            }
+        }
+        
+        // Check arrays (steps, successCriteria, etc.)
+        $array_fields = ['steps', 'successCriteria', 'linkedMI', 'linkedCDT'];
+        foreach ($array_fields as $field) {
+            $orig_array = $original[$field] ?? [];
+            $revised_array = $revised[$field] ?? [];
+            if (json_encode($orig_array) !== json_encode($revised_array)) {
+                $changed_fields[] = $field;
+            }
+        }
+        
+        // Check effort object
+        $orig_effort = $original['effort'] ?? [];
+        $revised_effort = $revised['effort'] ?? [];
+        if (json_encode($orig_effort) !== json_encode($revised_effort)) {
+            $changed_fields[] = 'effort';
+        }
+        
+        return $changed_fields;
     }
     
     /**

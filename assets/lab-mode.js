@@ -31,6 +31,7 @@
             $(document).on('click', '.lab-generate-experiments-btn', this.generateExperiments.bind(this));
             $(document).on('click', '.lab-start-experiment-btn', this.startExperiment.bind(this));
             $(document).on('click', '.lab-reflect-btn', this.showReflectionForm.bind(this));
+            $(document).on('click', '.lab-iterate-btn', this.openIterationPanel.bind(this));
             $(document).on('click', '.lab-regenerate-ai-btn', this.regenerateAiVariant.bind(this));
             $(document).on('submit', '.lab-qualifiers-form', this.saveQualifiers.bind(this));
             $(document).on('submit', '.lab-reflection-form', this.submitReflection.bind(this));
@@ -1771,6 +1772,7 @@
                                 
                                 <div class="experiment-actions">
                                     <button class="lab-btn lab-btn-primary lab-start-experiment-btn" data-experiment-id="${index}">Start</button>
+                                    <button class="lab-btn lab-btn-secondary lab-iterate-btn" data-experiment-id="${index}" title="Iteratively refine this experiment">Iterate</button>
                                     <button class="lab-btn lab-btn-secondary lab-regenerate-ai-btn" data-experiment-id="${index}" title="Generate a new AI-powered variant">Regenerate Variant</button>
                                     <button class="lab-btn lab-btn-tertiary lab-debug-toggle-btn" data-experiment-id="${index}">🔍 Debug</button>
                                 </div>
@@ -3027,6 +3029,52 @@ Return only valid JSON with the same structure as the original experiment.`;
         // Show reflection form for experiment from history
         showReflectionFormFromHistory: function(experimentId) {
             this.showReflectionForm({ preventDefault: () => {}, target: { dataset: { experimentId: experimentId } } });
+        },
+        
+        // Open iteration panel for experiment refinement
+        openIterationPanel: function(event) {
+            event.preventDefault();
+            
+            const experimentId = $(event.target).data('experiment-id');
+            const experiment = this.experiments[experimentId];
+            
+            if (!experiment) {
+                console.error('Experiment not found:', experimentId);
+                return;
+            }
+            
+            // Ensure IterationPanel is loaded
+            if (typeof window.IterationPanel === 'undefined') {
+                console.error('IterationPanel not loaded');
+                this.showError('Iteration panel not available. Please refresh the page.');
+                return;
+            }
+            
+            console.log('Opening iteration panel for experiment:', experimentId, experiment);
+            
+            // Build user context
+            const userContext = {
+                mi_top3: this.profileData?.mi_results?.slice(0, 3) || [],
+                cdt_bottom2: this.profileData?.cdt_results?.slice(-2) || [],
+                curiosities: this.qualifiers?.curiosity?.curiosities || [],
+                roleModels: this.qualifiers?.curiosity?.roleModels || [],
+                constraints: this.qualifiers?.curiosity?.constraints || {}
+            };
+            
+            window.IterationPanel.open(experiment, experimentId, userContext);
+        },
+        
+        // Update experiment in the experiments array and re-render
+        updateExperiment: function(index, updatedExperiment) {
+            if (index >= 0 && index < this.experiments.length) {
+                this.experiments[index] = $.extend(true, {}, updatedExperiment);
+                console.log('Updated experiment at index:', index, updatedExperiment);
+                
+                // Re-render the experiments view to show changes
+                this.showExperiments();
+            } else {
+                console.error('Invalid experiment index:', index);
+            }
         }
     };
 
