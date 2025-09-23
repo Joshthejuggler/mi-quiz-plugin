@@ -2089,6 +2089,23 @@ class Micro_Coach_Core {
         
         if ($enhanced) {
             $classes[] = 'mc-enhanced-profile-only';
+            
+            // Check if Lab Mode is available (all assessments complete)
+            $quizzes = self::get_quizzes();
+            $all_complete = true;
+            foreach ($quizzes as $quiz) {
+                if (!empty($quiz['results_meta_key'])) {
+                    $results = get_user_meta($user_id, $quiz['results_meta_key'], true);
+                    if (empty($results)) {
+                        $all_complete = false;
+                        break;
+                    }
+                }
+            }
+            
+            if ($all_complete) {
+                $classes[] = 'has-lab-mode';
+            }
         }
         
         return $classes;

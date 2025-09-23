@@ -1,6 +1,19 @@
 /* Enhanced Profile-Only Mode Styles */
+/* Only hide tabs in enhanced mode if Lab Mode isn't available */
 .mc-enhanced-profile-only .dashboard-tabs {
     display: none !important;
+}
+
+/* Override: Show tabs when Lab Mode is available, even in enhanced mode */
+.mc-enhanced-profile-only .dashboard-tabs:has([data-tab="tab-lab"]) {
+    display: flex !important;
+}
+
+/* Fallback for browsers that don't support :has() */
+@supports not (selector(:has(*))) {
+    .mc-enhanced-profile-only.has-lab-mode .dashboard-tabs {
+        display: flex !important;
+    }
 }
 
 .mc-enhanced-profile-only .tab-content-wrapper {

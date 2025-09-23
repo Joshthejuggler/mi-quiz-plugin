@@ -17,6 +17,7 @@
         init: function() {
             this.bindEvents();
             this.loadLandingView();
+            window.LabModeAppInitialized = true;
         },
         
         // Bind UI events
@@ -93,8 +94,9 @@
                         <div class="lab-testing-notice">
                             <div class="lab-notice-icon">⚠️</div>
                             <div class="lab-notice-content">
-                                <strong>Currently in Beta Testing</strong><br>
-                                <p>Lab Mode is experimental and may have rough edges. For full functionality, please use the <strong>AI Coach</strong> tab instead.</p>
+                                <strong>Currently in Beta Testing</strong>
+                                <p>Lab Mode is experimental and may have rough edges.</p>
+                                <p>For full functionality, please use the <strong>AI Coach</strong> tab instead.</p>
                             </div>
                         </div>
                     </div>
@@ -2581,10 +2583,32 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
         }
     };
 
-    // Initialize when document is ready
+    // Initialize when document is ready and when tabs are clicked
     $(document).ready(function() {
         if ($('#lab-mode-app').length > 0) {
             LabModeApp.init();
+        }
+        
+        // Also initialize when Lab Mode tab is clicked (for dynamic loading)
+        $(document).on('click', '[data-tab="tab-lab"]', function() {
+            // Small delay to ensure tab content is visible
+            setTimeout(function() {
+                if ($('#lab-mode-app').length > 0) {
+                    // Only initialize if not already initialized
+                    if (!window.LabModeAppInitialized) {
+                        LabModeApp.init();
+                        window.LabModeAppInitialized = true;
+                    }
+                }
+            }, 100);
+        });
+    });
+    
+    // Also try to initialize on window load as a fallback
+    $(window).on('load', function() {
+        if ($('#lab-mode-app').length > 0 && !window.LabModeAppInitialized) {
+            LabModeApp.init();
+            window.LabModeAppInitialized = true;
         }
     });
 
