@@ -17,6 +17,10 @@
         init: function() {
             this.bindEvents();
             this.loadLandingView();
+            // Check admin status after DOM is ready
+            setTimeout(() => {
+                this.checkAdminStatus();
+            }, 100);
             window.LabModeAppInitialized = true;
         },
         
@@ -52,6 +56,68 @@
                     <button class="lab-retry-btn" onclick="LabModeApp.init()">Try Again</button>
                 </div>
             `);
+        },
+        
+        // Check if current user is admin and show admin controls
+        checkAdminStatus: function() {
+            console.log('Checking admin status...', {
+                bodyClasses: document.body.classList.toString(),
+                url: window.location.href,
+                labMode: typeof labMode !== 'undefined' ? labMode : 'undefined',
+                isAdmin: labMode && labMode.isAdmin
+            });
+            
+            // Check if admin controls should be shown (look for admin indicators)
+            // WordPress admins often have body class 'logged-in' and other indicators
+            const isAdmin = document.body.classList.contains('wp-admin') || 
+                          window.location.href.includes('wp-admin') ||
+                          (labMode && labMode.isAdmin === true) ||
+                          this.detectAdminCapabilities();
+            
+            console.log('Admin status result:', isAdmin);
+            
+            if (isAdmin) {
+                console.log('Admin detected, showing model selector');
+                this.showAdminControls();
+            } else {
+                console.log('Non-admin user, hiding admin controls');
+            }
+        },
+        
+        // Detect admin capabilities (fallback method)
+        detectAdminCapabilities: function() {
+            // Check for common WordPress admin indicators
+            return document.querySelector('#wpadminbar') !== null ||
+                   document.body.classList.contains('admin-bar') ||
+                   document.body.classList.contains('wp-admin');
+        },
+        
+        // Show admin controls
+        showAdminControls: function() {
+            console.log('Showing admin controls...');
+            const adminControls = document.getElementById('lab-admin-controls');
+            console.log('Admin controls element:', adminControls);
+            
+            if (adminControls) {
+                adminControls.style.display = 'block';
+                console.log('Admin controls made visible');
+                
+                // Set default model selection from backend
+                const modelSelect = document.getElementById('lab-model-select');
+                console.log('Model select element:', modelSelect);
+                if (modelSelect && labMode && labMode.defaultModel) {
+                    modelSelect.value = labMode.defaultModel;
+                    console.log('Set default model to:', labMode.defaultModel);
+                }
+            } else {
+                console.error('Admin controls element not found!');
+            }
+        },
+        
+        // Get selected GPT model (for admin users)
+        getSelectedModel: function() {
+            const modelSelect = document.getElementById('lab-model-select');
+            return modelSelect ? modelSelect.value : 'gpt-4o-mini';
         },
         
         // Load the landing view
@@ -101,6 +167,24 @@
                         </div>
                     </div>
                     
+                    <!-- Admin Model Selector (only shown to admins) -->
+                    <div class="lab-admin-controls" id="lab-admin-controls" style="display: none;">
+                        <div class="lab-admin-section">
+                            <div class="lab-admin-header">
+                                <span class="lab-admin-icon">⚙️</span>
+                                <div class="lab-admin-title">Admin Controls</div>
+                            </div>
+                            <div class="lab-model-selector">
+                                <label for="lab-model-select" class="lab-model-label">GPT Model:</label>
+                                <select id="lab-model-select" class="lab-model-select">
+                                    <option value="gpt-4o-mini">GPT-4o mini (faster, cheaper)</option>
+                                    <option value="gpt-4o">GPT-4o (more capable, expensive)</option>
+                                </select>
+                                <div class="lab-model-note">Override default model for this session</div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="lab-landing-actions">
                         <button class="lab-start-btn lab-btn lab-btn-primary">Try Beta Version</button>
                         <button class="lab-view-history-btn lab-btn lab-btn-secondary">View Past Experiments</button>
@@ -112,6 +196,9 @@
             
             // Remove body class when not in form mode
             $('body').removeClass('lab-mode-active');
+            
+            // Check admin status after rendering landing view
+            this.checkAdminStatus();
         },
         
         // Start the profile inputs workflow
@@ -1583,15 +1670,24 @@
         generateExperiments: function() {
             this.showLoading('Generating your personalized experiments...');
             
+            const requestData = {
+                action: 'mc_lab_generate_experiments',
+                nonce: labMode.nonce,
+                qualifiers: JSON.stringify(this.qualifiers)
+            };
+            
+            // Add model selection for admin users
+            const selectedModel = this.getSelectedModel();
+            if (selectedModel && selectedModel !== 'gpt-4o-mini') {
+                requestData.model = selectedModel;
+                console.log('Using admin-selected model:', selectedModel);
+            }
+            
             $.ajax({
                 url: labMode.ajaxUrl,
                 type: 'POST',
                 dataType: 'json',
-                data: {
-                    action: 'mc_lab_generate_experiments',
-                    nonce: labMode.nonce,
-                    qualifiers: JSON.stringify(this.qualifiers)
-                },
+                data: requestData,
                 success: (response) => {
                     if (response.success) {
                         const raw = response.data.experiments || [];
@@ -1641,7 +1737,6 @@
                                 
                                 <div class="experiment-body">
                                     <div class="experiment-description">
-                                        <h4>What You'll Do:</h4>
                                         <p class="experiment-summary">${this.generateEngagingDescription(exp)}</p>
                                     </div>
                                     
@@ -1854,84 +1949,61 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
         
         // Generate engaging description for what the user will do
         generateEngagingDescription: function(experiment) {
-            if (!this.qualifiers || !this.profileData) {
-                return experiment.description || experiment.rationale || 'An engaging experiment tailored to your interests.';
+            // If experiment has an explicit summary, use that
+            if (experiment.summary) {
+                return experiment.summary;
             }
             
-            const mi = this.profileData.mi_results || [];
-            const cdt = this.profileData.cdt_results || [];
-            const topMI = mi.slice(0, 3);
-            const bottomCDT = cdt.slice(-2);
-            const curiosities = this.qualifiers.curiosity?.curiosities || [];
-            const roleModels = this.qualifiers.curiosity?.roleModels || [];
-            const constraints = this.qualifiers.curiosity?.constraints || {};
+            // If experiment has steps, create a concise summary from them
+            if (experiment.steps && Array.isArray(experiment.steps) && experiment.steps.length > 0) {
+                return this.createActionSummary(experiment.steps);
+            }
             
-            // Build natural, flowing description
-            let description = 'This experiment ';
+            // Fallback to title or generic description
+            if (experiment.title) {
+                // Remove "Experiment" suffix and convert to action phrase
+                const cleanTitle = experiment.title.replace(/\s*Experiment:?\s*/i, '').trim();
+                return cleanTitle || 'An engaging experiment tailored to your interests.';
+            }
             
-            // Add MI connection
-            if (experiment.influences?.miUsed) {
-                description += `taps into your ${experiment.influences.miUsed} `;
-            } else if (topMI.length > 0) {
-                description += `taps into your ${topMI[0].label} `;
+            return experiment.description || experiment.rationale || 'An engaging experiment tailored to your interests.';
+        },
+        
+        // Create a concise action summary from experiment steps
+        createActionSummary: function(steps) {
+            if (!steps || steps.length === 0) {
+                return 'Complete a series of personalized activities.';
+            }
+            
+            // Take first 1-2 steps to create summary
+            const relevantSteps = steps.slice(0, 2);
+            
+            // Clean and simplify each step
+            const cleanedSteps = relevantSteps.map(step => {
+                return step
+                    .replace(/^(Choose|Select|Pick|Identify)\s+/, 'Choose ') // Normalize selection verbs
+                    .replace(/^(Create|Make|Build|Design)\s+/, 'Create ') // Normalize creation verbs
+                    .replace(/^(Write|Document|Journal)\s+/, 'Write ') // Normalize writing verbs
+                    .replace(/^(Research|Study|Explore|Investigate)\s+/, 'Research ') // Normalize research verbs
+                    .replace(/^(Practice|Try|Attempt|Test)\s+/, 'Practice ') // Normalize practice verbs
+                    .replace(/^(Reflect|Think|Consider)\s+/, 'Reflect ') // Normalize reflection verbs
+                    .replace(/\s+about\s+your\s+curiosit(y|ies)/, ' about your interests') // Simplify curiosity references
+                    .replace(/\s+related\s+to\s+your\s+curiosit(y|ies)/, ' related to your interests') // Simplify curiosity references
+                    .replace(/\s+from\s+your\s+role\s+models?/, ' from people you admire') // Simplify role model references
+                    .trim();
+            });
+            
+            if (cleanedSteps.length === 1) {
+                return cleanedSteps[0].endsWith('.') ? cleanedSteps[0] : cleanedSteps[0] + '.';
+            } else if (cleanedSteps.length === 2) {
+                // Join with "then" for natural flow
+                const firstStep = cleanedSteps[0].replace(/\.$/, ''); // Remove trailing period if present
+                const secondStep = cleanedSteps[1].replace(/\.$/, ''); // Remove trailing period if present
+                return firstStep + ', then ' + secondStep.toLowerCase() + '.';
             } else {
-                description += `leverages your natural strengths `;
+                const firstStep = cleanedSteps[0].replace(/\.$/, ''); // Remove trailing period if present
+                return firstStep + ', and more.';
             }
-            
-            // Add curiosity connection
-            if (experiment.influences?.curiosityUsed) {
-                description += `and your curiosity for ${experiment.influences.curiosityUsed}, `;
-            } else if (curiosities.length > 0) {
-                description += `and your curiosity for ${curiosities[0]}, `;
-            } else {
-                description += `and your personal interests, `;
-            }
-            
-            // Add CDT growth connection
-            if (experiment.influences?.cdtEdge) {
-                description += `while nudging you to develop your ${experiment.influences.cdtEdge} skills `;
-            } else if (bottomCDT.length > 0) {
-                description += `while nudging you to develop your ${bottomCDT[0].label.toLowerCase()} skills `;
-            } else {
-                description += `while gently challenging you to grow `;
-            }
-            
-            // Add role model influence if present
-            if (experiment.influences?.roleModelUsed) {
-                description += `through approaches inspired by ${experiment.influences.roleModelUsed}. `;
-            } else if (roleModels.length > 0 && this.findRoleModelInfluences(experiment, roleModels).length > 0) {
-                description += `through approaches inspired by ${roleModels[0]}. `;
-            } else {
-                description += `in a way that feels natural to you. `;
-            }
-            
-            // Add practical constraints
-            const practicalDetails = [];
-            const timeHours = experiment.effort?.timeHours || 0;
-            const budget = experiment.effort?.budgetUSD || 0;
-            const risk = experiment.riskLevel || 'medium';
-            
-            if (budget === 0) {
-                practicalDetails.push('no-cost');
-            } else if (budget <= 20) {
-                practicalDetails.push('low-cost');
-            }
-            
-            if (timeHours <= 2) {
-                practicalDetails.push('time-efficient');
-            } else if (timeHours >= 4) {
-                practicalDetails.push('in-depth');
-            }
-            
-            if (risk.toLowerCase() === 'low') {
-                practicalDetails.push('low-risk');
-            }
-            
-            if (practicalDetails.length > 0) {
-                description += `It's a ${practicalDetails.join(', ')} activity that accommodates your preferences.`;
-            }
-            
-            return description;
         },
         
         // Generate personalized connection explaining why this experiment was chosen

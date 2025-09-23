@@ -262,6 +262,73 @@
     font-weight: 700;
 }
 
+/* Admin Controls */
+.lab-admin-controls {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: var(--lab-radius);
+    padding: 1.25rem;
+    margin: 1.5rem 0;
+}
+
+.lab-admin-section {
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.lab-admin-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+    color: #4b5563;
+    font-size: 0.9rem;
+}
+
+.lab-admin-icon {
+    font-size: 1.1rem;
+}
+
+.lab-admin-title {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.lab-model-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.lab-model-label {
+    font-weight: 500;
+    color: #374151;
+    font-size: 0.875rem;
+}
+
+.lab-model-select {
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    background: white;
+    color: #374151;
+}
+
+.lab-model-select:focus {
+    outline: none;
+    border-color: var(--lab-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.lab-model-note {
+    font-size: 0.75rem;
+    color: #6b7280;
+    font-style: italic;
+}
+
 /* Landing Actions */
 .lab-landing-actions {
     display: flex;
@@ -2184,7 +2251,7 @@ body.lab-mode-active {
 
 /* What You'll Do Section */
 .experiment-description .experiment-summary {
-    font-size: 1rem;
+    font-size: 1.125rem;
     line-height: 1.6;
     color: var(--lab-text);
     margin: 0;
