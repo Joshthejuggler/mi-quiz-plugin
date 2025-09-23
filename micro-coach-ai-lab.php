@@ -715,21 +715,30 @@ class Micro_Coach_AI_Lab {
      * Build AI prompt for experiment generation
      */
     private function build_experiment_generation_prompt($profile_data, $qualifiers, $archetype_templates, $cdt_dataset) {
-        // Enhanced system prompt with JSON format requirement
-        $system_prompt = 'You are the AI Coach in Lab Mode. Generate exactly 3 experiments (one Discover, one Build, one Share) in valid JSON format only. No markdown, no explanations outside JSON.\n\nRules:\n- Return ONLY valid JSON with "experiments" array\n- Each experiment must have: archetype, title, rationale, steps (array), effort (object with timeHours and budgetUSD), riskLevel, successCriteria (array)\n- Reference user\'s specific MI strengths and CDT growth areas\n- Keep experiments under 3 hours\n- Make steps concrete and actionable\n- Use user\'s curiosities and constraints\n\nReturn format: {"experiments": [{"archetype": "Discover", "title": "...", "rationale": "...", "steps": [...], "effort": {"timeHours": N, "budgetUSD": N}, "riskLevel": "Low|Medium|High", "successCriteria": [...]}, ...]}';
+        // Enhanced system prompt with role model focus and better structure
+        $system_prompt = 'Role: You generate personalized "minimum viable experiments" (MVEs) for self-discovery.\n\nTask: Produce diverse, safe, low-stakes MVEs the user can try within 7 days.\n\nDesign Rules:\n1. **Ground in MI strengths** – leverage at least one top MI (explicitly note which)\n2. **Address CDT growth edges** – integrate small nudges for bottom 2 dimensions\n3. **Role models as inspiration** – draw on style/philosophy/methods of at least one role model. Make this influence explicit (e.g., "In the spirit of Marie Kondo, simplify...")\n4. **Calibrate to constraints** – align with time, budget, risk preferences. Do not exceed ±1 without explanation\n5. **Incorporate curiosities** – use at least one curiosity area in each experiment\n\nOutput JSON with fields:\n- archetype (Build, Explore, Express, Connect, Reflect)\n- title\n- rationale (why this fits MI/CDT/role model/constraints)\n- steps (3-5 concrete, runnable steps)\n- effort (timeHours, budgetUSD, riskLevel)\n- successCriteria (2-3)\n- influences (object with: miUsed, cdtEdge, roleModelUsed, curiosityUsed)\n- calibrationNotes (if adjustments made)\n\nConstraints: Language must be warm, concrete, non-judgmental. All experiments safe, legal, age-appropriate, low-risk. Return ONLY valid JSON.';
         
-        // Get MI combinations for better personalization
-        $mi_combinations = $this->get_mi_combinations();
+        // Get role models from qualifiers
+        $role_models = [];
+        if (isset($qualifiers['curiosity']['roleModels']) && is_array($qualifiers['curiosity']['roleModels'])) {
+            $role_models = array_filter($qualifiers['curiosity']['roleModels']);
+        }
         
-        // Build simplified user message focused on the data
+        // Build comprehensive user message
         $user_message = sprintf(
-            "User Profile:\n- Top MI: %s\n- Lowest CDT: %s\n- Curiosities: %s\n- Budget: $%d\n- Time: %d hours/week\n- Risk: %d/100\n\nGenerate 3 personalized experiments (1 Discover, 1 Build, 1 Share) as JSON.",
-            implode(', ', array_column($profile_data['mi_top3'] ?: [], 'label')),
-            implode(', ', array_slice(array_column($profile_data['cdt'] ?: [], 'label'), -2)),
-            implode(', ', $qualifiers['curiosity']['curiosities'] ?: []),
-            $qualifiers['curiosity']['constraints']['budget'] ?? 50,
+            "Profile JSON: {\n  \"user\": {\n    \"mi_top3\": %s,\n    \"cdt_bottom2\": %s,\n    \"curiosities\": %s,\n    \"roleModels\": %s\n  },\n  \"constraints\": {\n    \"timePerWeek\": %d,\n    \"budget\": %d,\n    \"risk\": %d,\n    \"soloToGroup\": %d\n  }\n}\n\nGenerate 3 personalized MVEs as JSON.",
+            json_encode(array_map(function($mi) {
+                return ['label' => $mi['label'], 'score' => $mi['score']];
+            }, array_slice($profile_data['mi_top3'] ?: [], 0, 3))),
+            json_encode(array_map(function($cdt) {
+                return ['label' => $cdt['label'], 'score' => $cdt['score']];
+            }, array_slice($profile_data['cdt'] ?: [], -2))),
+            json_encode($qualifiers['curiosity']['curiosities'] ?: []),
+            json_encode($role_models),
             $qualifiers['curiosity']['constraints']['timePerWeekHours'] ?? 3,
-            $qualifiers['curiosity']['constraints']['risk'] ?? 50
+            $qualifiers['curiosity']['constraints']['budget'] ?? 50,
+            $qualifiers['curiosity']['constraints']['risk'] ?? 50,
+            $qualifiers['curiosity']['constraints']['soloToGroup'] ?? 50
         );
         
         return [

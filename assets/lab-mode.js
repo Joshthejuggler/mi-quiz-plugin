@@ -1685,6 +1685,18 @@
                                             </div>
                                         </div>
                                     ` : ''}
+                                    
+                                    ${exp.influences ? `
+                                        <div class="debug-section">
+                                            <h5>AI Influences Used:</h5>
+                                            <div class="debug-info">
+                                                <strong>MI:</strong> ${exp.influences.miUsed || 'None'}<br>
+                                                <strong>Role Model:</strong> ${exp.influences.roleModelUsed || 'None'}<br>
+                                                <strong>Curiosity:</strong> ${exp.influences.curiosityUsed || 'None'}<br>
+                                                <strong>CDT Edge:</strong> ${exp.influences.cdtEdge || 'None'}
+                                            </div>
+                                        </div>
+                                    ` : ''}
                                 </div>
                             </div>
                         `).join('')}
@@ -1841,6 +1853,37 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 return "This experiment aligns with your interests and learning preferences.";
             }
             
+            // First check if the AI provided detailed influences
+            if (experiment.influences) {
+                const influences = experiment.influences;
+                const connections = [];
+                
+                // Use AI-provided MI influence
+                if (influences.miUsed) {
+                    connections.push(`leverages your ${influences.miUsed} strength`);
+                }
+                
+                // Use AI-provided role model influence
+                if (influences.roleModelUsed) {
+                    connections.push(`draws from ${influences.roleModelUsed}'s approach`);
+                }
+                
+                // Use AI-provided curiosity
+                if (influences.curiosityUsed) {
+                    connections.push(`explores your interest in ${influences.curiosityUsed}`);
+                }
+                
+                // Use AI-provided CDT edge
+                if (influences.cdtEdge) {
+                    connections.push(`gently develops your ${influences.cdtEdge} skills`);
+                }
+                
+                if (connections.length > 0) {
+                    return this.formatConnections(connections);
+                }
+            }
+            
+            // Fallback to manual connection generation
             const mi = this.profileData.mi_results || [];
             const topMI = mi.slice(0, 3);
             const curiosities = this.qualifiers.curiosity?.curiosities || [];
@@ -1865,6 +1908,14 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 
                 const miConnection = miConnections[primaryMI.key] || `builds on your ${primaryMI.label} strength`;
                 connections.push(`It ${miConnection}`);
+            }
+            
+            // Enhanced role model connection - check experiment content for role model influences
+            const roleModelMentions = this.findRoleModelInfluences(experiment, roleModels);
+            if (roleModelMentions.length > 0) {
+                connections.push(`inspired by ${roleModelMentions[0]}'s philosophy`);
+            } else if (roleModels.length > 0) {
+                connections.push(`draws inspiration from creators like ${roleModels[0]}`);
             }
             
             // Connect to curiosities
@@ -1896,17 +1947,16 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 connections.push("includes social and collaborative elements");
             }
             
-            // Connect to role models if mentioned
-            if (roleModels.length > 0) {
-                connections.push(`draws inspiration from creators like ${roleModels[0]}`);
-            }
-            
             // Fallback if no specific connections found
             if (connections.length === 0) {
                 return "This experiment matches your unique combination of strengths, interests, and preferences.";
             }
             
-            // Combine connections into a natural sentence
+            return this.formatConnections(connections);
+        },
+        
+        // Helper function to format connection strings
+        formatConnections: function(connections) {
             if (connections.length === 1) {
                 return connections[0] + ".";
             } else if (connections.length === 2) {
@@ -1915,6 +1965,20 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 const lastConnection = connections.pop();
                 return connections.join(", ") + ", and " + lastConnection + ".";
             }
+        },
+        
+        // Helper function to find role model influences in experiment content
+        findRoleModelInfluences: function(experiment, roleModels) {
+            const searchText = `${experiment.title || ''} ${experiment.rationale || ''} ${(experiment.steps || []).join(' ')}`.toLowerCase();
+            
+            const foundModels = [];
+            roleModels.forEach(model => {
+                if (searchText.includes(model.toLowerCase())) {
+                    foundModels.push(model);
+                }
+            });
+            
+            return foundModels;
         },
         
         // Map raw slider constraints to normalized targets used for calibration (0..4)
