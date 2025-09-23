@@ -27,6 +27,7 @@
             $(document).on('click', '.lab-start-experiment-btn', this.startExperiment.bind(this));
             $(document).on('click', '.lab-reflect-btn', this.showReflectionForm.bind(this));
             $(document).on('click', '.lab-regenerate-variant-btn', this.regenerateVariant.bind(this));
+            $(document).on('click', '.lab-regenerate-ai-btn', this.regenerateAiVariant.bind(this));
             $(document).on('submit', '.lab-qualifiers-form', this.saveQualifiers.bind(this));
             $(document).on('submit', '.lab-reflection-form', this.submitReflection.bind(this));
             $(document).on('click', '.quick-select-btn', this.handleQuickSelect.bind(this));
@@ -1638,7 +1639,8 @@
                                 
                                 <div class="experiment-actions">
                                     <button class="lab-btn lab-btn-primary lab-start-experiment-btn" data-experiment-id="${index}">Start</button>
-                                    <button class="lab-btn lab-btn-secondary lab-regenerate-variant-btn" data-experiment-id="${index}">Regenerate Variant</button>
+                                    <button class="lab-btn lab-btn-secondary lab-regenerate-variant-btn" data-experiment-id="${index}" title="Quick template-based variant">⚡ Quick Variant</button>
+                                    <button class="lab-btn lab-btn-secondary lab-regenerate-ai-btn" data-experiment-id="${index}" title="AI-powered personalized variant">🤖 AI Variant</button>
                                     <button class="lab-btn lab-btn-tertiary lab-debug-toggle-btn" data-experiment-id="${index}">🔍 Debug</button>
                                 </div>
                                 
@@ -2130,7 +2132,15 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             // Generate new success criteria that match the new steps and archetype
             const newSuccessCriteria = this.generateSuccessCriteria(archetype, variation.steps, curiosity);
             
-            return {
+            console.log('🔄 Regenerating Variant:', {
+                originalArchetype: originalExperiment.archetype,
+                newArchetype: archetype,
+                originalSuccessCriteria: originalExperiment.successCriteria,
+                newSuccessCriteria: newSuccessCriteria,
+                variation: variation.title
+            });
+            
+            const newVariant = {
                 ...originalExperiment,
                 title: variation.title.replace('{curiosity}', curiosity).replace('{MI}', topMI.label),
                 rationale: variation.rationale.replace('{MI}', topMI.label),
@@ -2141,7 +2151,78 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 },
                 riskLevel: ['Low', 'Medium', 'High'][Math.floor(Math.random() * 3)],
                 successCriteria: newSuccessCriteria,
-                _calibrated: true
+                _calibrated: true,
+                _variantGenerated: Date.now() // Add timestamp to force refresh
+            };
+            
+            console.log('✅ Generated new variant:', newVariant);
+            return newVariant;
+        },
+        
+        // Regenerate a variant using AI (more personalized than local templates)
+        regenerateAiVariant: function(e) {
+            e.preventDefault();
+            const experimentIndex = parseInt($(e.target).data('experiment-id'));
+            const experiment = this.experiments[experimentIndex];
+            
+            if (!experiment) return;
+            
+            this.showLoading('Generating AI-powered variant...');
+            
+            // Create a custom prompt for variant generation
+            const variantPrompt = this.buildVariantPrompt(experiment);
+            
+            $.ajax({
+                url: labMode.ajaxUrl,
+                type: 'POST', 
+                dataType: 'json',
+                data: {
+                    action: 'mc_lab_generate_ai_variant',
+                    nonce: labMode.nonce,
+                    original_experiment: JSON.stringify(experiment),
+                    prompt_data: JSON.stringify(variantPrompt)
+                },
+                success: (response) => {
+                    if (response.success && response.data.variant) {
+                        // Replace the experiment with the AI-generated variant
+                        this.experiments[experimentIndex] = {
+                            ...response.data.variant,
+                            _aiGenerated: true,
+                            _variantOf: experiment.title
+                        };
+                        
+                        // Re-render experiments
+                        this.showExperiments();
+                        
+                        // Scroll to the updated experiment
+                        setTimeout(() => {
+                            $(`.experiment-card[data-archetype="${response.data.variant.archetype}"]`).eq(experimentIndex)
+                                .get(0)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 100);
+                    } else {
+                        // Fallback to local variant if AI fails
+                        console.log('AI variant failed, falling back to local variant');
+                        this.regenerateVariant(e);
+                    }
+                },
+                error: () => {
+                    // Fallback to local variant if AI request fails
+                    console.log('AI request failed, falling back to local variant');
+                    this.regenerateVariant(e);
+                }
+            });
+        },
+        
+        // Build AI prompt for variant generation
+        buildVariantPrompt: function(originalExperiment) {
+            const topMI = this.profileData?.mi_results?.slice(0, 3) || [];
+            const curiosities = this.qualifiers?.curiosity?.curiosities || [];
+            const roleModels = this.qualifiers?.curiosity?.roleModels || [];
+            const constraints = this.qualifiers?.curiosity?.constraints || {};
+            
+            return {
+                system: 'Generate a creative variant of the given experiment. Keep the same archetype but change the approach, steps, and success criteria. Make it fresh and engaging while staying true to the user\'s profile. Return only valid JSON with the same structure as the original experiment.',
+                user: `Original experiment: ${JSON.stringify(originalExperiment)}\n\nUser profile:\n- Top MI: ${topMI.map(mi => mi.label).join(', ')}\n- Curiosities: ${curiosities.join(', ')}\n- Role models: ${roleModels.join(', ')}\n- Time: ${constraints.timePerWeekHours || 3}h/week\n- Budget: $${constraints.budget || 50}\n- Risk: ${constraints.risk || 50}/100\n\nCreate a variant that feels different but maintains the same archetype and core intent. Focus on making it more engaging and personally relevant.`
             };
         },
         

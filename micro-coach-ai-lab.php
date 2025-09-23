@@ -41,6 +41,7 @@ class Micro_Coach_AI_Lab {
         add_action('wp_ajax_mc_lab_recalibrate', [$this, 'ajax_recalibrate']);
         add_action('wp_ajax_mc_lab_debug_user_data', [$this, 'ajax_debug_user_data']);
         add_action('wp_ajax_mc_lab_test_save_qualifiers', [$this, 'ajax_test_save_qualifiers']);
+        add_action('wp_ajax_mc_lab_generate_ai_variant', [$this, 'ajax_generate_ai_variant']);
         
         // Hook into the main dashboard to add Lab Mode tab
         add_filter('mc_dashboard_custom_tabs', [$this, 'add_lab_mode_tab']);
@@ -1143,6 +1144,117 @@ class Micro_Coach_AI_Lab {
         }
         
         return $qualifiers;
+    }
+    
+    /**
+     * AJAX: Generate AI-powered experiment variant
+     */
+    public function ajax_generate_ai_variant() {
+        check_ajax_referer('mc_lab_nonce', 'nonce');
+        
+        $user_id = get_current_user_id();
+        if (!$user_id || !$this->user_can_access_lab_mode()) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $original_experiment = json_decode(stripslashes($_POST['original_experiment'] ?? ''), true);
+        $prompt_data = json_decode(stripslashes($_POST['prompt_data'] ?? ''), true);
+        
+        if (!$original_experiment || !$prompt_data) {
+            wp_send_json_error('Invalid experiment or prompt data');
+        }
+        
+        try {
+            // Use the AI to generate a variant
+            $variant = $this->generate_ai_variant($prompt_data, $original_experiment);
+            
+            wp_send_json_success([
+                'variant' => $variant,
+                'source' => 'AI Generated Variant'
+            ]);
+            
+        } catch (Exception $e) {
+            error_log('Lab Mode Debug - AI variant generation failed: ' . $e->getMessage());
+            wp_send_json_error('AI variant generation failed: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Generate AI variant of an existing experiment
+     */
+    private function generate_ai_variant($prompt_data, $original_experiment) {
+        if (!class_exists('Micro_Coach_AI')) {
+            throw new Exception('Micro_Coach_AI class not available');
+        }
+        
+        $api_key = Micro_Coach_AI::get_openai_api_key();
+        if (empty($api_key)) {
+            throw new Exception('OpenAI API key not configured');
+        }
+        
+        $model = Micro_Coach_AI::get_selected_model();
+        
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $prompt_data['system']],
+                ['role' => 'user', 'content' => $prompt_data['user']]
+            ],
+            'temperature' => 0.8, // Higher creativity for variants
+            'max_tokens' => 1500,
+            'response_format' => ['type' => 'json_object']
+        ];
+        
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+            'timeout' => 60,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json'
+            ],
+            'body' => wp_json_encode($payload)
+        ]);
+        
+        if (is_wp_error($response)) {
+            throw new Exception('API request failed: ' . $response->get_error_message());
+        }
+        
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code !== 200) {
+            throw new Exception('API returned status: ' . $status_code);
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if (!$data || isset($data['error'])) {
+            throw new Exception('API error: ' . ($data['error']['message'] ?? 'Unknown error'));
+        }
+        
+        if (!isset($data['choices'][0]['message']['content'])) {
+            throw new Exception('Invalid API response structure');
+        }
+        
+        $content = $data['choices'][0]['message']['content'];
+        $variant = json_decode($content, true);
+        
+        if (!$variant) {
+            throw new Exception('Failed to decode AI variant response as JSON');
+        }
+        
+        // Ensure required fields are present
+        if (!isset($variant['title']) || !isset($variant['steps']) || !isset($variant['successCriteria'])) {
+            // If the AI response is not properly structured, return the original with modifications
+            $variant = [
+                ...$original_experiment,
+                'title' => $variant['title'] ?? $original_experiment['title'] . ' (AI Variant)',
+                'rationale' => $variant['rationale'] ?? 'An AI-generated variant of your original experiment.',
+                'steps' => $variant['steps'] ?? $original_experiment['steps'],
+                'successCriteria' => $variant['successCriteria'] ?? $original_experiment['successCriteria'],
+                '_aiGenerated' => true
+            ];
+        }
+        
+        return $variant;
     }
 }
 
