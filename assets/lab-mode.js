@@ -204,6 +204,10 @@
         // Start the profile inputs workflow
         startProfileInputs: function(e) {
             e.preventDefault();
+            
+            console.log('Try Beta Version clicked');
+            
+            // Show simple loading while getting profile data
             this.showLoading('Loading your assessment data...');
             this.loadProfileData();
         },
@@ -221,6 +225,7 @@
                 success: (response) => {
                     if (response.success) {
                         this.profileData = response.data;
+                        // Go directly to typeform
                         this.showProfileInputsForm();
                     } else {
                         this.showError(response.data || 'Failed to load profile data');
@@ -427,18 +432,13 @@
                 examples: this.getCuriosityExamples()
             });
             
-            // Role models
+            // Role models - enhanced discovery
             questions.push({
                 id: 'role_models',
-                type: 'multiple_input',
-                title: 'Who do you admire or learn from?',
-                subtitle: 'Role models, creators, or thought leaders who inspire you (optional but helpful).',
-                inputs: [
-                    { id: 'role_model_1', placeholder: 'Name or @handle', required: false },
-                    { id: 'role_model_2', placeholder: 'Another name or @handle', required: false },
-                    { id: 'role_model_3', placeholder: 'Third name or @handle', required: false }
-                ],
-                examples: this.getRoleModelExamples()
+                type: 'role_model_discovery',
+                title: 'Who are your role models?',
+                subtitle: 'Let our AI help you discover inspiring people who share similar qualities with those you already admire.',
+                required: false
             });
             
             // Constraints - Risk tolerance
@@ -506,7 +506,11 @@
         renderTypeform: function() {
             const currentQuestion = this.typeformState.questions[this.typeformState.currentQuestionIndex];
             const isLastQuestion = this.typeformState.currentQuestionIndex === this.typeformState.questions.length - 1;
-            const progressPercent = (this.typeformState.currentQuestionIndex / (this.typeformState.questions.length - 1)) * 100;
+            
+            // Calculate progress excluding the welcome screen
+            const totalQuestions = this.typeformState.questions.length - 1; // Exclude welcome screen
+            const currentStepNumber = Math.max(1, this.typeformState.currentQuestionIndex); // Start at 1 for non-welcome screens
+            const progressPercent = this.typeformState.currentQuestionIndex === 0 ? 0 : ((this.typeformState.currentQuestionIndex - 1) / (totalQuestions - 1)) * 100;
             
             let questionHtml = '';
             
@@ -527,36 +531,51 @@
                 case 'slider':
                     questionHtml = this.renderSliderQuestion(currentQuestion);
                     break;
+                case 'role_model_discovery':
+                    questionHtml = this.renderRoleModelDiscoveryQuestion(currentQuestion);
+                    break;
             }
             
+            // Hide footer on welcome screen for fresh starts
+            const isWelcomeScreen = currentQuestion.type === 'welcome';
+            const hasExistingAnswers = this.typeformState.answers && Object.keys(this.typeformState.answers).length > 0;
+            const showFooter = !isWelcomeScreen || hasExistingAnswers;
+            
+            const footerHtml = showFooter ? `
+                <div class="lab-typeform-footer">
+                    <div class="lab-typeform-nav">
+                        <div class="lab-nav-left">
+                            <button class="lab-nav-back" ${this.typeformState.currentQuestionIndex === 0 ? 'disabled' : ''} data-action="back">
+                                ← Back
+                            </button>
+                        </div>
+                        
+                        <div class="lab-progress-container">
+                            <div class="lab-progress-bar">
+                                <div class="lab-progress-fill" style="width: ${progressPercent}%"></div>
+                            </div>
+                            <div class="lab-progress-text">${currentStepNumber} of ${totalQuestions}</div>
+                        </div>
+                        
+                        <button class="lab-nav-forward" id="next-btn" data-action="next" ${currentQuestion.type === 'welcome' ? '' : 'disabled'}>
+                            ${isLastQuestion ? 'Generate Experiments' : (currentQuestion.type === 'welcome' ? 'Start' : 'Next →')}
+                        </button>
+                    </div>
+                </div>
+            ` : '';
+            
+            // Apply welcome-mode class only for welcome screens without existing answers
+            const isWelcomeMode = isWelcomeScreen && !hasExistingAnswers;
+            const containerClass = isWelcomeMode ? 'lab-typeform-container welcome-mode' : 'lab-typeform-container';
+            
             const html = `
-                <div class="lab-typeform-container">
+                <div class="${containerClass}">
                     <div class="lab-typeform-content">
                         <div class="lab-question-screen active">
                             ${questionHtml}
                         </div>
                     </div>
-                    
-                    <div class="lab-typeform-footer">
-                        <div class="lab-typeform-nav">
-                            <div class="lab-nav-left">
-                                <button class="lab-nav-back" ${this.typeformState.currentQuestionIndex === 0 ? 'disabled' : ''} data-action="back">
-                                    ← Back
-                                </button>
-                            </div>
-                            
-                            <div class="lab-progress-container">
-                                <div class="lab-progress-bar">
-                                    <div class="lab-progress-fill" style="width: ${progressPercent}%"></div>
-                                </div>
-                                <div class="lab-progress-text">${this.typeformState.currentQuestionIndex + 1} of ${this.typeformState.questions.length}</div>
-                            </div>
-                            
-                            <button class="lab-nav-forward" id="next-btn" data-action="next" ${currentQuestion.type === 'welcome' ? '' : 'disabled'}>
-                                ${isLastQuestion ? 'Generate Experiments' : (currentQuestion.type === 'welcome' ? 'Start' : 'Next →')}
-                            </button>
-                        </div>
-                    </div>
+                    ${footerHtml}
                 </div>
             `;
             
@@ -596,6 +615,7 @@
             let progressMessage = '';
             let clearButton = '';
             let resumeButton = '';
+            let startButton = '';
             
             if (hasExistingAnswers && savedQuestionIndex > 0) {
                 const answeredCount = Object.keys(this.typeformState.answers).length;
@@ -622,12 +642,20 @@
                         ▶️ Continue Where I Left Off
                     </button>
                 `;
+            } else {
+                // Fresh start - show start button prominently below title
+                startButton = `
+                    <button class="lab-start-button" id="welcome-start-btn">
+                        Start
+                    </button>
+                `;
             }
             
             return `
                 <div class="lab-welcome-screen">
                     <h1>${question.title}</h1>
                     <p>${question.subtitle}</p>
+                    ${startButton}
                     ${progressMessage}
                     <div class="welcome-actions">
                         ${resumeButton}
@@ -741,6 +769,61 @@
             `;
         },
         
+        // Render role model discovery question
+        renderRoleModelDiscoveryQuestion: function(question) {
+            const currentValue = this.typeformState.answers[question.id];
+            const hasSelection = currentValue && currentValue.finalSelection && currentValue.finalSelection.length > 0;
+            
+            let displayContent = '';
+            
+            if (hasSelection) {
+                // Show selected role models
+                const finalModels = currentValue.finalSelection;
+                displayContent = `
+                    <div class="selected-role-models">
+                        <h4>Your Selected Role Models:</h4>
+                        <div class="selected-models-list">
+                            ${finalModels.map(model => `
+                                <div class="selected-model-chip">
+                                    <span class="model-name">${model.name}</span>
+                                    <span class="model-category">${model.category}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button type="button" class="rolemodel-change-btn" data-question-id="${question.id}">
+                            Change Selection
+                        </button>
+                    </div>
+                `;
+            } else {
+                // Show discovery button
+                displayContent = `
+                    <div class="role-model-discovery-prompt">
+                        <div class="discovery-icon">🎯</div>
+                        <p class="discovery-description">We'll help you identify people who inspire you and discover others with similar qualities.</p>
+                        <button type="button" class="rolemodel-discover-btn" data-question-id="${question.id}">
+                            Discover Role Models
+                        </button>
+                        <div class="or-divider">
+                            <span>or</span>
+                        </div>
+                        <button type="button" class="rolemodel-skip-btn" data-question-id="${question.id}">
+                            Skip This Step
+                        </button>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div>
+                    <h2 class="lab-question-title">${question.title}</h2>
+                    <p class="lab-question-subtitle">${question.subtitle}</p>
+                    
+                    ${displayContent}
+                </div>
+            `;
+        },
+        
         // Setup event delegation for all button interactions
         setupEventDelegation: function() {
             const self = this;
@@ -787,6 +870,29 @@
                 if (questionId && option) {
                     self.selectChoice(questionId, option);
                 }
+            });
+            
+            // Role model discovery buttons
+            $(document).on('click.typeform', '.rolemodel-discover-btn, .rolemodel-change-btn', function(e) {
+                e.preventDefault();
+                const questionId = $(this).data('question-id');
+                if (questionId) {
+                    self.openRoleModelDiscovery(questionId);
+                }
+            });
+            
+            $(document).on('click.typeform', '.rolemodel-skip-btn', function(e) {
+                e.preventDefault();
+                const questionId = $(this).data('question-id');
+                if (questionId) {
+                    self.skipRoleModelDiscovery(questionId);
+                }
+            });
+            
+            // Welcome start button
+            $(document).on('click.typeform', '#welcome-start-btn, .lab-start-button', function(e) {
+                e.preventDefault();
+                self.goToNextQuestion();
             });
         },
         
@@ -999,6 +1105,42 @@
             }
         },
         
+        // Open role model discovery modal
+        openRoleModelDiscovery: function(questionId) {
+            if (!window.RoleModelDiscovery) {
+                console.error('RoleModelDiscovery component not loaded');
+                alert('Role model discovery is not available. Please refresh the page.');
+                return;
+            }
+            
+            window.RoleModelDiscovery.open((result) => {
+                console.log('Role model discovery completed:', result);
+                
+                // Store the complete result
+                this.updateAnswer(questionId, result);
+                
+                // Re-render the current question to show the selection
+                this.renderTypeform();
+            });
+        },
+        
+        // Skip role model discovery
+        skipRoleModelDiscovery: function(questionId) {
+            // Store empty result to indicate skipped
+            const skippedResult = {
+                userInputModels: [],
+                selectedCategories: [],
+                aiSuggestions: [],
+                finalSelection: [],
+                skipped: true
+            };
+            
+            this.updateAnswer(questionId, skippedResult);
+            
+            // Move to next question automatically
+            this.goToNextQuestion();
+        },
+        
         // Validate current question
         validateCurrentQuestion: function() {
             const currentQuestion = this.typeformState.questions[this.typeformState.currentQuestionIndex];
@@ -1025,6 +1167,10 @@
                     
                 case 'slider':
                     // Sliders always have a value (either saved or default), so always valid
+                    return true;
+                    
+                case 'role_model_discovery':
+                    // Role model discovery is optional, so always valid
                     return true;
                     
                 default:
@@ -1220,11 +1366,23 @@
                 answers['curiosity_3']
             ].filter(c => c && c.trim());
             
-            qualifiers.curiosity.roleModels = [
-                answers['role_model_1'],
-                answers['role_model_2'],
-                answers['role_model_3']
-            ].filter(r => r && r.trim());
+            // Extract enhanced role models data
+            const roleModelData = answers['role_models'];
+            if (roleModelData && !roleModelData.skipped && roleModelData.finalSelection) {
+                // Use the enhanced role model discovery results
+                qualifiers.curiosity.roleModels = roleModelData.finalSelection.map(model => model.name);
+                qualifiers.curiosity.roleModelCategories = [...new Set(roleModelData.finalSelection.map(model => model.category))];
+                qualifiers.curiosity.roleModelAnalysis = {
+                    userInputModels: roleModelData.userInputModels || [],
+                    selectedCategories: roleModelData.selectedCategories || [],
+                    aiSuggestions: roleModelData.aiSuggestions || []
+                };
+            } else {
+                // Fallback for skipped or empty role model discovery
+                qualifiers.curiosity.roleModels = [];
+                qualifiers.curiosity.roleModelCategories = [];
+                qualifiers.curiosity.roleModelAnalysis = null;
+            }
             
             qualifiers.curiosity.constraints = {
                 risk: answers['risk_tolerance'] || 50,
@@ -1237,8 +1395,30 @@
             
             this.qualifiers = qualifiers;
             
-            // Save qualifiers and generate experiments
-            this.showLoading('Saving your preferences...');
+            // Save qualifiers using AI loading overlay or fallback
+            if (typeof AILoadingOverlay !== 'undefined' && AILoadingOverlay.show) {
+                console.log('Using AI Loading Overlay for saving');
+                const savingMessages = [
+                    "Saving your personalized preferences…",
+                    "Processing your strengths and growth areas…",
+                    "Preparing your profile for AI analysis…",
+                    "Setting up your experiment parameters…",
+                    "Ready to generate your experiments…"
+                ];
+                
+                try {
+                    AILoadingOverlay.show({
+                        messages: savingMessages,
+                        subtitle: "Saving your profile data… 💾"
+                    });
+                } catch (error) {
+                    console.error('Error with AI Loading Overlay during save, using fallback:', error);
+                    this.showLoading('Saving your preferences...');
+                }
+            } else {
+                console.log('AI Loading Overlay not available for saving, using fallback');
+                this.showLoading('Saving your preferences...');
+            }
             
             $.ajax({
                 url: labMode.ajaxUrl,
@@ -1253,16 +1433,34 @@
                     console.log('Save qualifiers response:', response);
                     if (response.success) {
                         console.log('Qualifiers saved successfully, generating experiments...');
-                        this.generateExperiments();
+                        // Progress to 50% and continue with experiment generation
+                        if (typeof AILoadingOverlay !== 'undefined' && AILoadingOverlay.isVisible) {
+                            AILoadingOverlay.setProgress(50);
+                            AILoadingOverlay.updateSubtitle("Profile saved! Now generating experiments… 🧪");
+                        }
+                        this.generateExperiments(true); // Pass true to indicate this is from save process
                     } else {
                         console.error('Failed to save qualifiers:', response);
+                        if (typeof AILoadingOverlay !== 'undefined' && AILoadingOverlay.isVisible) {
+                            AILoadingOverlay.hide();
+                        }
                         this.showError('Failed to save qualifiers: ' + (response.data || 'Unknown error'));
                     }
                 },
                 error: (xhr, status, error) => {
                     console.error('Network error saving qualifiers:', xhr, status, error);
+                    if (typeof AILoadingOverlay !== 'undefined' && AILoadingOverlay.isVisible) {
+                        AILoadingOverlay.hide();
+                    }
                     this.showError('Network error while saving qualifiers: ' + error);
                 }
+            });
+            
+            // Listen for cancel events during saving
+            $(document).off('ai-loading-cancelled.saving').on('ai-loading-cancelled.saving', () => {
+                // Cancel the save operation and return to form
+                AILoadingOverlay.hide();
+                // Stay on the current form since cancelling save doesn't make sense to go back
             });
         },
         
@@ -1667,8 +1865,33 @@
         },
         
         // Generate experiments using AI
-        generateExperiments: function() {
-            this.showLoading('Generating your personalized experiments...');
+        generateExperiments: function(fromSave = false) {
+            // Only show loading overlay if not already shown from save process
+            if (!fromSave && !AILoadingOverlay.isVisible) {
+                const experimentMessages = [
+                    "Taking time to pull from your MI, CDT scores, and Motivational Scores…",
+                    "Cross-checking your strengths and growth areas to make this experiment fit you…",
+                    "Calibrating cost, time, and risk to your preferences…",
+                    "Adding inspiration from your chosen role models and curiosities…",
+                    "Almost ready: a safe, low-stakes experiment just for you…"
+                ];
+                
+                AILoadingOverlay.show({
+                    messages: experimentMessages,
+                    subtitle: "AI is crafting your personalized experiments… 🧪"
+                });
+            } else if (fromSave) {
+                // Update messages for the second phase of the process
+                const newMessages = [
+                    "Now analyzing your complete profile for experiments…",
+                    "Cross-checking your strengths and growth areas…",
+                    "Calibrating cost, time, and risk to your preferences…",
+                    "Adding inspiration from your chosen role models…",
+                    "Finalizing your personalized experiments…"
+                ];
+                AILoadingOverlay.messages = newMessages;
+                AILoadingOverlay.messageIndex = 0;
+            }
             
             const requestData = {
                 action: 'mc_lab_generate_experiments',
@@ -1698,14 +1921,35 @@
                         console.log('Calibrated experiments:', this.experiments);
                         this.experimentSource = response.data.source || 'Unknown';
                         this.usingMock = response.data.using_mock || false;
-                        this.showExperiments();
+                        
+                        // Complete progress and show results
+                        if (typeof AILoadingOverlay !== 'undefined' && AILoadingOverlay.isVisible) {
+                            AILoadingOverlay.setProgress(100);
+                            AILoadingOverlay.updateSubtitle("Complete! Showing your experiments… ✨");
+                            setTimeout(() => {
+                                AILoadingOverlay.hide();
+                                this.showExperiments();
+                            }, 1200); // Show completion message briefly before transitioning
+                        } else {
+                            // Fallback if overlay not available
+                            this.showExperiments();
+                        }
                     } else {
+                        AILoadingOverlay.hide();
                         this.showError(response.data || 'Failed to generate experiments');
                     }
                 },
                 error: () => {
+                    AILoadingOverlay.hide();
                     this.showError('Network error while generating experiments');
                 }
+            });
+            
+            // Listen for cancel events
+            $(document).off('ai-loading-cancelled.experiments').on('ai-loading-cancelled.experiments', () => {
+                // Cancel the AJAX request if possible and return to previous state
+                AILoadingOverlay.hide();
+                this.showProfileInputs(); // Return to the input screen
             });
         },
         

@@ -132,6 +132,36 @@
                                             <span class="iteration-section-label">Refine with One Change</span>
                                             <small class="iteration-section-subtitle">Each click sends exactly ONE modifier</small>
                                         </div>
+                                        
+                                        <!-- Custom Input Section -->
+                                        <div class="iteration-custom-input">
+                                            <div class="custom-input-header">
+                                                <span class="modifier-emoji">✏️</span>
+                                                <span class="modifier-label">Custom Request</span>
+                                            </div>
+                                            <div class="custom-input-body">
+                                                <textarea 
+                                                    id="iteration-custom-text" 
+                                                    placeholder="Describe the specific change you want... (e.g., 'Add a team building element', 'Make it work for remote teams', 'Include measurable outcomes')"
+                                                    rows="3"
+                                                    maxlength="500"
+                                                    aria-label="Custom modification request"
+                                                ></textarea>
+                                                <div class="custom-input-actions">
+                                                    <div class="char-counter">
+                                                        <span class="char-count">0</span>/500
+                                                    </div>
+                                                    <button type="button" class="iteration-modifier-btn iteration-custom-btn" data-mod-type="Custom" title="Apply your custom modification">
+                                                        Apply Custom Change
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="iteration-divider">
+                                            <span>Or choose a quick modifier</span>
+                                        </div>
+                                        
                                         <div class="iteration-modifier-groups">
                                             <!-- Modifier controls will be populated here -->
                                         </div>
@@ -212,10 +242,38 @@
                 const modType = $btn.data('mod-type');
                 const modValue = $btn.data('mod-value');
                 
-                this.sendModifier({
-                    kind: modType,
-                    value: modValue
-                });
+                // Handle custom input differently
+                if (modType === 'Custom') {
+                    this.handleCustomModifier();
+                } else {
+                    this.sendModifier({
+                        kind: modType,
+                        value: modValue
+                    });
+                }
+            });
+            
+            // Character counter for custom input
+            $(document).on('input', '#iteration-custom-text', (e) => {
+                const text = $(e.target).val();
+                const charCount = text.length;
+                $('.char-count').text(charCount);
+                
+                // Enable/disable custom button based on input
+                const $customBtn = $('.iteration-custom-btn');
+                if (charCount > 0 && charCount <= 500) {
+                    $customBtn.prop('disabled', false);
+                } else {
+                    $customBtn.prop('disabled', true);
+                }
+            });
+            
+            // Enter key in custom textarea to trigger submission
+            $(document).on('keydown', '#iteration-custom-text', (e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    this.handleCustomModifier();
+                }
             });
         },
 
@@ -254,6 +312,7 @@
             this.renderCurrentExperiment();
             this.renderModifierControls();
             this.updateBreadcrumb();
+            this.initializeCustomInput();
         },
 
         /**
@@ -648,6 +707,46 @@
             });
             
             console.log('Debug info stored:', this.debugHistory.length, 'entries');
+        },
+        
+        /**
+         * Initialize the custom input section
+         */
+        initializeCustomInput: function() {
+            // Clear any previous input
+            $('#iteration-custom-text').val('');
+            $('.char-count').text('0');
+            $('.iteration-custom-btn').prop('disabled', true);
+        },
+        
+        /**
+         * Handle custom text input modifier
+         */
+        handleCustomModifier: function() {
+            const customText = $('#iteration-custom-text').val().trim();
+            
+            if (!customText) {
+                this.showError('Please enter a custom modification request.');
+                return;
+            }
+            
+            if (customText.length > 500) {
+                this.showError('Custom request is too long. Please keep it under 500 characters.');
+                return;
+            }
+            
+            // Clear the input after successful submission
+            const modifier = {
+                kind: 'Custom',
+                value: customText
+            };
+            
+            this.sendModifier(modifier);
+            
+            // Clear the textarea after sending
+            $('#iteration-custom-text').val('');
+            $('.char-count').text('0');
+            $('.iteration-custom-btn').prop('disabled', true);
         },
         
         /**

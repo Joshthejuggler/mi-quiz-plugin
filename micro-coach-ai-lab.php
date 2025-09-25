@@ -45,6 +45,7 @@ class Micro_Coach_AI_Lab {
         add_action('wp_ajax_mc_lab_test_save_qualifiers', [$this, 'ajax_test_save_qualifiers']);
         add_action('wp_ajax_mc_lab_generate_ai_variant', [$this, 'ajax_generate_ai_variant']);
         add_action('wp_ajax_mc_lab_iterate', [$this, 'ajax_iterate']);
+        add_action('wp_ajax_mc_lab_analyze_role_models', [$this, 'ajax_analyze_role_models']);
         
         // Hook into the main dashboard to add Lab Mode tab
         add_filter('mc_dashboard_custom_tabs', [$this, 'add_lab_mode_tab']);
@@ -235,10 +236,22 @@ class Micro_Coach_AI_Lab {
                     css.href = '<?php echo esc_url_raw(plugins_url('assets/lab-mode.css', __FILE__)); ?>?ver=' + Date.now();
                     document.head.appendChild(css);
                     
-                    // Load main JavaScript first
-                    var script = document.createElement('script');
-                    script.src = '<?php echo esc_url_raw(plugins_url('assets/lab-mode.js', __FILE__)); ?>?ver=' + Date.now();
-                    script.onload = function() {
+                    // Load AI Loading Overlay CSS
+                    var aiCss = document.createElement('link');
+                    aiCss.rel = 'stylesheet';
+                    aiCss.href = '<?php echo esc_url_raw(plugins_url('assets/ai-loading-overlay.css', __FILE__)); ?>?ver=' + Date.now();
+                    document.head.appendChild(aiCss);
+                    
+                    // Load AI Loading Overlay JavaScript first
+                    var aiScript = document.createElement('script');
+                    aiScript.src = '<?php echo esc_url_raw(plugins_url('assets/ai-loading-overlay.js', __FILE__)); ?>?ver=' + Date.now();
+                    aiScript.onload = function() {
+                        console.log("AI Loading Overlay JS loaded");
+                        
+                        // Load main JavaScript after AI overlay is ready
+                        var script = document.createElement('script');
+                        script.src = '<?php echo esc_url_raw(plugins_url('assets/lab-mode.js', __FILE__)); ?>?ver=' + Date.now();
+                        script.onload = function() {
                         console.log("Lab Mode main JS loaded");
                         
                         // Load iteration panel JavaScript
@@ -246,30 +259,48 @@ class Micro_Coach_AI_Lab {
                         iterateScript.src = '<?php echo esc_url_raw(plugins_url('assets/lab-mode-iterate.js', __FILE__)); ?>?ver=' + Date.now();
                         iterateScript.onload = function() {
                             console.log("Lab Mode iterate JS loaded");
-                            console.log("Lab Mode assets loaded successfully");
                             
-                            // Set up localized data
-                            window.labMode = {
-                                ajaxUrl: '<?php echo esc_url_raw(admin_url('admin-ajax.php')); ?>',
-                                nonce: '<?php echo wp_create_nonce('mc_lab_nonce'); ?>',
-                                userId: <?php echo get_current_user_id(); ?>,
-                                restUrl: '<?php echo esc_url_raw(rest_url('wp/v2/')); ?>',
-                                isAdmin: <?php echo current_user_can('manage_options') ? 'true' : 'false'; ?>,
-                                defaultModel: '<?php echo class_exists('Micro_Coach_AI') ? Micro_Coach_AI::get_selected_model() : 'gpt-4o-mini'; ?>'
+                            // Load role model discovery JavaScript
+                            var roleModelScript = document.createElement('script');
+                            roleModelScript.src = '<?php echo esc_url_raw(plugins_url('assets/lab-mode-rolemodel-discovery.js', __FILE__)); ?>?ver=' + Date.now();
+                            roleModelScript.onload = function() {
+                                console.log("Lab Mode role model discovery JS loaded");
+                                console.log("Lab Mode assets loaded successfully");
+                                
+                                // Set up localized data
+                                window.labMode = {
+                                    ajaxUrl: '<?php echo esc_url_raw(admin_url('admin-ajax.php')); ?>',
+                                    nonce: '<?php echo wp_create_nonce('mc_lab_nonce'); ?>',
+                                    userId: <?php echo get_current_user_id(); ?>,
+                                    restUrl: '<?php echo esc_url_raw(rest_url('wp/v2/')); ?>',
+                                    isAdmin: <?php echo current_user_can('manage_options') ? 'true' : 'false'; ?>,
+                                    defaultModel: '<?php echo class_exists('Micro_Coach_AI') ? Micro_Coach_AI::get_selected_model() : 'gpt-4o-mini'; ?>'
+                                };
+                                resolve();
                             };
-                            resolve();
+                            roleModelScript.onerror = function() {
+                                console.error("Failed to load Lab Mode Role Model Discovery JavaScript");
+                                reject(new Error('Failed to load Lab Mode role model discovery assets'));
+                            };
+                            document.head.appendChild(roleModelScript);
+                            };
+                            iterateScript.onerror = function() {
+                                console.error("Failed to load Lab Mode Iterate JavaScript");
+                                reject(new Error('Failed to load Lab Mode iterate assets'));
+                            };
+                            document.head.appendChild(iterateScript);
                         };
-                        iterateScript.onerror = function() {
-                            console.error("Failed to load Lab Mode Iterate JavaScript");
-                            reject(new Error('Failed to load Lab Mode iterate assets'));
+                        script.onerror = function() {
+                            console.error("Failed to load Lab Mode JavaScript");
+                            reject(new Error('Failed to load Lab Mode assets'));
                         };
-                        document.head.appendChild(iterateScript);
+                        document.head.appendChild(script);
                     };
-                    script.onerror = function() {
-                        console.error("Failed to load Lab Mode JavaScript");
-                        reject(new Error('Failed to load Lab Mode assets'));
+                    aiScript.onerror = function() {
+                        console.error("Failed to load AI Loading Overlay JavaScript");
+                        reject(new Error('Failed to load AI Loading Overlay assets'));
                     };
-                    document.head.appendChild(script);
+                    document.head.appendChild(aiScript);
                 });
             }
             
@@ -347,11 +378,27 @@ class Micro_Coach_AI_Lab {
             false  // Load in header instead of footer
         );
         
+        // Enqueue AI Loading Overlay assets
+        wp_enqueue_script(
+            'ai-loading-overlay-js',
+            plugins_url('assets/ai-loading-overlay.js', __FILE__),
+            ['jquery'],
+            time(),
+            false
+        );
+        
         wp_enqueue_style(
             'lab-mode-css',
             plugins_url('assets/lab-mode.css', __FILE__),
             [],
             time()  // Use timestamp for cache busting during development
+        );
+        
+        wp_enqueue_style(
+            'ai-loading-overlay-css',
+            plugins_url('assets/ai-loading-overlay.css', __FILE__),
+            [],
+            time()
         );
         
         // Localize script with AJAX URL and nonce
@@ -1847,6 +1894,173 @@ class Micro_Coach_AI_Lab {
         }
         
         return $variant;
+    }
+    
+    /**
+     * AJAX: Analyze user's role models and generate adjacent suggestions
+     */
+    public function ajax_analyze_role_models() {
+        check_ajax_referer('mc_lab_nonce', 'nonce');
+        
+        $user_id = get_current_user_id();
+        if (!$user_id || !$this->user_can_access_lab_mode()) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        // Parse incoming data
+        $user_role_models = json_decode(stripslashes($_POST['userRoleModels'] ?? '[]'), true);
+        $categories = json_decode(stripslashes($_POST['categories'] ?? '[]'), true);
+        
+        // Validate input
+        if (empty($user_role_models) || !is_array($user_role_models)) {
+            wp_send_json_error('Please provide at least one role model.');
+        }
+        
+        if (empty($categories) || !is_array($categories)) {
+            wp_send_json_error('Please select at least one category.');
+        }
+        
+        // Filter out empty role models
+        $user_role_models = array_filter($user_role_models, function($model) {
+            return !empty(trim($model));
+        });
+        
+        if (count($user_role_models) < 2) {
+            wp_send_json_error('Please provide at least 2 role models.');
+        }
+        
+        if (count($user_role_models) > 3) {
+            // Limit to first 3 for API efficiency
+            $user_role_models = array_slice($user_role_models, 0, 3);
+        }
+        
+        error_log('Lab Mode Role Models - User role models: ' . print_r($user_role_models, true));
+        error_log('Lab Mode Role Models - Categories: ' . print_r($categories, true));
+        
+        try {
+            $suggestions = $this->analyze_role_models_with_ai($user_role_models, $categories);
+            
+            wp_send_json_success([
+                'suggestions' => $suggestions,
+                'analyzed_models' => $user_role_models,
+                'categories' => $categories
+            ]);
+            
+        } catch (Exception $e) {
+            error_log('Lab Mode Role Models - AI analysis failed: ' . $e->getMessage());
+            wp_send_json_error('Failed to analyze role models: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Analyze role models using AI to find adjacent suggestions
+     */
+    private function analyze_role_models_with_ai($user_role_models, $categories) {
+        // Build system prompt for role model analysis
+        $system_prompt = 'You are an assistant that expands on user-provided role models. Given a few role models and a broad admiration category, identify the themes and suggest adjacent role models with similar qualities. Provide output as JSON cards with name, category, and ≤20-word rationale.\n\nAnalyze the provided role models to identify common themes, values, and qualities. Then suggest 3-6 adjacent role models that share similar characteristics but offer different perspectives or approaches.\n\nOutput JSON with:\n{\n  "suggestions": [\n    {\n      "name": "Person Name",\n      "category": "Category from provided list",\n      "description": "Brief description (≤20 words) explaining why they might inspire the user"\n    }\n  ]\n}\n\nEnsure all suggestions are real people who are publicly known and have made positive contributions.';
+        
+        // Build user prompt with role models and categories
+        $user_prompt = json_encode([
+            'userRoleModels' => $user_role_models,
+            'categories' => $categories
+        ], JSON_PRETTY_PRINT);
+        
+        error_log('Lab Mode Role Models - System prompt length: ' . strlen($system_prompt));
+        error_log('Lab Mode Role Models - User prompt: ' . $user_prompt);
+        
+        // Call AI API
+        $api_key = Micro_Coach_AI::get_openai_api_key();
+        if (empty($api_key)) {
+            throw new Exception('OpenAI API key not configured');
+        }
+        
+        $model = Micro_Coach_AI::get_selected_model();
+        
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system_prompt],
+                ['role' => 'user', 'content' => $user_prompt]
+            ],
+            'temperature' => 0.8, // Higher creativity for discovering new role models
+            'max_tokens' => 1200,
+            'response_format' => ['type' => 'json_object']
+        ];
+        
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+            'timeout' => 45,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json'
+            ],
+            'body' => wp_json_encode($payload)
+        ]);
+        
+        if (is_wp_error($response)) {
+            throw new Exception('API request failed: ' . $response->get_error_message());
+        }
+        
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code !== 200) {
+            $body = wp_remote_retrieve_body($response);
+            $error_data = json_decode($body, true);
+            throw new Exception('API returned status ' . $status_code . ': ' . ($error_data['error']['message'] ?? 'Unknown error'));
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if (!$data || !isset($data['choices'][0]['message']['content'])) {
+            throw new Exception('Invalid API response structure');
+        }
+        
+        $content = $data['choices'][0]['message']['content'];
+        error_log('Lab Mode Role Models - AI response: ' . $content);
+        
+        $analysis = json_decode($content, true);
+        if (!$analysis) {
+            throw new Exception('Failed to decode AI response as JSON: ' . $content);
+        }
+        
+        if (!isset($analysis['suggestions']) || !is_array($analysis['suggestions'])) {
+            throw new Exception('AI response missing suggestions field or invalid format');
+        }
+        
+        // Validate and clean suggestions
+        $cleaned_suggestions = [];
+        foreach ($analysis['suggestions'] as $suggestion) {
+            if (!isset($suggestion['name']) || !isset($suggestion['category']) || !isset($suggestion['description'])) {
+                continue; // Skip invalid suggestions
+            }
+            
+            // Ensure description is not too long
+            $description = trim($suggestion['description']);
+            $words = str_word_count($description);
+            if ($words > 25) {
+                // Truncate if too long
+                $words_array = explode(' ', $description);
+                $description = implode(' ', array_slice($words_array, 0, 20)) . '...';
+            }
+            
+            $cleaned_suggestions[] = [
+                'name' => sanitize_text_field(trim($suggestion['name'])),
+                'category' => sanitize_text_field(trim($suggestion['category'])),
+                'description' => sanitize_text_field($description)
+            ];
+        }
+        
+        if (empty($cleaned_suggestions)) {
+            throw new Exception('No valid suggestions were generated');
+        }
+        
+        // Limit to 6 suggestions max
+        if (count($cleaned_suggestions) > 6) {
+            $cleaned_suggestions = array_slice($cleaned_suggestions, 0, 6);
+        }
+        
+        error_log('Lab Mode Role Models - Cleaned suggestions count: ' . count($cleaned_suggestions));
+        
+        return $cleaned_suggestions;
     }
 }
 
