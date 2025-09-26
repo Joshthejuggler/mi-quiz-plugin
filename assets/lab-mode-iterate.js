@@ -107,9 +107,14 @@
                     <div class="iteration-dialog">
                         <div class="iteration-header">
                             <h2 id="iteration-modal-title">Refine Experiment</h2>
-                            <button type="button" class="iteration-close-btn" aria-label="Close iteration panel">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
+                            <div class="iteration-header-controls">
+                                <button type="button" class="iteration-admin-debug-btn lab-btn lab-btn-tertiary" style="display: none;" title="Show AI prompts and debug info">
+                                    🐛 Debug
+                                </button>
+                                <button type="button" class="iteration-close-btn" aria-label="Close iteration panel">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                            </div>
                         </div>
                         <div class="iteration-content">
                             <div class="iteration-columns">
@@ -254,18 +259,25 @@
             });
             
             // Character counter for custom input
-            $(document).on('input', '#iteration-custom-text', (e) => {
-                const text = $(e.target).val();
-                const charCount = text.length;
-                $('.char-count').text(charCount);
-                
-                // Enable/disable custom button based on input
-                const $customBtn = $('.iteration-custom-btn');
-                if (charCount > 0 && charCount <= 500) {
-                    $customBtn.prop('disabled', false);
-                } else {
-                    $customBtn.prop('disabled', true);
-                }
+            $(document).on('input keyup paste', '#iteration-custom-text', (e) => {
+                // Add small delay to ensure value is updated after paste
+                setTimeout(() => {
+                    const text = $(e.target).val();
+                    const charCount = text.length;
+                    $('.char-count').text(charCount);
+                    
+                    console.log('Custom text updated:', charCount, 'characters');
+                    
+                    // Enable/disable custom button based on input
+                    const $customBtn = $('.iteration-custom-btn');
+                    if (charCount > 0 && charCount <= 500) {
+                        $customBtn.prop('disabled', false).removeClass('disabled');
+                        console.log('Custom button enabled');
+                    } else {
+                        $customBtn.prop('disabled', true).addClass('disabled');
+                        console.log('Custom button disabled, char count:', charCount);
+                    }
+                }, 0);
             });
             
             // Enter key in custom textarea to trigger submission
@@ -274,6 +286,12 @@
                     e.preventDefault();
                     this.handleCustomModifier();
                 }
+            });
+            
+            // Admin debug button
+            $(document).on('click', '.iteration-admin-debug-btn', (e) => {
+                e.preventDefault();
+                this.toggleAdminDebugPanel();
             });
         },
 
@@ -313,6 +331,131 @@
             this.renderModifierControls();
             this.updateBreadcrumb();
             this.initializeCustomInput();
+            this.checkAdminStatus();
+        },
+        
+        /**
+         * Check if user is admin and show debug controls
+         */
+        checkAdminStatus: function() {
+            const isAdmin = (window.labMode && window.labMode.isAdmin) ||
+                           document.body.classList.contains('wp-admin') ||
+                           document.querySelector('#wpadminbar') !== null ||
+                           document.body.classList.contains('admin-bar');
+            
+            console.log('IterationPanel - Admin status:', isAdmin);
+            
+            if (isAdmin) {
+                $('.iteration-admin-debug-btn').show();
+            } else {
+                $('.iteration-admin-debug-btn').hide();
+            }
+        },
+        
+        /**
+         * Toggle admin debug panel
+         */
+        toggleAdminDebugPanel: function() {
+            const existingPanel = $('.iteration-admin-debug-panel');
+            
+            if (existingPanel.length > 0) {
+                existingPanel.slideToggle(300);
+                const isVisible = existingPanel.is(':visible');
+                $('.iteration-admin-debug-btn').text(isVisible ? '🐛 Hide Debug' : '🐛 Debug');
+            } else {
+                this.createAdminDebugPanel();
+            }
+        },
+        
+        /**
+         * Create admin debug panel showing AI prompts
+         */
+        createAdminDebugPanel: function() {
+            const debugHistory = this.debugHistory || [];
+            
+            let debugContent = '<p style="color: #666; font-style: italic;">No AI requests made yet. Try making a modification to see debug info.</p>';
+            
+            if (debugHistory.length > 0) {
+                debugContent = debugHistory.map((entry, index) => `
+                    <div class="admin-debug-entry">
+                        <h5>Request ${index + 1} (${entry.timestamp})</h5>
+                        <div class="debug-section">
+                            <h6>Modifier:</h6>
+                            <div class="debug-code"><pre>${JSON.stringify(entry.modifier, null, 2)}</pre></div>
+                        </div>
+                        <div class="debug-section">
+                            <h6>System Prompt:</h6>
+                            <div class="debug-prompt-container">
+                                <textarea class="admin-debug-prompt" readonly rows="8">${entry.systemPrompt || 'Not available'}</textarea>
+                                <button class="debug-copy-btn" data-copy-text="${this.escapeHtml(entry.systemPrompt || '')}" title="Copy to clipboard">📋</button>
+                            </div>
+                        </div>
+                        <div class="debug-section">
+                            <h6>User Prompt:</h6>
+                            <div class="debug-prompt-container">
+                                <textarea class="admin-debug-prompt" readonly rows="6">${entry.userPrompt || 'Not available'}</textarea>
+                                <button class="debug-copy-btn" data-copy-text="${this.escapeHtml(entry.userPrompt || '')}" title="Copy to clipboard">📋</button>
+                            </div>
+                        </div>
+                        <div class="debug-section">
+                            <h6>Response Summary:</h6>
+                            <p><strong>Changed Fields:</strong> ${entry.changedFields ? entry.changedFields.join(', ') : 'None'}</p>
+                            ${entry.calibrationNotes ? `<p><strong>Calibration:</strong> ${entry.calibrationNotes}</p>` : ''}
+                        </div>
+                    </div>
+                `).join('<hr style="margin: 1.5rem 0; border: 1px solid #eee;">');
+            }
+            
+            const debugPanelHTML = `
+                <div class="iteration-admin-debug-panel" style="margin-top: 1rem; display: none;">
+                    <div class="admin-debug-header">
+                        <h4>🛠️ Admin Debug Panel</h4>
+                        <p style="color: #666; font-size: 0.9rem; margin: 0.5rem 0 1rem 0;">AI prompts and responses for this iteration session</p>
+                    </div>
+                    <div class="admin-debug-content">
+                        ${debugContent}
+                    </div>
+                </div>
+            `;
+            
+            $('.iteration-breadcrumb').after(debugPanelHTML);
+            $('.iteration-admin-debug-panel').slideDown(300);
+            $('.iteration-admin-debug-btn').text('🐛 Hide Debug');
+            
+            // Bind copy button events
+            $('.debug-copy-btn').on('click', (e) => {
+                const textToCopy = $(e.target).data('copy-text');
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    const $btn = $(e.target);
+                    const originalText = $btn.text();
+                    $btn.text('✓ Copied!');
+                    setTimeout(() => $btn.text(originalText), 2000);
+                }).catch(err => {
+                    console.error('Failed to copy text:', err);
+                    alert('Failed to copy to clipboard');
+                });
+            });
+        },
+        
+        /**
+         * Update admin debug panel with latest data
+         */
+        updateAdminDebugPanel: function() {
+            const existingPanel = $('.iteration-admin-debug-panel');
+            if (existingPanel.length > 0 && existingPanel.is(':visible')) {
+                // Remove existing panel and recreate with updated data
+                existingPanel.remove();
+                this.createAdminDebugPanel();
+            }
+        },
+        
+        /**
+         * Escape HTML for safe insertion
+         */
+        escapeHtml: function(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML.replace(/"/g, '&quot;');
         },
 
         /**
@@ -326,10 +469,15 @@
                 <div class="experiment-card-display">
                     <div class="experiment-header">
                         <h3 class="experiment-title">${this.renderWithDiff('title', exp.title, originalExp.title)}</h3>
-                        <span class="archetype-badge archetype-${exp.archetype?.toLowerCase() || 'discover'}">${exp.archetype || 'Discover'}</span>
+                        <span class="archetype-badge archetype-${String(exp.archetype || 'discover').toLowerCase()}">${exp.archetype || 'Discover'}</span>
                     </div>
                     
                     <div class="experiment-body">
+                        <div class="experiment-description">
+                            <h4>What You'll Do:</h4>
+                            <p>${this.renderWithDiff('description', this.getExperimentDescription(exp), this.getExperimentDescription(originalExp))}</p>
+                        </div>
+                        
                         <div class="experiment-rationale">
                             <h4>Why This Fits You:</h4>
                             <p>${this.renderWithDiff('rationale', exp.rationale || '', originalExp.rationale || '')}</p>
@@ -348,7 +496,7 @@
                             <div class="effort-display">
                                 <span class="effort-time">${this.renderWithDiff('timeHours', exp.effort?.timeHours || 0, originalExp.effort?.timeHours || 0)}h</span>
                                 <span class="effort-budget">$${this.renderWithDiff('budgetUSD', exp.effort?.budgetUSD || 0, originalExp.effort?.budgetUSD || 0)}</span>
-                                <span class="risk-level risk-${(exp.riskLevel || 'medium').toLowerCase()}">${this.renderWithDiff('riskLevel', exp.riskLevel || 'Medium', originalExp.riskLevel || 'Medium')}</span>
+                                <span class="risk-level risk-${String(exp.riskLevel || 'medium').toLowerCase()}">${this.renderWithDiff('riskLevel', exp.riskLevel || 'Medium', originalExp.riskLevel || 'Medium')}</span>
                             </div>
                         </div>
                         
@@ -386,6 +534,73 @@
          */
         sanitizeAttr: function(value) {
             return $('<div>').attr('data-temp', value).attr('data-temp');
+        },
+        
+        /**
+         * Extract the main description from an experiment object
+         * Uses the same logic as generateEngagingDescription from LabModeApp
+         */
+        getExperimentDescription: function(exp) {
+            if (!exp) return 'No description available';
+            
+            // If experiment has an explicit summary, use that
+            if (exp.summary) {
+                return exp.summary;
+            }
+            
+            // If experiment has steps, create a concise summary from them
+            if (exp.steps && Array.isArray(exp.steps) && exp.steps.length > 0) {
+                return this.createActionSummary(exp.steps);
+            }
+            
+            // Fallback to title or other fields
+            if (exp.title) {
+                // Remove "Experiment" suffix and convert to action phrase
+                const cleanTitle = exp.title.replace(/\s*Experiment:?\s*/i, '').trim();
+                return cleanTitle || 'An engaging experiment tailored to your interests.';
+            }
+            
+            return exp.description || exp.rationale || 'An engaging experiment tailored to your interests.';
+        },
+        
+        /**
+         * Create a concise action summary from experiment steps
+         * Copied from LabModeApp.createActionSummary
+         */
+        createActionSummary: function(steps) {
+            if (!steps || steps.length === 0) {
+                return 'Complete a series of personalized activities.';
+            }
+            
+            // Take first 1-2 steps to create summary
+            const relevantSteps = steps.slice(0, 2);
+            
+            // Clean and simplify each step
+            const cleanedSteps = relevantSteps.map(step => {
+                return step
+                    .replace(/^(Choose|Select|Pick|Identify)\s+/, 'Choose ') // Normalize selection verbs
+                    .replace(/^(Create|Make|Build|Design)\s+/, 'Create ') // Normalize creation verbs
+                    .replace(/^(Write|Document|Journal)\s+/, 'Write ') // Normalize writing verbs
+                    .replace(/^(Research|Study|Explore|Investigate)\s+/, 'Research ') // Normalize research verbs
+                    .replace(/^(Practice|Try|Attempt|Test)\s+/, 'Practice ') // Normalize practice verbs
+                    .replace(/^(Reflect|Think|Consider)\s+/, 'Reflect ') // Normalize reflection verbs
+                    .replace(/\s+about\s+your\s+curiosit(y|ies)/, ' about your interests') // Simplify curiosity references
+                    .replace(/\s+related\s+to\s+your\s+curiosit(y|ies)/, ' related to your interests') // Simplify curiosity references
+                    .replace(/\s+from\s+your\s+role\s+models?/, ' from people you admire') // Simplify role model references
+                    .trim();
+            });
+            
+            if (cleanedSteps.length === 1) {
+                return cleanedSteps[0].endsWith('.') ? cleanedSteps[0] : cleanedSteps[0] + '.';
+            } else if (cleanedSteps.length === 2) {
+                // Join with "then" for natural flow
+                const firstStep = cleanedSteps[0].replace(/\.$/, ''); // Remove trailing period if present
+                const secondStep = cleanedSteps[1].replace(/\.$/, ''); // Remove trailing period if present
+                return firstStep + ', then ' + secondStep.toLowerCase() + '.';
+            } else {
+                const firstStep = cleanedSteps[0].replace(/\.$/, ''); // Remove trailing period if present
+                return firstStep + ', and more.';
+            }
         },
 
         /**
@@ -713,40 +928,85 @@
          * Initialize the custom input section
          */
         initializeCustomInput: function() {
+            console.log('Initializing custom input section');
+            
             // Clear any previous input
-            $('#iteration-custom-text').val('');
-            $('.char-count').text('0');
-            $('.iteration-custom-btn').prop('disabled', true);
+            const $textarea = $('#iteration-custom-text');
+            const $charCount = $('.char-count');
+            const $customBtn = $('.iteration-custom-btn');
+            
+            $textarea.val('');
+            $charCount.text('0');
+            $customBtn.prop('disabled', true).addClass('disabled');
+            
+            console.log('Custom input initialized:', {
+                textarea: $textarea.length,
+                charCount: $charCount.length,
+                button: $customBtn.length
+            });
+            
+            // Trigger initial state check
+            $textarea.trigger('input');
         },
         
         /**
          * Handle custom text input modifier
          */
         handleCustomModifier: function() {
-            const customText = $('#iteration-custom-text').val().trim();
+            console.log('Handling custom modifier...');
             
+            const customText = $('#iteration-custom-text').val().trim();
+            console.log('Custom text:', customText, 'length:', customText.length);
+            
+            // Enhanced validation
             if (!customText) {
+                console.warn('No custom text provided');
                 this.showError('Please enter a custom modification request.');
+                $('#iteration-custom-text').focus();
+                return;
+            }
+            
+            if (customText.length < 10) {
+                console.warn('Custom text too short:', customText.length, 'characters');
+                this.showError('Please provide more detail in your custom request (at least 10 characters).');
+                $('#iteration-custom-text').focus();
                 return;
             }
             
             if (customText.length > 500) {
+                console.warn('Custom text too long:', customText.length, 'characters');
                 this.showError('Custom request is too long. Please keep it under 500 characters.');
+                $('#iteration-custom-text').focus();
                 return;
             }
             
-            // Clear the input after successful submission
+            // Check for potentially problematic content
+            const lowercaseText = customText.toLowerCase();
+            if (lowercaseText.includes('delete') || lowercaseText.includes('remove all')) {
+                if (!confirm('Your request mentions deletion. Are you sure you want to proceed? This might significantly change your experiment.')) {
+                    return;
+                }
+            }
+            
+            // Create modifier object
             const modifier = {
                 kind: 'Custom',
                 value: customText
             };
             
+            console.log('Sending custom modifier:', modifier);
+            
+            // Disable input during processing
+            $('#iteration-custom-text').prop('disabled', true);
+            $('.iteration-custom-btn').prop('disabled', true).addClass('disabled');
+            
             this.sendModifier(modifier);
             
-            // Clear the textarea after sending
-            $('#iteration-custom-text').val('');
+            // Clear the textarea after successful sending
+            $('#iteration-custom-text').val('').prop('disabled', false);
             $('.char-count').text('0');
-            $('.iteration-custom-btn').prop('disabled', true);
+            
+            console.log('Custom input cleared after submission');
         },
         
         /**
@@ -760,13 +1020,26 @@
 
             console.log('Sending modifier:', modifier);
             
+            // Validate required data before sending
+            if (!this.currentExperiment) {
+                console.error('No current experiment available');
+                this.showError('No experiment data available. Please try refreshing the page.');
+                return;
+            }
+            
+            if (!window.labMode?.nonce) {
+                console.error('No security nonce available');
+                this.showError('Security token missing. Please refresh the page and try again.');
+                return;
+            }
+            
             this.isLoading = true;
             this.showLoading(true);
             $('.iteration-modifier-btn').prop('disabled', true);
 
             const requestData = {
                 action: 'mc_lab_iterate',
-                nonce: window.labMode?.nonce || '',
+                nonce: window.labMode.nonce,
                 currentExperiment: JSON.stringify(this.currentExperiment),
                 modifier: JSON.stringify(modifier),
                 userContext: JSON.stringify(this.userContext),
@@ -776,23 +1049,48 @@
             // Store modifier for debug purposes
             this.currentModifier = modifier;
             this.requestStartTime = Date.now();
+            
+            console.log('Request data:', {
+                action: requestData.action,
+                nonce: requestData.nonce ? 'Present' : 'Missing',
+                experimentTitle: this.currentExperiment?.title || 'Unknown',
+                modifierKind: modifier?.kind || 'Unknown',
+                url: window.labMode?.ajaxUrl || '/wp-admin/admin-ajax.php'
+            });
 
             $.ajax({
                 url: window.labMode?.ajaxUrl || '/wp-admin/admin-ajax.php',
                 type: 'POST',
                 dataType: 'json',
                 data: requestData,
-                timeout: 30000,
+                timeout: 45000, // Increased timeout for AI processing
+                beforeSend: (xhr) => {
+                    console.log('AJAX request starting...');
+                },
                 success: (response) => {
+                    console.log('AJAX success:', response);
                     this.handleIterateSuccess(response);
                 },
                 error: (xhr, status, error) => {
+                    console.error('AJAX error:', { xhr, status, error, responseText: xhr.responseText });
                     this.handleIterateError(xhr, status, error);
                 },
                 complete: () => {
+                    const duration = Date.now() - this.requestStartTime;
+                    console.log('Request completed in', duration, 'ms');
                     this.isLoading = false;
                     this.showLoading(false);
                     $('.iteration-modifier-btn').prop('disabled', false);
+                    
+                    // Re-enable custom input if it was disabled
+                    $('#iteration-custom-text').prop('disabled', false);
+                    
+                    // Re-validate custom input state
+                    const customText = $('#iteration-custom-text').val().trim();
+                    const $customBtn = $('.iteration-custom-btn');
+                    if (customText.length > 0 && customText.length <= 500) {
+                        $customBtn.prop('disabled', false).removeClass('disabled');
+                    }
                 }
             });
         },
@@ -812,6 +1110,9 @@
                         debug.userPrompt || 'User prompt not available',
                         { changedFields, calibrationNotes }
                     );
+                    
+                    // Update admin debug panel if it's visible
+                    this.updateAdminDebugPanel();
                 }
                 
                 // Add to iterations history
@@ -843,18 +1144,49 @@
          * Handle iteration error
          */
         handleIterateError: function(xhr, status, error) {
-            console.error('Iteration failed:', { xhr, status, error });
+            console.error('Iteration failed:', { xhr, status, error, responseText: xhr?.responseText });
             
             let errorMessage = 'Failed to iterate experiment. ';
+            let debugInfo = {
+                status: status,
+                error: error,
+                statusCode: xhr?.status,
+                responseText: xhr?.responseText
+            };
             
             if (status === 'timeout') {
-                errorMessage += 'The request timed out. Please try again.';
+                errorMessage += 'The AI processing took too long. This can happen with complex requests. Please try again with a simpler modification.';
+            } else if (status === 'abort') {
+                errorMessage += 'Request was cancelled. Please try again.';
+            } else if (xhr?.status === 403) {
+                errorMessage += 'Permission denied. Please refresh the page and try again.';
+            } else if (xhr?.status === 404) {
+                errorMessage += 'Service not found. Please contact support if this persists.';
+            } else if (xhr?.status >= 500) {
+                errorMessage += 'Server error occurred. Please try again in a moment.';
             } else if (xhr && xhr.responseJSON && xhr.responseJSON.data) {
                 errorMessage += xhr.responseJSON.data;
+            } else if (xhr?.responseText) {
+                try {
+                    const parsedResponse = JSON.parse(xhr.responseText);
+                    if (parsedResponse.data) {
+                        errorMessage += parsedResponse.data;
+                    } else {
+                        errorMessage += 'Unexpected server response.';
+                    }
+                } catch (e) {
+                    errorMessage += 'Server returned an invalid response.';
+                }
             } else {
-                errorMessage += 'Please check your connection and try again.';
+                errorMessage += 'Please check your internet connection and try again.';
             }
             
+            // Add modifier type to error message for context
+            if (this.currentModifier) {
+                errorMessage += ` (Modifier: ${this.currentModifier.kind})`;
+            }
+            
+            console.error('Error details for debugging:', debugInfo);
             this.showError(errorMessage);
         },
 
@@ -924,6 +1256,11 @@
          * Save changes and apply to the main experiment list
          */
         saveAndApply: function() {
+            console.log('Saving and applying changes...');
+            
+            // Clear all diff highlighting before saving
+            this.clearDiffHighlighting();
+            
             // Call back to LabModeApp to update the experiment
             if (window.LabModeApp && typeof window.LabModeApp.updateExperiment === 'function') {
                 window.LabModeApp.updateExperiment(this.currentIndex, this.currentExperiment);
@@ -933,6 +1270,25 @@
             
             this.close();
             console.log('Applied changes and closed panel');
+        },
+        
+        /**
+         * Clear all diff highlighting from the experiment display
+         */
+        clearDiffHighlighting: function() {
+            console.log('Clearing diff highlighting...');
+            
+            // Remove all diff-changed classes and unwrap content
+            $('.diff-changed').each(function() {
+                const $this = $(this);
+                const originalText = $this.text().replace('✏️', '').trim(); // Remove icon
+                $this.replaceWith(originalText);
+            });
+            
+            // Also update the current experiment to remove any diff markers
+            this.originalExperiment = $.extend(true, {}, this.currentExperiment);
+            
+            console.log('Diff highlighting cleared');
         },
 
         /**

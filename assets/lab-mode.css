@@ -27,14 +27,14 @@
     margin: 0 auto;
     padding: 24px;
     background: var(--lab-background);
-    min-height: 60vh;
+    min-height: auto;
 }
 
 /* ===== Loading & Error States ===== */
 .lab-mode-loading,
 .lab-mode-error {
     text-align: center;
-    padding: 60px 24px;
+    padding: 32px 24px;
     background: var(--lab-surface);
     border-radius: var(--lab-radius);
     box-shadow: var(--lab-shadow);
@@ -121,11 +121,68 @@
     color: var(--lab-text);
 }
 
+/* Enhanced reset button styling */
+.lab-btn-reset {
+    background: var(--lab-background);
+    color: var(--lab-text);
+    border: 2px solid var(--lab-border);
+    border-radius: var(--lab-radius);
+    padding: 0.8rem 1.6rem;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-width: 120px;
+}
+
+.lab-btn-reset:hover {
+    background: var(--lab-surface);
+    border-color: var(--lab-text-muted);
+    color: var(--lab-text);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.lab-btn-reset:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.2);
+}
+
+/* Enhanced resume button styling */
+.resume-progress-btn {
+    background: var(--lab-primary) !important;
+    color: white !important;
+    border: 2px solid var(--lab-primary) !important;
+    font-weight: 600 !important;
+    padding: 0.8rem 1.6rem !important;
+    border-radius: var(--lab-radius) !important;
+    font-size: 1rem !important;
+    min-width: 200px;
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.resume-progress-btn:hover {
+    background: var(--lab-primary-hover) !important;
+    border-color: var(--lab-primary-hover) !important;
+    color: white !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+}
+
+.resume-progress-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+
 /* ===== Landing Page ===== */
 .lab-mode-landing {
     text-align: center;
     background: var(--lab-surface);
-    padding: 60px 40px;
+    padding: 32px 32px 28px;
     border-radius: var(--lab-radius);
     box-shadow: var(--lab-shadow);
     max-width: 700px;
@@ -134,45 +191,31 @@
 
 /* Hero Section */
 .lab-mode-hero {
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
 }
 
 .lab-hero-icon {
-    font-size: 3rem;
-    margin-bottom: 1rem;
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
 }
 
 .lab-mode-hero h2 {
-    font-size: 2.5rem;
+    font-size: 2.2rem;
     color: var(--lab-text);
-    margin: 0 0 1rem 0;
+    margin: 0 0 0.75rem 0;
     font-weight: 700;
-}
-
-.lab-beta-badge {
-    display: inline-block;
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    color: white;
-    padding: 0.5rem 1rem;
-    border-radius: 2rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
-    margin-bottom: 1rem;
 }
 
 /* Introduction Content */
 .lab-intro-content {
-    margin-bottom: 2.5rem;
+    margin-bottom: 1.75rem;
 }
 
 .lab-intro-main {
-    font-size: 1.125rem;
+    font-size: 1.05rem;
     color: var(--lab-text);
-    line-height: 1.7;
-    margin-bottom: 2rem;
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
     font-weight: 400;
 }
 
@@ -180,8 +223,8 @@
 .lab-features {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
 }
 
 .lab-feature {
@@ -213,58 +256,13 @@
     line-height: 1.4;
 }
 
-/* Testing Notice */
-.lab-testing-notice {
-    background: linear-gradient(135deg, #fef3c7, #fde68a);
-    border: 1px solid #f59e0b;
-    border-radius: var(--lab-radius);
-    padding: 1.5rem;
-    display: flex;
-    align-items: flex-start;
-    gap: 1rem;
-    text-align: left;
-    margin-top: 2rem;
-}
-
-.lab-notice-icon {
-    font-size: 1.25rem;
-    flex-shrink: 0;
-    margin-top: 0.25rem;
-}
-
-.lab-notice-content > strong {
-    color: #92400e;
-    font-weight: 600;
-    font-size: 0.95rem;
-    display: block;
-    margin-bottom: 0.5rem;
-}
-
-.lab-notice-content p {
-    color: #92400e;
-    font-size: 0.875rem;
-    line-height: 1.5;
-    margin: 0 0 0.75rem 0;
-}
-
-.lab-notice-content p:last-child {
-    margin-bottom: 0;
-}
-
-/* Inline strong elements (like AI Coach) should flow naturally */
-.lab-notice-content p strong {
-    color: #1f2937;
-    font-weight: 700;
-    display: inline;
-}
-
 /* Admin Controls */
 .lab-admin-controls {
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: var(--lab-radius);
-    padding: 1.25rem;
-    margin: 1.5rem 0;
+    padding: 1rem;
+    margin: 1rem 0;
 }
 
 .lab-admin-section {
@@ -331,7 +329,7 @@
     gap: 1rem;
     justify-content: center;
     flex-wrap: wrap;
-    margin-top: 1.5rem;
+    margin-top: 1rem;
 }
 
 .lab-landing-actions .lab-btn {
@@ -349,12 +347,12 @@
 /* Responsive adjustments */
 @media (max-width: 640px) {
     .lab-mode-landing {
-        padding: 40px 24px;
+        padding: 24px 20px;
         margin: 0 16px;
     }
     
     .lab-mode-hero h2 {
-        font-size: 2rem;
+        font-size: 1.9rem;
     }
     
     .lab-features {
@@ -374,6 +372,45 @@
     .lab-landing-actions .lab-btn {
         width: 100%;
         max-width: 250px;
+    }
+    
+    /* Enhanced mobile button styling */
+    .clear-progress-btn {
+        padding: 0.8rem 1.2rem;
+        font-size: 0.9rem;
+        min-height: 44px;
+        width: 100%;
+        max-width: 200px;
+    }
+    
+    .lab-btn-reset {
+        padding: 0.8rem 1.2rem;
+        font-size: 0.9rem;
+        min-height: 44px;
+        min-width: 100px;
+    }
+    
+    /* Experiment card responsive improvements */
+    .experiment-title {
+        font-size: 1.2rem;
+        margin: 0 0 0.8rem 0;
+        line-height: 1.4;
+    }
+    
+    /* Resume button mobile styling */
+    .resume-progress-btn {
+        width: 100%;
+        max-width: 250px;
+        min-width: auto;
+        padding: 0.9rem 1.4rem !important;
+    }
+    
+    /* Welcome actions mobile layout */
+    .welcome-actions {
+        flex-direction: column;
+        gap: 0.8rem;
+        width: 100%;
+        align-items: center;
     }
 }
 
@@ -1053,7 +1090,30 @@ body.lab-mode-active {
     z-index: 9999;
 }
 
-.lab-typeform-container:not(.welcome-mode) {
+/* Hide all dashboard elements when typeform is active */
+body:has(.lab-typeform-container) .dashboard-header,
+body:has(.lab-typeform-container) .dashboard-tabs,
+body:has(.lab-typeform-container) .quiz-dashboard-hero,
+body:has(.lab-typeform-container) .tab-content:not(#tab-lab) {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* Fallback for browsers that don't support :has() */
+body.lab-typeform-active .dashboard-header,
+body.lab-typeform-active .dashboard-tabs,
+body.lab-typeform-active .quiz-dashboard-hero,
+body.lab-typeform-active .tab-content:not(#tab-lab) {
+    display: none !important;
+    visibility: hidden !important;
+}
+
+/* Ensure the typeform is the only visible content */
+.lab-typeform-container ~ * {
+    display: none !important;
+}
+
+.lab-typeform-container {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
@@ -1382,17 +1442,19 @@ body.lab-mode-active {
 .lab-welcome-screen h1 {
     font-size: clamp(2.5rem, 5vw, 4rem);
     font-weight: 800;
-    color: #1e3a8a;
+    color: #ffffff;
     margin: 0;
     line-height: 1.1;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .lab-welcome-screen p {
     font-size: clamp(1.1rem, 2.5vw, 1.4rem);
-    color: #374151;
+    color: rgba(255, 255, 255, 0.95);
     margin: 0;
     line-height: 1.5;
     max-width: 600px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .lab-start-button {
@@ -1461,20 +1523,33 @@ body.lab-mode-active {
 
 .clear-progress-btn {
     padding: 0.75rem 1.5rem;
-    background: rgba(239, 68, 68, 0.1);
-    border: 2px solid rgba(239, 68, 68, 0.3);
+    background: rgba(0, 0, 0, 0.8) !important;
+    border: 2px solid rgba(255, 255, 255, 0.4) !important;
     border-radius: 8px;
-    color: rgba(255, 255, 255, 0.9);
+    color: #ffffff !important;
     cursor: pointer;
     transition: all 0.3s ease;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    font-weight: 600;
     backdrop-filter: blur(10px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .clear-progress-btn:hover {
-    background: rgba(239, 68, 68, 0.2);
-    border-color: rgba(239, 68, 68, 0.6);
-    transform: translateY(-1px);
+    background: rgba(220, 38, 38, 0.95) !important;
+    border-color: rgba(255, 255, 255, 0.8) !important;
+    color: #ffffff !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(220, 38, 38, 0.4);
+}
+
+.clear-progress-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3), 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
 @keyframes fadeInUp {
@@ -1650,8 +1725,8 @@ body.lab-mode-active {
 }
 
 .debug-code {
-    background: rgba(0, 0, 0, 0.05);
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
     border-radius: 4px;
     overflow-x: auto;
 }
@@ -1662,15 +1737,19 @@ body.lab-mode-active {
     font-size: 0.75rem;
     line-height: 1.4;
     color: #2d3748;
+    background: transparent;
     white-space: pre-wrap;
     word-wrap: break-word;
 }
 
 .debug-code code {
     font-family: inherit;
-    background: none;
-    padding: 0;
+    background: none !important;
+    padding: 0 !important;
     border-radius: 0;
+    color: inherit !important;
+    border: none !important;
+    font-size: inherit;
 }
 
 .debug-info {
@@ -1703,12 +1782,18 @@ body.lab-mode-active {
     }
     
     .debug-code {
-        background: rgba(255, 255, 255, 0.05);
-        border-color: rgba(255, 255, 255, 0.1);
+        background: #1a202c;
+        border-color: #2d3748;
     }
     
     .debug-code pre {
         color: #e2e8f0;
+        background: transparent;
+    }
+    
+    .debug-code code {
+        color: #e2e8f0 !important;
+        background: none !important;
     }
     
     .debug-info {
@@ -2143,18 +2228,180 @@ body.lab-mode-active {
 
 .experiment-global-actions {
     display: flex;
-    gap: 12px;
+    justify-content: space-between;
     align-items: center;
+    gap: 12px;
     flex-wrap: wrap;
 }
 
+.action-buttons-left {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.action-buttons-right {
+    display: flex;
+    align-items: center;
+}
+
+/* Tertiary button styling - text-only, subtle */
+.lab-btn-tertiary {
+    background: none;
+    border: none;
+    color: #6b7280;
+    font-weight: 500;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.lab-btn-tertiary:hover {
+    color: #374151;
+    background: #f3f4f6;
+}
+
+/* ===== Tabbed Interface ===== */
+.experiments-tabs-container {
+    margin: 2rem 0;
+    border-bottom: 1px solid var(--lab-border);
+}
+
+/* Simplified Navigation */
+.desktop-nav,
+.mobile-nav {
+    display: flex;
+    justify-content: center;
+}
+
+.experiments-tabs {
+    display: flex;
+    gap: 0;
+    justify-content: center;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    width: 100%;
+}
+
+.experiments-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.experiment-tab {
+    background: none;
+    border: none;
+    padding: 1rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    position: relative;
+}
+
+.experiment-tab:hover {
+    color: #374151;
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.experiment-tab.active {
+    color: #10b981;
+    border-bottom-color: #10b981;
+    font-weight: 600;
+}
+
+.tab-count {
+    font-size: 0.875rem;
+    opacity: 0.7;
+    margin-left: 0.25rem;
+}
+
+.tab-arrow {
+    display: none;
+}
+
+
+/* ===== Tab Content ===== */
+.experiments-tab-content {
+    margin-top: 2rem;
+    transition: opacity 0.15s ease;
+}
+
+.experiments-tab-content.fade-out {
+    opacity: 0;
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===== Empty Tab Message ===== */
+.empty-tab-message {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--lab-text-muted);
+}
+
+.empty-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.empty-tab-message h3 {
+    color: var(--lab-text);
+    font-size: 1.25rem;
+    margin: 0 0 0.5rem 0;
+}
+
+.empty-tab-message p {
+    margin: 0 0 1.5rem 0;
+    font-size: 0.875rem;
+}
+
+.empty-cta {
+    margin-top: 0.5rem;
+}
+
+/* ===== Mobile Responsive ===== */
 @media (max-width: 768px) {
+    .experiments-tabs {
+        justify-content: center;
+        padding-bottom: 0.5rem;
+    }
+    
     .experiment-global-actions {
         flex-direction: column;
         align-items: stretch;
+        gap: 1rem;
     }
     
-    .experiment-global-actions .lab-btn {
+    .action-buttons-left {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .action-buttons-right {
+        justify-content: center;
+    }
+    
+    .action-buttons-left .lab-btn {
         width: 100%;
         justify-content: center;
     }
@@ -2162,45 +2409,50 @@ body.lab-mode-active {
 
 .experiments-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 24px;
-    margin-bottom: 32px;
+    grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 /* ===== Experiment Cards ===== */
 .experiment-card {
-    background: var(--lab-surface);
+    background: white;
     border: 1px solid var(--lab-border);
-    border-radius: var(--lab-radius);
-    box-shadow: var(--lab-shadow);
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     overflow: hidden;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    margin-bottom: 1.5rem;
+    transition: all 0.2s ease;
     display: flex;
     flex-direction: column;
+    height: fit-content;
 }
 
 .experiment-card:hover {
     transform: translateY(-2px);
-    box-shadow: var(--lab-shadow-lg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-color: rgba(59, 130, 246, 0.2);
 }
 
 .experiment-header {
-    padding: 1.25rem;
-    border-bottom: 1px solid var(--lab-border);
+    padding: 0.75rem 1.25rem 0.5rem 1.25rem;
+    border-bottom: none;
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1rem;
+    flex-direction: column;
+    gap: 0.25rem;
 }
 
 .experiment-title {
     margin: 0;
-    font-size: 1.25rem;
+    font-size: 1.375rem;
     color: var(--lab-text);
-    line-height: 1.4;
+    line-height: 1.3;
     font-weight: 600;
     flex: 1;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--lab-border);
 }
 
 /* ===== Archetype Badges ===== */
@@ -2231,7 +2483,7 @@ body.lab-mode-active {
 
 /* ===== Experiment Body ===== */
 .experiment-body {
-    padding: 1.5rem;
+    padding: 1.25rem;
     flex: 1;
 }
 
@@ -2826,6 +3078,8 @@ body.lab-mode-active {
     
     .experiments-grid {
         grid-template-columns: 1fr;
+        gap: 1rem;
+        max-width: none;
     }
     
     .experiment-header {
@@ -3170,6 +3424,92 @@ body.lab-mode-active {
     color: var(--lab-text);
 }
 
+.iteration-header-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.iteration-admin-debug-btn {
+    font-size: 0.85rem !important;
+    padding: 0.5rem 1rem !important;
+}
+
+/* Admin Debug Panel */
+.iteration-admin-debug-panel {
+    background: var(--lab-background);
+    border: 1px solid var(--lab-border);
+    border-radius: var(--lab-radius);
+    padding: 1.5rem;
+    margin-top: 1rem;
+    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
+}
+
+.admin-debug-header h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--lab-text);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.admin-debug-entry {
+    margin-bottom: 2rem;
+}
+
+.admin-debug-entry h5 {
+    margin: 0 0 1rem 0;
+    color: var(--lab-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    border-bottom: 1px solid var(--lab-border);
+    padding-bottom: 0.5rem;
+}
+
+.admin-debug-entry h6 {
+    margin: 1rem 0 0.5rem 0;
+    color: var(--lab-text);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.debug-prompt-container {
+    position: relative;
+}
+
+.admin-debug-prompt {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--lab-border);
+    border-radius: var(--lab-radius);
+    background: var(--lab-surface);
+    color: var(--lab-text);
+    font-family: inherit;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    resize: vertical;
+}
+
+.debug-copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: var(--lab-primary);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.debug-copy-btn:hover {
+    background: var(--lab-primary-hover);
+    transform: translateY(-1px);
+}
+
 .iteration-close-btn {
     background: none;
     border: none;
@@ -3401,14 +3741,25 @@ body.lab-mode-active {
     box-shadow: 0 4px 8px rgba(59, 130, 246, 0.2);
 }
 
-.iteration-custom-btn:disabled {
+.iteration-custom-btn:disabled,
+.iteration-custom-btn.disabled {
     background: var(--lab-text-muted) !important;
     border-color: var(--lab-text-muted) !important;
-    color: white !important;
+    color: rgba(255, 255, 255, 0.7) !important;
     cursor: not-allowed;
     transform: none !important;
     box-shadow: none !important;
-    opacity: 0.6;
+    opacity: 0.5;
+    transition: all 0.2s ease;
+}
+
+.iteration-custom-btn:disabled:hover,
+.iteration-custom-btn.disabled:hover {
+    background: var(--lab-text-muted) !important;
+    border-color: var(--lab-text-muted) !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    transform: none !important;
+    box-shadow: none !important;
 }
 
 /* Divider between custom input and modifier groups */
@@ -3557,15 +3908,31 @@ body.lab-mode-active {
 .diff-changed {
     background: var(--lab-primary, #3b82f6);
     color: white;
-    padding: 0 2px;
-    border-radius: 2px;
-    font-weight: 500;
+    padding: 0 4px;
+    border-radius: 3px;
+    font-weight: 700;
     animation: diffHighlight 0.8s ease-out;
+    box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.diff-changed::before {
+    content: '✏️';
+    margin-right: 4px;
+    font-size: 0.8em;
 }
 
 @keyframes diffHighlight {
-    0% { background: #fbbf24; }
-    100% { background: var(--lab-primary, #3b82f6); }
+    0% { 
+        background: #fbbf24; 
+        transform: scale(1.05);
+        box-shadow: 0 2px 8px rgba(251, 191, 36, 0.5);
+    }
+    100% { 
+        background: var(--lab-primary, #3b82f6);
+        transform: scale(1);
+        box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+    }
 }
 
 /* Diff notice */

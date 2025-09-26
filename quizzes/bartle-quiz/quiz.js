@@ -197,7 +197,7 @@
         const headerHtml = `
             <div class="results-main-header">
                 <div class="site-branding">
-                    <img src="https://skillofselfdiscovery.com/wp-content/uploads/2025/09/Untitled-design-4.png" alt="Logo" class="site-logo">
+                    <img src="http://mi-test-site.local/wp-content/uploads/2025/09/SOSD-Logo.jpeg" alt="Skill of Self-Discovery Logo" class="site-logo">
                     <span class="site-title">Skill of Self-Discovery</span>
                 </div>
             </div>

@@ -145,10 +145,10 @@ class Micro_Coach_Core {
                 $first = "Friend";
             }
             $greetings = [
-                "Welcome back, {$first} — what will you discover today?",
-                "Good to see you, {$first}. Your journey continues.",
-                "Hi {$first}, ready for another step in self-discovery?",
-                "{$first}, small steps lead to big insights."
+                "Welcome back, <span class='name-emphasis'>{$first}</span> — what will you discover today?",
+                "Good to see you, <span class='name-emphasis'>{$first}</span>. Your journey continues.",
+                "Hi <span class='name-emphasis'>{$first}</span>, ready for another step in self-discovery?",
+                "<span class='name-emphasis'>{$first}</span>, small steps lead to big insights."
             ];
             $greeting = $greetings[ array_rand( $greetings ) ];
 
@@ -209,7 +209,7 @@ class Micro_Coach_Core {
             <div class="quiz-dashboard-container">
                 <div class="dashboard-header">
                     <div class="site-branding">
-                        <img src="https://skillofselfdiscovery.com/wp-content/uploads/2025/09/Untitled-design-4.png" alt="Logo" class="site-logo">
+                        <img src="http://mi-test-site.local/wp-content/uploads/2025/09/SOSD-Logo.jpeg" alt="Skill of Self-Discovery Logo" class="site-logo">
                         <span class="site-title">Skill of Self-Discovery</span>
                     </div>
                     <!-- User menu can be added here -->
@@ -217,9 +217,10 @@ class Micro_Coach_Core {
                 <!-- Hero / Greeting Row -->
                 <div class="quiz-dashboard-hero">
                     <div class="quiz-dashboard-hero-greeting">
-                        <h2 class="greeting-title"><?php echo esc_html($greeting); ?></h2>
+                        <h2 class="greeting-title"><?php echo wp_kses($greeting, ['span' => ['class' => []]]); ?></h2>
                         <p class="greeting-subtitle">Your journey of self-discovery is a marathon, not a sprint. Each step reveals something new.</p>
                     </div>
+                    <?php if ($completed_quizzes < $total_quizzes || $total_quizzes === 0): ?>
                     <div class="quiz-dashboard-hero-progress-card">
                         <div class="progress-card-header">
                             <h3 class="progress-card-title">Your Progress</h3>
@@ -236,6 +237,7 @@ class Micro_Coach_Core {
                             <span class="quiz-dashboard-button is-disabled progress-card-next-step-btn"><?php echo esc_html($next_step_title); ?></span>
                         <?php endif; ?>
                     </div>
+                    <?php endif; ?>
                 </div>
  
                 <?php if ($user_id && $completed_quizzes === $total_quizzes && $total_quizzes > 0): 
@@ -247,6 +249,9 @@ class Micro_Coach_Core {
                     $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
                     $cdt_results = get_user_meta($user_id, 'cdt_quiz_results', true);
                     $bartle_results = get_user_meta($user_id, 'bartle_quiz_results', true);
+
+                    // Always enqueue dashboard CSS for completed users
+                    wp_enqueue_style('dashboard-enhanced-css', plugins_url('assets/dashboard.css', __FILE__), [], '1.0.4');
 
                     // --- Enhanced Flow Detection ---
                     $enhanced = !empty($bartle_results['enhanced_flow']) && empty(get_user_meta($user_id, 'ai_coach_unlocked', true));
@@ -277,7 +282,7 @@ class Micro_Coach_Core {
                         
                         // Enqueue enhanced dashboard script and CSS
                         wp_enqueue_script('dashboard-enhanced-js', plugins_url('assets/dashboard-enhanced.js', __FILE__), ['jquery'], '1.0.0', true);
-                        wp_enqueue_style('dashboard-enhanced-css', plugins_url('assets/dashboard.css', __FILE__), [], '1.0.0');
+                        wp_enqueue_style('dashboard-enhanced-css', plugins_url('assets/dashboard.css', __FILE__), [], '1.0.4');
                         wp_localize_script('dashboard-enhanced-js', 'dashboard_enhanced_data', [
                             'ajaxUrl' => admin_url('admin-ajax.php'),
                             'nonce' => wp_create_nonce('mc_dash')
@@ -294,11 +299,25 @@ class Micro_Coach_Core {
                     $primary_bartle_pct = round(($bartle_scores_by_slug[$primary_bartle_slug] ?? 0) / 50 * 100);
                     $secondary_bartle_pct = round(($bartle_scores_by_slug[$secondary_bartle_slug] ?? 0) / 50 * 100);
 
-                    // CDT top and bottom
+                    // CDT top and bottom two scores
                     $cdt_sorted = $cdt_results['sortedScores'] ?? [];
                     $cdt_top_slug = !empty($cdt_sorted[0][0]) ? $cdt_sorted[0][0] : null;
                     $cdt_bottom_slug = null;
-                    if (!empty($cdt_sorted)) { $last = end($cdt_sorted); if (!empty($last[0])) { $cdt_bottom_slug = $last[0]; } }
+                    $cdt_second_bottom_slug = null;
+                    if (!empty($cdt_sorted)) {
+                        // Get the bottom two scores (lowest two)
+                        $sorted_count = count($cdt_sorted);
+                        if ($sorted_count >= 1) {
+                            $last = $cdt_sorted[$sorted_count - 1];
+                            if (!empty($last[0])) { $cdt_bottom_slug = $last[0]; }
+                        }
+                        if ($sorted_count >= 2) {
+                            $second_last = $cdt_sorted[$sorted_count - 2];
+                            if (!empty($second_last[0]) && $second_last[0] !== $cdt_bottom_slug) {
+                                $cdt_second_bottom_slug = $second_last[0];
+                            }
+                        }
+                    }
 
                     // --- Build radar chart data ---
                     $chart_labels = [ 'Linguistic', 'Logical', 'Spatial', 'Bodily', 'Musical', 'Interpersonal', 'Intrapersonal', 'Naturalistic', 'Ambiguity', 'Value Conflict', 'Self-Confront', 'Discomfort Reg', 'Growth', 'Explorer', 'Achiever', 'Socializer', 'Strategist' ];
@@ -335,13 +354,15 @@ class Micro_Coach_Core {
                     $lab_mode_available = isset($custom_tabs['tab-lab']);
                     ?>
                     <?php if ($lab_mode_available): ?>
-                        <button class="tab-link" data-tab="tab-lab">🧪 Lab Mode</button>
+                        <button class="tab-link active" data-tab="tab-lab">🧪 Lab Mode</button>
                         <button class="tab-link" data-tab="tab-composite">🧩 Your Self-Discovery Profile</button>
+                        <button class="tab-link" data-tab="tab-path">📊 Detailed Results</button>
+                        <button class="tab-link" data-tab="tab-ai">🤖 AI Coach</button>
                     <?php else: ?>
                         <button class="tab-link" data-tab="tab-composite">🧩 Your Self-Discovery Profile</button>
+                        <button class="tab-link" data-tab="tab-path">📊 Detailed Results</button>
+                        <button class="tab-link active" data-tab="tab-ai">🤖 AI Coach</button>
                     <?php endif; ?>
-                    <button class="tab-link" data-tab="tab-path">📊 Detailed Results</button>
-                    <button class="tab-link active" data-tab="tab-ai">🤖 AI Coach</button>
                     <?php
                     // Add other custom tabs (excluding lab which we handled above)
                     foreach ($custom_tabs as $tab_id => $tab_label) {
@@ -354,7 +375,7 @@ class Micro_Coach_Core {
                 </div>
                 <div class="tab-content-wrapper">
                     <?php if ($lab_mode_available): ?>
-                        <div id="tab-lab" class="tab-content"><?php do_action('mc_dashboard_custom_tab_content', 'tab-lab'); ?></div>
+                        <div id="tab-lab" class="tab-content active"><?php do_action('mc_dashboard_custom_tab_content', 'tab-lab'); ?></div>
                         <div id="tab-composite" class="tab-content">
                     <?php else: ?>
                         <div id="tab-composite" class="tab-content active">
@@ -392,8 +413,20 @@ class Micro_Coach_Core {
                                     }
                                 }
 
-                                // CDT top/bottom
-                                $cdt_top = null; $cdt_bottom = null;
+                                // CDT top and bottom two
+                                $cdt_top = null; $cdt_bottom = null; $cdt_second_bottom = null;
+                                
+                                // Debug: Output CDT data for troubleshooting
+                                if (current_user_can('manage_options')) {
+                                    echo '<!-- CDT Debug: ';
+                                    echo 'cdt_results exist: ' . (!empty($cdt_results) ? 'yes' : 'no') . ', ';
+                                    echo 'cdt_categories exist: ' . (isset($cdt_categories) ? 'yes' : 'no') . ', ';
+                                    echo 'cdt_top_slug: ' . ($cdt_top_slug ?? 'null') . ', ';
+                                    echo 'cdt_bottom_slug: ' . ($cdt_bottom_slug ?? 'null') . ', ';
+                                    echo 'cdt_second_bottom_slug: ' . ($cdt_second_bottom_slug ?? 'null') . ', ';
+                                    echo 'cdt_sorted count: ' . count($cdt_sorted) . ', ';
+                                    echo 'cdt_sorted: ' . json_encode($cdt_sorted) . ' -->';
+                                }
                                 if (!empty($cdt_top_slug)) {
                                     $t_pct = max(0, min(100, round((($cdt_scores_by_slug[$cdt_top_slug] ?? 0) / 50) * 100)));
                                     $cdt_top = [ 'label' => $cdt_categories[$cdt_top_slug] ?? ucfirst(str_replace('-', ' ', $cdt_top_slug)), 'pct' => $t_pct ];
@@ -401,6 +434,18 @@ class Micro_Coach_Core {
                                 if (!empty($cdt_bottom_slug)) {
                                     $b_pct = max(0, min(100, round((($cdt_scores_by_slug[$cdt_bottom_slug] ?? 0) / 50) * 100)));
                                     $cdt_bottom = [ 'label' => $cdt_categories[$cdt_bottom_slug] ?? ucfirst(str_replace('-', ' ', $cdt_bottom_slug)), 'pct' => $b_pct ];
+                                }
+                                if (!empty($cdt_second_bottom_slug)) {
+                                    $sb_pct = max(0, min(100, round((($cdt_scores_by_slug[$cdt_second_bottom_slug] ?? 0) / 50) * 100)));
+                                    $cdt_second_bottom = [ 'label' => $cdt_categories[$cdt_second_bottom_slug] ?? ucfirst(str_replace('-', ' ', $cdt_second_bottom_slug)), 'pct' => $sb_pct ];
+                                }
+                                
+                                // Debug: Output final CDT data objects
+                                if (current_user_can('manage_options')) {
+                                    echo '<!-- CDT Data Objects: ';
+                                    echo 'cdt_top: ' . json_encode($cdt_top) . ', ';
+                                    echo 'cdt_bottom: ' . json_encode($cdt_bottom) . ', ';
+                                    echo 'cdt_second_bottom: ' . json_encode($cdt_second_bottom) . ' -->';
                                 }
                             ?>
 
@@ -529,10 +574,18 @@ class Micro_Coach_Core {
                                   <?php endif; ?>
                                   <?php if ($cdt_bottom): ?>
                                   <div class="cdt-chip edge">
-                                    <span class="cdt-tag">Growth Edge</span>
+                                    <span class="cdt-tag">Growth Area</span>
                                     <span class="cdt-name"><?php echo esc_html($cdt_bottom['label']); ?></span>
                                     <span class="cdt-meter" style="--val:<?php echo (int) $cdt_bottom['pct']; ?>"></span>
                                     <span class="cdt-val"><?php echo (int) $cdt_bottom['pct']; ?></span>
+                                  </div>
+                                  <?php endif; ?>
+                                  <?php if ($cdt_second_bottom): ?>
+                                  <div class="cdt-chip edge">
+                                    <span class="cdt-tag">Growth Area</span>
+                                    <span class="cdt-name"><?php echo esc_html($cdt_second_bottom['label']); ?></span>
+                                    <span class="cdt-meter" style="--val:<?php echo (int) $cdt_second_bottom['pct']; ?>"></span>
+                                    <span class="cdt-val"><?php echo (int) $cdt_second_bottom['pct']; ?></span>
                                   </div>
                                   <?php endif; ?>
                                 </div>
@@ -546,14 +599,24 @@ class Micro_Coach_Core {
                                     'Conflict Resolution Tolerance' => 'you stay engaged through conflict to reach resolution.'
                                   ];
                                   $cdt_caption = '';
-                                  if ($cdt_top || $cdt_bottom) {
+                                  if ($cdt_top || $cdt_bottom || $cdt_second_bottom) {
                                     if ($cdt_top) {
                                       $nm = $cdt_top['label'];
                                       $cdt_caption .= 'Your strongest area, ' . $nm . ', suggests ' . ($cdt_phrase[$nm] ?? 'a reliable strength under pressure') . ' ';
                                     }
+                                    $growth_areas = [];
                                     if ($cdt_bottom) {
-                                      $nm = $cdt_bottom['label'];
-                                      $cdt_caption .= 'Your growth edge, ' . $nm . ', points to where focused practice can help.';
+                                      $growth_areas[] = $cdt_bottom['label'];
+                                    }
+                                    if ($cdt_second_bottom) {
+                                      $growth_areas[] = $cdt_second_bottom['label'];
+                                    }
+                                    if (!empty($growth_areas)) {
+                                      if (count($growth_areas) == 1) {
+                                        $cdt_caption .= 'Your growth area, ' . $growth_areas[0] . ', points to where focused practice can help.';
+                                      } else {
+                                        $cdt_caption .= 'Your growth areas, ' . $growth_areas[0] . ' and ' . $growth_areas[1] . ', point to where focused practice can help.';
+                                      }
                                     }
                                   }
                                 ?>
@@ -1035,7 +1098,7 @@ class Micro_Coach_Core {
             <div class="quiz-dashboard-auth-wrapper">
                 <div class="dashboard-header">
                     <div class="site-branding">
-                        <img src="https://skillofselfdiscovery.com/wp-content/uploads/2025/09/Untitled-design-4.png" alt="Logo" class="site-logo">
+                        <img src="http://mi-test-site.local/wp-content/uploads/2025/09/SOSD-Logo.jpeg" alt="Skill of Self-Discovery Logo" class="site-logo">
                         <span class="site-title">Skill of Self-Discovery</span>
                     </div>
                 </div>
@@ -1086,6 +1149,15 @@ class Micro_Coach_Core {
                         if (detailsBtn) detailsBtn.click();
                     });
                 }
+                
+                // CDT Grid Layout Helper (for browsers without :has() support)
+                const cdtGrid = document.querySelector('.pc-cdt-grid');
+                if (cdtGrid) {
+                    const chipCount = cdtGrid.querySelectorAll('.cdt-chip').length;
+                    if (chipCount === 2) {
+                        cdtGrid.classList.add('two-items');
+                    }
+                }
             });
         </script>
         <style>
@@ -1123,8 +1195,13 @@ class Micro_Coach_Core {
             .mi-label{ font-weight:700; text-align:left; }
             .mi-val{ font-weight:800; justify-self:end; }
             .pc-cdt{ margin-top:10px; }
-            .pc-cdt-grid{ display:grid; gap:10px; grid-template-columns:1fr 1fr; }
-            @media (max-width:560px){ .pc-cdt-grid{ grid-template-columns:1fr; } }
+            .pc-cdt-grid{ display:grid; gap:10px; grid-template-columns:1fr 1fr 1fr; }
+            @media (max-width:768px){ .pc-cdt-grid{ grid-template-columns:1fr; } }
+            /* Special layout when only 2 items (1 strength + 1 growth) */
+            .pc-cdt-grid:has(.cdt-chip:nth-child(2):last-child) { grid-template-columns: 1fr 1fr; }
+            @supports not selector(:has(*)) {
+                .pc-cdt-grid.two-items { grid-template-columns: 1fr 1fr; }
+            }
             .cdt-chip{ display:grid; grid-template-columns:auto 1fr auto; grid-template-rows:auto auto; align-items:center; gap:6px 8px; border:1px solid var(--pc-line); border-radius:12px; padding:10px 12px; background:#f8fafc; }
             @media (prefers-color-scheme: dark){ .cdt-chip{ background:#121627; } }
             .cdt-tag{ font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; color:var(--pc-muted); grid-column:1 / span 1; padding:2px 6px; border-radius:999px; }
@@ -1184,8 +1261,8 @@ class Micro_Coach_Core {
             .sosd-playercard .mi-gauge::after{ font-size: 12px; }
             .sosd-playercard .mi-label{ line-height: 1.2; }
 
-            /* 3) CDT chips — more contrast, steady spacing */
-            .sosd-playercard .pc-cdt-grid{ gap: 14px; align-items: stretch; }
+            /* 3) CDT chips — more contrast, steady spacing, accommodates up to 3 items */
+            .sosd-playercard .pc-cdt-grid{ gap: 14px; align-items: stretch; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
             .sosd-playercard .cdt-chip{ padding: 12px; background: #f9fafb; border: 1px solid #e6e9f2; display:grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto auto; row-gap:6px; column-gap:8px; min-height: 110px; }
             /* Bottom tag: centered title (row 1), meter+score (row 2), tag footer (row 3) */
             .sosd-playercard .cdt-name{ grid-column:1 / span 2; font-size:16px; font-weight:800; margin:0; text-align:center; grid-row:1; }

@@ -40,6 +40,9 @@
         
         // Show loading spinner
         showLoading: function(message) {
+            // Remove typeform body class when showing loading
+            $('body').removeClass('lab-typeform-active');
+            
             $('#lab-mode-app').html(`
                 <div class="lab-mode-loading">
                     <p>${message || 'Loading...'}</p>
@@ -50,6 +53,9 @@
         
         // Show error message
         showError: function(message) {
+            // Remove typeform body class when showing error
+            $('body').removeClass('lab-typeform-active');
+            
             $('#lab-mode-app').html(`
                 <div class="lab-mode-error">
                     <h3>Error</h3>
@@ -128,7 +134,6 @@
                     <div class="lab-mode-hero">
                         <div class="lab-hero-icon">🧪</div>
                         <h2>Lab Mode</h2>
-                        <div class="lab-beta-badge">Beta Testing</div>
                     </div>
                     
                     <div class="lab-intro-content">
@@ -158,13 +163,6 @@
                             </div>
                         </div>
                         
-                        <div class="lab-testing-notice">
-                            <div class="lab-notice-icon">⚠️</div>
-                            <div class="lab-notice-content">
-                                <strong>Currently in Beta Testing</strong>
-                                <p>Lab Mode is experimental and may have rough edges. For full functionality, please use the <strong>AI Coach</strong> tab instead.</p>
-                            </div>
-                        </div>
                     </div>
                     
                     <!-- Admin Model Selector (only shown to admins) -->
@@ -186,7 +184,7 @@
                     </div>
                     
                     <div class="lab-landing-actions">
-                        <button class="lab-start-btn lab-btn lab-btn-primary">Try Beta Version</button>
+                        <button class="lab-start-btn lab-btn lab-btn-primary">Start Lab Mode</button>
                         <button class="lab-view-history-btn lab-btn lab-btn-secondary">View Past Experiments</button>
                     </div>
                 </div>
@@ -194,8 +192,8 @@
             $('#lab-mode-app').html(html);
             this.currentStep = 'landing';
             
-            // Remove body class when not in form mode
-            $('body').removeClass('lab-mode-active');
+            // Remove body classes when returning to landing
+            $('body').removeClass('lab-mode-active lab-typeform-active');
             
             // Check admin status after rendering landing view
             this.checkAdminStatus();
@@ -205,7 +203,7 @@
         startProfileInputs: function(e) {
             e.preventDefault();
             
-            console.log('Try Beta Version clicked');
+            console.log('Start Lab Mode clicked');
             
             // Show simple loading while getting profile data
             this.showLoading('Loading your assessment data...');
@@ -584,6 +582,9 @@
             $('#lab-mode-app').html(html);
             this.currentStep = 'typeform';
             
+            // Add body class to hide dashboard elements during typeform
+            $('body').addClass('lab-typeform-active');
+            
             // Verify footer exists after render
             setTimeout(() => {
                 const footer = document.querySelector('.lab-typeform-footer');
@@ -633,7 +634,7 @@
                 
                 clearButton = `
                     <button class="lab-btn lab-btn-tertiary clear-progress-btn" onclick="LabModeApp.clearAndRestart()">
-                        🗑️ Start Fresh
+                        <span style="font-size: 1.1em; margin-right: 0.3em;">🔄</span>Start Fresh
                     </button>
                 `;
                 
@@ -1953,136 +1954,109 @@
             });
         },
         
-        // Show generated experiments
+        // Show generated experiments with tabbed interface
         showExperiments: function() {
-            const sourceIndicator = this.usingMock ? 
-                '<div class="experiment-source mock-indicator">⚠️ Using Mock Data (AI temporarily unavailable)</div>' :
-                '<div class="experiment-source ai-indicator">🤖 AI Generated</div>';
+            // Remove typeform body class when showing experiments
+            $('body').removeClass('lab-typeform-active');
+            
+            // Group experiments by tab (will filter out empty categories)
+            const experimentsByTab = this.groupExperimentsByTab();
+            
+            // Get available tabs
+            const availableTabs = Object.keys(experimentsByTab);
+            console.log('Available tabs:', availableTabs);
+            
+            // Initialize current tab state or ensure it's valid
+            if (!this.currentExperimentTab || !availableTabs.includes(this.currentExperimentTab)) {
+                // Try to get from localStorage, but fallback to first available tab
+                const savedTab = localStorage.getItem('labModeActiveTab');
+                this.currentExperimentTab = (savedTab && availableTabs.includes(savedTab)) ? savedTab : availableTabs[0];
+                console.log('Set current experiment tab to:', this.currentExperimentTab);
+            }
             
             let html = `
                 <div class="lab-experiments">
                     <h2>Your Experiments</h2>
-                    ${sourceIndicator}
                     <div class="lab-experiment-controls">
-                        <p class="lab-subtitle">These are prototypes. Use "Regenerate Variant" on individual experiments, or:</p>
+                        <p class="lab-subtitle">Each experiment is a safe, low-stakes way to practice self-discovery. Explore, Reflect, or Connect — start where you feel drawn.</p>
                         <div class="experiment-global-actions">
-                            <button class="lab-btn lab-btn-secondary" onclick="LabModeApp.startProfileInputs(event)">Modify Constraints & Regenerate All</button>
-                            <button class="lab-btn lab-btn-tertiary" onclick="LabModeApp.loadLandingView()">Start Over</button>
+                            <div class="action-buttons-left">
+                                <button class="lab-btn lab-btn-primary" onclick="LabModeApp.regenerateWithCurrentSettings()" title="Create a fresh set of experiments tailored to you">+ New Experiments</button>
+                                <button class="lab-btn lab-btn-secondary" onclick="LabModeApp.startProfileInputs(event)" title="Tweak your time, cost, or risk preferences">Adjust Settings</button>
+                            </div>
+                            <div class="action-buttons-right">
+                                <button class="lab-btn lab-btn-reset" onclick="LabModeApp.loadLandingView()" title="Clear your current experiments and start fresh">🔄 Reset</button>
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="experiments-grid">
-                        ${this.experiments.map((exp, index) => `
-                            <div class="experiment-card" data-archetype="${exp.archetype}">
-                                <div class="experiment-header">
-                                    <h3 class="experiment-title">${exp.title}</h3>
-                                    <span class="archetype-badge archetype-${exp.archetype.toLowerCase()}">${exp.archetype}</span>
-                                </div>
-                                
-                                <div class="experiment-body">
-                                    <div class="experiment-description">
-                                        <p class="experiment-summary">${this.generateEngagingDescription(exp)}</p>
-                                    </div>
-                                    
-                                    <div class="experiment-connection">
-                                        <h4>Why This Fits You:</h4>
-                                        <p class="connection-text">${this.generatePersonalizedConnection(exp, index)}</p>
-                                    </div>
-                                    
-                                    ${exp._calibrationNotes ? `<div class="experiment-calibration"><small class="calibration-note">${exp._calibrationNotes}</small></div>` : ''}
-                                    
-                                    <div class="experiment-steps">
-                                        <h4>Steps:</h4>
-                                        <ol>
-                                            ${exp.steps.map(step => `<li>${step}</li>`).join('')}
-                                        </ol>
-                                    </div>
-                                    
-                                    <div class="experiment-meta">
-                                        <div class="experiment-effort">
-                                            <span class="effort-time">${exp.effort?.timeHours || 0}h</span>
-                                            <span class="effort-budget">$${exp.effort?.budgetUSD || 0}</span>
-                                            <span class="risk-level risk-${(exp.riskLevel || 'medium').toLowerCase()}">${exp.riskLevel}</span>
-                                        </div>
-                                        
-                                        <div class="success-criteria">
-                                            <h5>Success Criteria:</h5>
-                                            <ul>
-                                                ${(exp.successCriteria || []).map(criteria => `<li>${criteria}</li>`).join('')}
-                                            </ul>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <div class="experiment-actions">
-                                    <button class="lab-btn lab-btn-primary lab-start-experiment-btn" data-experiment-id="${index}">Start</button>
-                                    <button class="lab-btn lab-btn-secondary lab-iterate-btn" data-experiment-id="${index}" title="Iteratively refine this experiment">Iterate</button>
-                                    <button class="lab-btn lab-btn-secondary lab-regenerate-ai-btn" data-experiment-id="${index}" title="Generate a new AI-powered variant">Regenerate Variant</button>
-                                    <button class="lab-btn lab-btn-tertiary lab-debug-toggle-btn" data-experiment-id="${index}">🔍 Debug</button>
-                                </div>
-                                
-                                <div class="experiment-debug" id="debug-${index}" style="display: none;">
-                                    <div class="debug-header">
-                                        <h4>🛠️ Debug Information</h4>
-                                        <small>Technical details for troubleshooting</small>
-                                    </div>
-                                    
-                                    <div class="debug-section">
-                                        <h5>AI Prompt Sent:</h5>
-                                        <div class="debug-code">
-                                            <pre><code>${this.formatDebugPrompt()}</code></pre>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="debug-section">
-                                        <h5>Raw Experiment Data:</h5>
-                                        <div class="debug-code">
-                                            <pre><code>${JSON.stringify(exp, null, 2)}</code></pre>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="debug-section">
-                                        <h5>User Profile Data:</h5>
-                                        <div class="debug-code">
-                                            <pre><code>${JSON.stringify({
-                                                topMI: this.profileData?.mi_results?.slice(0, 3) || [],
-                                                constraints: this.qualifiers?.curiosity?.constraints || {},
-                                                curiosities: this.qualifiers?.curiosity?.curiosities || [],
-                                                roleModels: this.qualifiers?.curiosity?.roleModels || [],
-                                                bottomCDT: this.profileData?.cdt_results?.slice(-2) || []
-                                            }, null, 2)}</code></pre>
-                                        </div>
-                                    </div>
-                                    
-                                    ${this.experimentSource ? `
-                                        <div class="debug-section">
-                                            <h5>Generation Source:</h5>
-                                            <div class="debug-info">
-                                                <strong>Source:</strong> ${this.experimentSource}<br>
-                                                <strong>Using Mock:</strong> ${this.usingMock ? 'Yes' : 'No'}<br>
-                                                <strong>Calibrated:</strong> ${exp._calibrated ? 'Yes' : 'No'}
-                                            </div>
-                                        </div>
-                                    ` : ''}
-                                    
-                                    ${exp.influences ? `
-                                        <div class="debug-section">
-                                            <h5>AI Influences Used:</h5>
-                                            <div class="debug-info">
-                                                <strong>MI:</strong> ${exp.influences.miUsed || 'None'}<br>
-                                                <strong>Role Model:</strong> ${exp.influences.roleModelUsed || 'None'}<br>
-                                                <strong>Curiosity:</strong> ${exp.influences.curiosityUsed || 'None'}<br>
-                                                <strong>CDT Edge:</strong> ${exp.influences.cdtEdge || 'None'}
-                                            </div>
-                                        </div>
-                                    ` : ''}
-                                </div>
+                    ${availableTabs.length > 1 ? `
+                    <!-- Tabbed Interface -->
+                    <div class="experiments-tabs-container">
+                        <!-- Desktop: Arrows on sides -->
+                        <div class="tab-navigation desktop-nav">
+                            <button class="tab-arrow tab-arrow-left" onclick="LabModeApp.previousTab()" aria-label="Previous tab">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                </svg>
+                            </button>
+                            
+                            <div class="experiments-tabs">
+                                ${availableTabs.map(tab => `
+                                    <button class="experiment-tab ${this.currentExperimentTab === tab ? 'active' : ''}" 
+                                            data-tab="${tab}" 
+                                            onclick="LabModeApp.switchTab('${tab}')"
+                                            aria-selected="${this.currentExperimentTab === tab}"
+                                            title="${this.getTabTooltip(tab)}">
+                                        ${this.getTabLabel(tab)} <span class="tab-count">(${experimentsByTab[tab].length})</span>
+                                    </button>
+                                `).join('')}
                             </div>
-                        `).join('')}
+                            
+                            <button class="tab-arrow tab-arrow-right" onclick="LabModeApp.nextTab()" aria-label="Next tab">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        <!-- Mobile: Arrows below tabs -->
+                        <div class="tab-navigation mobile-nav">
+                            <div class="experiments-tabs">
+                                ${availableTabs.map(tab => `
+                                    <button class="experiment-tab ${this.currentExperimentTab === tab ? 'active' : ''}" 
+                                            data-tab="${tab}" 
+                                            onclick="LabModeApp.switchTab('${tab}')"
+                                            aria-selected="${this.currentExperimentTab === tab}"
+                                            title="${this.getTabTooltip(tab)}">
+                                        ${this.getTabLabel(tab)} <span class="tab-count">(${experimentsByTab[tab].length})</span>
+                                    </button>
+                                `).join('')}
+                            </div>
+                            
+                            <div class="mobile-tab-arrows">
+                                <button class="tab-arrow tab-arrow-left" onclick="LabModeApp.previousTab()" aria-label="Previous tab">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                                    </svg>
+                                </button>
+                                <button class="tab-arrow tab-arrow-right" onclick="LabModeApp.nextTab()" aria-label="Next tab">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    <!-- Experiment Cards for Active Tab -->
+                    <div class="experiments-tab-content">
+                        ${this.renderTabContent(experimentsByTab[this.currentExperimentTab] || [], this.currentExperimentTab)}
                     </div>
                     
                     <div class="lab-footer-actions">
-                        <button class="lab-btn lab-btn-secondary" onclick="LabModeApp.loadLandingView()">Back to Start</button>
+                        <button class="lab-btn lab-btn-reset" onclick="LabModeApp.loadLandingView()">← Back to Start</button>
                     </div>
                 </div>
             `;
@@ -2090,11 +2064,232 @@
             $('#lab-mode-app').html(html);
             this.currentStep = 'experiments';
             
+            // Setup keyboard navigation
+            this.setupTabKeyboardNavigation();
+            
             // Scroll to top after showing experiments
             window.scrollTo({ top: 0, behavior: 'smooth' });
             
             // Setup debug toggle event listeners
             this.setupDebugToggles();
+        },
+        
+        // Group experiments by archetype for tabs
+        groupExperimentsByTab: function() {
+            const groups = {
+                explore: [],
+                reflect: [],
+                connect: []
+            };
+            
+            this.experiments.forEach((exp, index) => {
+                const archetype = exp.archetype?.toLowerCase() || 'discover';
+                // Map archetypes to tabs
+                if (archetype === 'discover' || archetype === 'explore') {
+                    groups.explore.push({ ...exp, originalIndex: index });
+                } else if (archetype === 'build' || archetype === 'reflect') {
+                    groups.reflect.push({ ...exp, originalIndex: index });
+                } else if (archetype === 'share' || archetype === 'connect') {
+                    groups.connect.push({ ...exp, originalIndex: index });
+                } else {
+                    // Default unknown archetypes to explore
+                    groups.explore.push({ ...exp, originalIndex: index });
+                }
+            });
+            
+            // Only return groups that have experiments
+            const filteredGroups = {};
+            Object.keys(groups).forEach(key => {
+                if (groups[key].length > 0) {
+                    filteredGroups[key] = groups[key];
+                }
+            });
+            
+            console.log('Filtered experiment groups:', filteredGroups);
+            return filteredGroups;
+        },
+        
+        // Get display label for tab
+        getTabLabel: function(tab) {
+            const labels = {
+                explore: 'Explore',
+                reflect: 'Reflect', 
+                connect: 'Connect'
+            };
+            return labels[tab] || tab;
+        },
+        
+        // Get tooltip for tab
+        getTabTooltip: function(tab) {
+            const tooltips = {
+                explore: 'For trying new ideas and experiences',
+                reflect: 'For journaling, analysis, and self-awareness',
+                connect: 'For building relationships and learning with others'
+            };
+            return tooltips[tab] || '';
+        },
+        
+        // Get icon for tab
+        getTabIcon: function(tab) {
+            const icons = {
+                explore: '🔍',
+                reflect: '💭',
+                connect: '🤝'
+            };
+            return icons[tab] || '🎯';
+        },
+        
+        // Render content for a specific tab
+        renderTabContent: function(experiments, tabName) {
+            if (experiments.length === 0) {
+                return `
+                    <div class="empty-tab-message">
+                        <div class="empty-icon">${this.getTabIcon(tabName)}</div>
+                        <h3>No ${this.getTabLabel(tabName)} experiments yet</h3>
+                        <p>Generate new ones to try something in this area.</p>
+                        <button class="lab-btn lab-btn-primary empty-cta" onclick="LabModeApp.regenerateWithCurrentSettings()" title="Create a fresh set of experiments tailored to you">+ New Experiments</button>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="experiments-grid fade-in">
+                    ${experiments.map(exp => `
+                        <div class="experiment-card" data-archetype="${exp.archetype}">
+                            <div class="experiment-header">
+                                <h3 class="experiment-title">${exp.title}</h3>
+                            </div>
+                            
+                            <div class="experiment-body">
+                                <div class="experiment-description">
+                                    <p class="experiment-summary">${this.generateEngagingDescription(exp)}</p>
+                                </div>
+                                
+                                <div class="experiment-connection">
+                                    <h4>Why This Fits You:</h4>
+                                    <p class="connection-text">${this.generatePersonalizedConnection(exp, exp.originalIndex)}</p>
+                                </div>
+                                
+                                <div class="experiment-steps">
+                                    <h4>Steps:</h4>
+                                    <ol>
+                                        ${exp.steps.map(step => `<li>${step}</li>`).join('')}
+                                    </ol>
+                                </div>
+                                
+                                <div class="success-criteria">
+                                    <h4>Success Criteria:</h4>
+                                    <ul>
+                                        ${(exp.successCriteria || []).map(criteria => `<li>${criteria}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="experiment-actions">
+                                <button class="lab-btn lab-btn-primary lab-start-experiment-btn" data-experiment-id="${exp.originalIndex}">Try This</button>
+                                <button class="lab-btn lab-btn-secondary lab-iterate-btn" data-experiment-id="${exp.originalIndex}" title="Iteratively refine this experiment">Tweak</button>
+                                <button class="lab-btn lab-btn-secondary lab-regenerate-ai-btn" data-experiment-id="${exp.originalIndex}" title="Generate a new AI-powered variant">New Version</button>
+                                <button class="lab-btn lab-btn-tertiary lab-debug-toggle-btn" data-experiment-id="${exp.originalIndex}">Why This?</button>
+                            </div>
+                            
+                            <div class="experiment-debug" id="debug-${exp.originalIndex}" style="display: none;">
+                                <div class="debug-header">
+                                    <h4>🛠️ Debug Information</h4>
+                                    <small>Technical details for troubleshooting</small>
+                                </div>
+                                
+                                <div class="debug-section">
+                                    <h5>Raw Experiment Data:</h5>
+                                    <div class="debug-code">
+                                        <pre><code>${JSON.stringify(exp, null, 2)}</code></pre>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        },
+        
+        // Switch to a specific tab
+        switchTab: function(tabName) {
+            if (this.currentExperimentTab === tabName) return;
+            
+            this.currentExperimentTab = tabName;
+            localStorage.setItem('labModeActiveTab', tabName);
+            
+            // Update tab buttons
+            $('.experiment-tab').removeClass('active').attr('aria-selected', 'false');
+            $(`.experiment-tab[data-tab="${tabName}"]`).addClass('active').attr('aria-selected', 'true');
+            
+            // Fade out current content
+            $('.experiments-tab-content').addClass('fade-out');
+            
+            setTimeout(() => {
+                // Update content
+                const experimentsByTab = this.groupExperimentsByTab();
+                $('.experiments-tab-content').html(
+                    this.renderTabContent(experimentsByTab[tabName] || [], tabName)
+                );
+                
+                // Fade in new content
+                $('.experiments-tab-content').removeClass('fade-out');
+                
+                // Re-setup debug toggles for new content
+                this.setupDebugToggles();
+            }, 150);
+        },
+        
+        // Navigate to previous tab
+        previousTab: function() {
+            const experimentsByTab = this.groupExperimentsByTab();
+            const tabs = Object.keys(experimentsByTab);
+            if (tabs.length <= 1) return; // No navigation needed with 0 or 1 tab
+            
+            const currentIndex = tabs.indexOf(this.currentExperimentTab);
+            const previousIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+            this.switchTab(tabs[previousIndex]);
+        },
+        
+        // Navigate to next tab
+        nextTab: function() {
+            const experimentsByTab = this.groupExperimentsByTab();
+            const tabs = Object.keys(experimentsByTab);
+            if (tabs.length <= 1) return; // No navigation needed with 0 or 1 tab
+            
+            const currentIndex = tabs.indexOf(this.currentExperimentTab);
+            const nextIndex = (currentIndex + 1) % tabs.length;
+            this.switchTab(tabs[nextIndex]);
+        },
+        
+        // Regenerate experiments using current settings without going through profile inputs
+        regenerateWithCurrentSettings: function() {
+            if (!this.qualifiers) {
+                console.error('No qualifiers available for regeneration');
+                this.showError('Unable to regenerate - no profile data found. Please start over.');
+                return;
+            }
+            
+            console.log('Regenerating experiments with current settings:', this.qualifiers);
+            this.generateExperiments();
+        },
+        
+        // Setup keyboard navigation for tabs
+        setupTabKeyboardNavigation: function() {
+            $(document).off('keydown.tabs').on('keydown.tabs', (e) => {
+                if (this.currentStep !== 'experiments') return;
+                
+                // Arrow key navigation when tab has focus
+                if (document.activeElement.classList.contains('experiment-tab')) {
+                    if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        this.previousTab();
+                    } else if (e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        this.nextTab();
+                    }
+                }
+            });
         },
         
         // Setup debug toggle functionality
@@ -2107,10 +2302,10 @@
                 
                 if (debugSection.is(':visible')) {
                     debugSection.slideUp(200);
-                    button.text('🔍 Debug');
+                    button.text('Why This?');
                 } else {
                     debugSection.slideDown(200);
-                    button.text('🔍 Hide Debug');
+                    button.text('Hide Info');
                 }
             });
         },
@@ -3279,13 +3474,20 @@ Return only valid JSON with the same structure as the original experiment.`;
         openIterationPanel: function(event) {
             event.preventDefault();
             
-            const experimentId = $(event.target).data('experiment-id');
-            const experiment = this.experiments[experimentId];
+            const experimentIndex = $(event.target).data('experiment-id');
+            console.log('Looking for experiment with index:', experimentIndex, 'in experiments array of length:', this.experiments.length);
+            
+            // Find experiment by originalIndex (which may be stored in the data attribute)
+            const experiment = this.experiments[experimentIndex];
             
             if (!experiment) {
-                console.error('Experiment not found:', experimentId);
+                console.error('Experiment not found at index:', experimentIndex);
+                console.log('Available experiments:', this.experiments.map((exp, idx) => ({ index: idx, title: exp.title })));
+                this.showError('Experiment not found. Please try refreshing the page.');
                 return;
             }
+            
+            console.log('Found experiment:', experiment);
             
             // Ensure IterationPanel is loaded
             if (typeof window.IterationPanel === 'undefined') {
@@ -3294,7 +3496,7 @@ Return only valid JSON with the same structure as the original experiment.`;
                 return;
             }
             
-            console.log('Opening iteration panel for experiment:', experimentId, experiment);
+            console.log('Opening iteration panel for experiment at index:', experimentIndex, experiment);
             
             // Build user context
             const userContext = {
@@ -3305,7 +3507,7 @@ Return only valid JSON with the same structure as the original experiment.`;
                 constraints: this.qualifiers?.curiosity?.constraints || {}
             };
             
-            window.IterationPanel.open(experiment, experimentId, userContext);
+            window.IterationPanel.open(experiment, experimentIndex, userContext);
         },
         
         // Update experiment in the experiments array and re-render

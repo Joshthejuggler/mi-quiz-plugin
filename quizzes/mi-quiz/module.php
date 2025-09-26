@@ -317,7 +317,7 @@ class MI_Quiz_Plugin_AI {
             $branding_html = '<div style="text-align:center; padding: 20px 0; border-bottom: 1px solid #ddd;">
                 <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
                     <tbody><tr>
-                        <td style="vertical-align:middle;"><img src="https://skillofselfdiscovery.com/wp-content/uploads/2025/09/Untitled-design-4.png" alt="Logo" style="height: 45px; width: auto; border:0;" height="45"></td>
+                        <td style="vertical-align:middle;"><img src="http://mi-test-site.local/wp-content/uploads/2025/09/SOSD-Logo.jpeg" alt="Skill of Self-Discovery Logo" style="height: 45px; width: auto; border:0;" height="45"></td>
                         <td style="vertical-align:middle; padding-left:15px;"><span style="font-size: 1.3em; font-weight: 600; color: #1a202c; line-height: 1.2;">Skill of Self-Discovery</span></td>
                     </tr></tbody>
                 </table></div>';

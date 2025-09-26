@@ -32,11 +32,11 @@ function debugLabMode() {
         console.log('✅ jQuery found:', jQuery.fn.jquery);
     }
     
-    // Check if the Try Beta Version button exists
-    console.log('4. Checking Try Beta Version button:');
+    // Check if the Start Lab Mode button exists
+    console.log('4. Checking Start Lab Mode button:');
     const button = $('.lab-start-btn');
     if (button.length === 0) {
-        console.error('❌ Try Beta Version button not found!');
+        console.error('❌ Start Lab Mode button not found!');
     } else {
         console.log('✅ Button found:', button);
         console.log('Button classes:', button.attr('class'));
@@ -83,8 +83,8 @@ function debugLabMode() {
 }
 
 // Test the button functionality specifically
-function testTryBetaButton() {
-    console.log('🧪 Testing Try Beta Version button...');
+function testStartLabModeButton() {
+    console.log('🧪 Testing Start Lab Mode button...');
     
     const button = $('.lab-start-btn');
     if (button.length === 0) {
@@ -113,7 +113,7 @@ function rebindLabModeEvents() {
 // Auto-run diagnostics
 console.log('🚀 Lab Mode Debug Tool loaded. Available functions:');
 console.log('- debugLabMode() - Full diagnostic');
-console.log('- testTryBetaButton() - Test button functionality');  
+console.log('- testStartLabModeButton() - Test button functionality');  
 console.log('- rebindLabModeEvents() - Rebind event handlers');
 console.log('Running auto-diagnostics in 1 second...');
 

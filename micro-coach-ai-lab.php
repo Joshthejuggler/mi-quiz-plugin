@@ -56,7 +56,8 @@ class Micro_Coach_AI_Lab {
      * Check if current user has Lab Mode access
      */
     private function user_can_access_lab_mode() {
-        return current_user_can('edit_posts') || current_user_can('manage_options');
+        // Allow any logged-in user to access Lab Mode
+        return is_user_logged_in();
     }
     
     /**
@@ -1615,10 +1616,19 @@ class Micro_Coach_AI_Lab {
      * AJAX: Iterate on an experiment with a single modifier
      */
     public function ajax_iterate() {
-        check_ajax_referer('mc_lab_nonce', 'nonce');
+        // Enhanced error logging
+        error_log('Lab Mode Iterate - Request started by user: ' . get_current_user_id());
+        
+        try {
+            check_ajax_referer('mc_lab_nonce', 'nonce');
+        } catch (Exception $e) {
+            error_log('Lab Mode Iterate - Nonce verification failed: ' . $e->getMessage());
+            wp_send_json_error('Security verification failed. Please refresh the page and try again.');
+        }
         
         $user_id = get_current_user_id();
         if (!$user_id || !$this->user_can_access_lab_mode()) {
+            error_log('Lab Mode Iterate - Permission denied for user: ' . $user_id);
             wp_send_json_error('Insufficient permissions');
         }
         
@@ -1643,7 +1653,27 @@ class Micro_Coach_AI_Lab {
         
         // Validate modifier structure
         if (!isset($modifier['kind']) || !isset($modifier['value'])) {
+            error_log('Lab Mode Iterate - Invalid modifier structure: ' . print_r($modifier, true));
             wp_send_json_error('Invalid modifier structure - missing kind or value');
+        }
+        
+        // Additional validation for custom modifiers
+        if ($modifier['kind'] === 'Custom') {
+            $custom_value = trim($modifier['value']);
+            if (empty($custom_value)) {
+                error_log('Lab Mode Iterate - Empty custom modifier value');
+                wp_send_json_error('Custom modification request cannot be empty');
+            }
+            
+            if (strlen($custom_value) < 10) {
+                error_log('Lab Mode Iterate - Custom modifier too short: ' . strlen($custom_value) . ' characters');
+                wp_send_json_error('Custom modification request is too short. Please provide more detail.');
+            }
+            
+            if (strlen($custom_value) > 500) {
+                error_log('Lab Mode Iterate - Custom modifier too long: ' . strlen($custom_value) . ' characters');
+                wp_send_json_error('Custom modification request is too long. Please keep it under 500 characters.');
+            }
         }
         
         // Check if debug info is requested
@@ -1686,15 +1716,52 @@ class Micro_Coach_AI_Lab {
      * Iterate an experiment with a single modifier using AI
      */
     private function iterate_experiment($current_experiment, $modifier, $user_context, $include_debug = false) {
-        // Build system prompt for iteration
-        $system_prompt = 'You are an AI coach specializing in iterative refinement of a single experiment. The user will send the current experiment JSON and exactly one modifier. Return a revised version of the SAME experiment. Only change what the modifier requires; keep all other fields as stable as possible. Respect safety and user constraints. Be concrete and runnable. Keep steps (3–5), success criteria (2–3).\n\nReturn JSON with: archetype, title, rationale, steps (array), effort (object with timeHours and budgetUSD), riskLevel, successCriteria (array), linkedMI (array), linkedCDT (array), and optionally _calibrationNotes explaining what changed.';
+        // Detect if experiment appears over-modified (heuristics)
+        $complexity_indicators = [
+            'title_length' => strlen($current_experiment['title'] ?? ''),
+            'step_count' => count($current_experiment['steps'] ?? []),
+            'avg_step_length' => 0,
+            'description_repetition' => 0
+        ];
+        
+        if (!empty($current_experiment['steps'])) {
+            $total_step_length = array_sum(array_map('strlen', $current_experiment['steps']));
+            $complexity_indicators['avg_step_length'] = $total_step_length / count($current_experiment['steps']);
+            
+            // Check for repetitive phrases (sign of additive modifications)
+            $combined_text = implode(' ', $current_experiment['steps']) . ' ' . ($current_experiment['rationale'] ?? '');
+            $complexity_indicators['description_repetition'] = 
+                substr_count(strtolower($combined_text), 'behavioral psychology') +
+                substr_count(strtolower($combined_text), 'group setting') +
+                substr_count(strtolower($combined_text), 'share') * 0.5;
+        }
+        
+        $needs_cleanup = (
+            $complexity_indicators['title_length'] > 60 ||
+            $complexity_indicators['step_count'] > 5 ||
+            $complexity_indicators['avg_step_length'] > 200 ||
+            $complexity_indicators['description_repetition'] > 2
+        );
+        
+        error_log('Lab Mode Iterate - Complexity analysis: ' . json_encode($complexity_indicators));
+        error_log('Lab Mode Iterate - Needs cleanup: ' . ($needs_cleanup ? 'YES' : 'NO'));
+        
+        // Build system prompt for iteration with emphasis on integration
+        $cleanup_emphasis = $needs_cleanup ? 
+            '\n\nIMPORTANT: This experiment appears to have been modified multiple times and needs SIGNIFICANT CLEANUP and SIMPLIFICATION. Focus on creating a clean, coherent experiment that incorporates the new modification while removing redundancy and complexity.' : '';
+            
+        $system_prompt = 'You are an AI coach specializing in elegant experiment refinement. Your goal is to INTEGRATE the requested change seamlessly into the existing experiment, not just add it on top.\n\nKey principles:\n- REFACTOR and STREAMLINE: If the experiment is getting complex, consolidate and simplify while incorporating the change\n- REPLACE rather than ADD: Instead of adding new elements, modify existing ones to incorporate the change\n- MAINTAIN COHERENCE: The final experiment should read as if designed from scratch, not like multiple modifications layered together\n- PRESERVE CORE INTENT: Keep the fundamental learning objective while elegantly weaving in the modification\n- CONCISE STEPS: Keep to 3-5 clear, actionable steps that flow naturally\n- TARGETED SUCCESS CRITERIA: 2-3 specific, measurable outcomes\n\nIf the experiment has become unwieldy from previous iterations, use this opportunity to clean it up while applying the modification.' . $cleanup_emphasis . '\n\nReturn clean, integrated JSON with: archetype, title, rationale, steps (array), effort (object with timeHours and budgetUSD), riskLevel, successCriteria (array), linkedMI (array), linkedCDT (array), and optionally _calibrationNotes explaining the integration approach.';
         
         // Build user prompt with current experiment and modifier
+        $cleanup_instruction = $needs_cleanup ? 
+            "\n\nNOTE: Analysis suggests this experiment has become overly complex from previous modifications (title length: {$complexity_indicators['title_length']}, steps: {$complexity_indicators['step_count']}, repetition score: {$complexity_indicators['description_repetition']}). Please SIGNIFICANTLY SIMPLIFY and CONSOLIDATE while incorporating the new modification." : '';
+            
         $user_prompt = sprintf(
-            "Current Experiment: %s\n\nModifier to Apply: %s\n\nUser Context: %s\n\nApply exactly ONE modification as specified by the modifier. Return the full revised experiment as JSON.",
+            "Current Experiment to Refine: %s\n\nModification Request: %s\n\nUser Context: %s%s\n\nPlease INTEGRATE this modification into the experiment elegantly. If the experiment seems complex or repetitive from previous modifications, use this as an opportunity to streamline and refactor while incorporating the requested change. The result should feel cohesive and purposeful, not like a collection of add-ons.\n\nReturn the refined experiment as clean JSON.",
             json_encode($current_experiment, JSON_PRETTY_PRINT),
             json_encode($modifier, JSON_PRETTY_PRINT),
-            json_encode($user_context, JSON_PRETTY_PRINT)
+            json_encode($user_context, JSON_PRETTY_PRINT),
+            $cleanup_instruction
         );
         
         error_log('Lab Mode Iterate - System prompt: ' . substr($system_prompt, 0, 200) . '...');
@@ -1766,6 +1833,11 @@ class Micro_Coach_AI_Lab {
         // Ensure effort structure exists
         if (!isset($revised_experiment['effort']) || !is_array($revised_experiment['effort'])) {
             $revised_experiment['effort'] = $current_experiment['effort'] ?? ['timeHours' => 2, 'budgetUSD' => 0];
+        }
+        
+        // Add calibration note if cleanup was performed
+        if ($needs_cleanup && !isset($revised_experiment['_calibrationNotes'])) {
+            $revised_experiment['_calibrationNotes'] = 'Streamlined and simplified this experiment to remove redundancy from previous modifications while integrating your requested change.';
         }
         
         // Prepare result with optional debug info
