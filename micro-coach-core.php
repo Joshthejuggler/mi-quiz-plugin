@@ -14,6 +14,7 @@ class Micro_Coach_Core {
     public function __construct() {
         // Add the new shortcode for the quiz dashboard.
         add_shortcode('quiz_dashboard', [$this, 'render_quiz_dashboard']);
+        add_shortcode('quiz_funnel', [$this, 'render_quiz_funnel']);
 
         if (is_admin()) {
             // Add admin settings page for the platform.
@@ -25,6 +26,9 @@ class Micro_Coach_Core {
         
         // AJAX endpoint for enhanced flow - mark AI coach as unlocked
         add_action('wp_ajax_mc_mark_ai_unlocked', [$this, 'ajax_mark_ai_unlocked']);
+        
+        // AJAX endpoints for funnel management
+        add_action('wp_ajax_mc_save_funnel', [$this, 'ajax_save_funnel']);
         
         // Add body class for enhanced flow (early hook)
         add_filter('body_class', [$this, 'add_enhanced_flow_body_class']);
@@ -81,6 +85,16 @@ class Micro_Coach_Core {
             'manage_options',
             'quiz-platform-settings', // Use parent slug for the main settings page
             [$this, 'render_settings_page']
+        );
+        
+        // Add funnel management page
+        add_submenu_page(
+            'quiz-platform-settings',
+            'Quiz Funnel Configuration',
+            'Funnel',
+            'manage_options',
+            'quiz-platform-funnel',
+            [$this, 'render_funnel_admin_page']
         );
     }
 
@@ -220,24 +234,18 @@ class Micro_Coach_Core {
                         <h2 class="greeting-title"><?php echo wp_kses($greeting, ['span' => ['class' => []]]); ?></h2>
                         <p class="greeting-subtitle">Your journey of self-discovery is a marathon, not a sprint. Each step reveals something new.</p>
                     </div>
-                    <?php if ($completed_quizzes < $total_quizzes || $total_quizzes === 0): ?>
-                    <div class="quiz-dashboard-hero-progress-card">
-                        <div class="progress-card-header">
-                            <h3 class="progress-card-title">Your Progress</h3>
-                            <span class="progress-card-percent"><?php echo esc_html($progress_pct); ?>%</span>
-                        </div>
-                        <div class="progress-bar-container">
-                            <div class="progress-bar-fill" style="width: <?php echo esc_attr($progress_pct); ?>%;"></div>
-                        </div>
-                        <?php if ($next_step_action === 'switch-to-ai-tab'): ?>
-                            <button type="button" id="switch-to-ai-coach" class="quiz-dashboard-button progress-card-next-step-btn"><?php echo esc_html($next_step_title); ?></button>
-                        <?php elseif ($next_step_url && $next_step_url !== '#'): ?>
-                            <a href="<?php echo esc_url($next_step_url); ?>" class="quiz-dashboard-button progress-card-next-step-btn"><?php echo esc_html($next_step_title); ?></a>
-                        <?php else: ?>
-                            <span class="quiz-dashboard-button is-disabled progress-card-next-step-btn"><?php echo esc_html($next_step_title); ?></span>
-                        <?php endif; ?>
-                    </div>
-                    <?php endif; ?>
+                </div>
+                
+                <!-- Funnel Section -->
+                <div class="quiz-dashboard-funnel-section">
+                    <?php 
+                    // Render the quiz funnel with dashboard styling
+                    $funnel_style = ($completed_quizzes === $total_quizzes && $total_quizzes > 0) ? 'dashboard-compact' : 'dashboard';
+                    echo $this->render_quiz_funnel([
+                        'show_description' => 'false',
+                        'style' => $funnel_style
+                    ]);
+                    ?>
                 </div>
  
                 <?php if ($user_id && $completed_quizzes === $total_quizzes && $total_quizzes > 0): 
@@ -282,7 +290,7 @@ class Micro_Coach_Core {
                         
                         // Enqueue enhanced dashboard script and CSS
                         wp_enqueue_script('dashboard-enhanced-js', plugins_url('assets/dashboard-enhanced.js', __FILE__), ['jquery'], '1.0.0', true);
-                        wp_enqueue_style('dashboard-enhanced-css', plugins_url('assets/dashboard.css', __FILE__), [], '1.0.4');
+                        wp_enqueue_style('dashboard-enhanced-css', plugins_url('assets/dashboard.css', __FILE__), [], '1.0.5');
                         wp_localize_script('dashboard-enhanced-js', 'dashboard_enhanced_data', [
                             'ajaxUrl' => admin_url('admin-ajax.php'),
                             'nonce' => wp_create_nonce('mc_dash')
@@ -2142,6 +2150,113 @@ class Micro_Coach_Core {
         <?php
         return ob_get_clean();
     }
+    
+    /**
+     * Renders the [quiz_funnel] shortcode content.
+     */
+    public function render_quiz_funnel($atts = []) {
+        if (!class_exists('MC_Funnel')) {
+            return current_user_can('manage_options') ? '<p><em>Funnel: MC_Funnel class not loaded.</em></p>' : '';
+        }
+        
+        $atts = shortcode_atts([
+            'show_description' => 'true',
+            'style' => 'default'
+        ], $atts, 'quiz_funnel');
+        
+        $user_id = get_current_user_id();
+        $config = MC_Funnel::get_config();
+        $completion = MC_Funnel::get_completion_status($user_id);
+        $unlock = MC_Funnel::get_unlock_status($user_id);
+        
+        // Enqueue styles and scripts
+        wp_enqueue_style('mc-funnel-css', plugins_url('assets/funnel.css', __FILE__), [], '1.0.0');
+        wp_enqueue_script('mc-funnel-js', plugins_url('assets/funnel.js', __FILE__), ['jquery'], '1.0.0', true);
+        
+        // Localize script data
+        wp_localize_script('mc-funnel-js', 'mc_funnel_data', [
+            'config' => $config,
+            'completion' => $completion,
+            'unlock' => $unlock,
+            'user_id' => $user_id,
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('mc_funnel')
+        ]);
+        
+        ob_start();
+        ?>
+        <div class="mc-funnel-container" data-style="<?php echo esc_attr($atts['style']); ?>">
+            <div class="mc-funnel">
+                <?php foreach ($config['steps'] as $index => $step_slug): 
+                    $is_completed = $completion[$step_slug] ?? false;
+                    $is_unlocked = $unlock[$step_slug] ?? false;
+                    $title = $config['titles'][$step_slug] ?? ucfirst(str_replace('-', ' ', $step_slug));
+                    
+                    $classes = ['mc-funnel-step'];
+                    if ($is_completed) $classes[] = 'completed';
+                    if (!$is_unlocked) $classes[] = 'locked';
+                    if ($is_unlocked && !$is_completed) $classes[] = 'available';
+                    if ($step_slug === 'placeholder') $classes[] = 'placeholder';
+                    
+                    $step_url = $is_unlocked ? MC_Funnel::get_step_url($step_slug) : null;
+                ?>
+                    <div class="<?php echo esc_attr(implode(' ', $classes)); ?>" 
+                         data-slug="<?php echo esc_attr($step_slug); ?>"
+                         data-index="<?php echo esc_attr($index + 1); ?>"
+                         <?php if ($step_url): ?>data-url="<?php echo esc_url($step_url); ?>"<?php endif; ?>>
+                        
+                        <div class="mc-funnel-step-content">
+                            <div class="mc-funnel-step-icon">
+                                <?php if ($is_completed): ?>
+                                    <span class="checkmark">✓</span>
+                                <?php elseif (!$is_unlocked): ?>
+                                    <span class="lock">🔒</span>
+                                <?php else: ?>
+                                    <span class="number"><?php echo $index + 1; ?></span>
+                                <?php endif; ?>
+                            </div>
+                            
+                            <div class="mc-funnel-step-info">
+                                <h3 class="mc-funnel-step-title"><?php echo esc_html($title); ?></h3>
+                                
+                                <?php if ($atts['show_description'] === 'true'): ?>
+                                    <div class="mc-funnel-step-description">
+                                        <?php if ($step_slug === 'placeholder'): ?>
+                                            <p><?php echo esc_html($config['placeholder']['description']); ?></p>
+                                        <?php else: 
+                                            $registered_quizzes = self::get_quizzes();
+                                            $quiz_info = $registered_quizzes[$step_slug] ?? [];
+                                            $description = $is_completed ? 
+                                                ($quiz_info['description_completed'] ?? $quiz_info['description'] ?? '') :
+                                                ($quiz_info['description'] ?? '');
+                                        ?>
+                                            <p><?php echo esc_html($description); ?></p>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+                                
+                                <div class="mc-funnel-step-status">
+                                    <?php if ($is_completed): ?>
+                                        <span class="status-badge completed">Completed</span>
+                                    <?php elseif ($is_unlocked): ?>
+                                        <span class="status-badge available">Available</span>
+                                    <?php else: ?>
+                                        <span class="status-badge locked">Locked</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <?php if ($index < count($config['steps']) - 1): ?>
+                            <div class="mc-funnel-connector"></div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
 
     /**
      * Finds the permalink of the first page that contains a given shortcode.
@@ -2230,6 +2345,172 @@ class Micro_Coach_Core {
         update_user_meta($user_id, 'ai_coach_unlocked', 1);
         
         wp_send_json_success('AI Coach unlocked successfully!');
+    }
+    
+    /**
+     * AJAX endpoint to save funnel configuration.
+     */
+    public function ajax_save_funnel() {
+        check_ajax_referer('mc_funnel');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions.');
+        }
+        
+        $config = [
+            'steps' => $_POST['steps'] ?? [],
+            'titles' => $_POST['titles'] ?? [],
+            'placeholder' => [
+                'title' => $_POST['placeholder_title'] ?? '',
+                'description' => $_POST['placeholder_description'] ?? '',
+                'target' => $_POST['placeholder_target'] ?? '',
+                'enabled' => !empty($_POST['placeholder_enabled'])
+            ]
+        ];
+        
+        if (!class_exists('MC_Funnel')) {
+            wp_send_json_error('MC_Funnel class not available.');
+        }
+        
+        $result = MC_Funnel::save_config($config);
+        
+        if ($result) {
+            wp_send_json_success('Funnel configuration saved successfully!');
+        } else {
+            wp_send_json_error('Failed to save funnel configuration.');
+        }
+    }
+    
+    /**
+     * Render the funnel admin page.
+     */
+    public function render_funnel_admin_page() {
+        if (!class_exists('MC_Funnel')) {
+            echo '<div class="wrap"><h1>Quiz Funnel Configuration</h1><div class="notice notice-error"><p>MC_Funnel class not available.</p></div></div>';
+            return;
+        }
+        
+        $config = MC_Funnel::get_config();
+        $registered_quizzes = self::get_quizzes();
+        
+        // Enqueue admin scripts
+        wp_enqueue_script('jquery-ui-sortable');
+        wp_enqueue_script('mc-funnel-admin', plugins_url('assets/funnel-admin.js', __FILE__), ['jquery', 'jquery-ui-sortable'], '1.0.0', true);
+        wp_enqueue_style('mc-funnel-admin', plugins_url('assets/funnel-admin.css', __FILE__), [], '1.0.0');
+        
+        wp_localize_script('mc-funnel-admin', 'mc_funnel_admin_data', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('mc_funnel'),
+            'config' => $config,
+            'registered_quizzes' => $registered_quizzes
+        ]);
+        
+        ?>
+        <div class="wrap">
+            <h1>Quiz Funnel Configuration</h1>
+            <p>Configure the order, titles, and settings for your quiz funnel. Users progress through the funnel step by step, with each quiz unlocking the next.</p>
+            
+            <div id="mc-funnel-admin-notices"></div>
+            
+            <form id="mc-funnel-form" class="mc-funnel-admin">
+                <?php wp_nonce_field('mc_funnel'); ?>
+                
+                <div class="mc-funnel-admin-section">
+                    <h2>Quiz Steps</h2>
+                    <p>Drag and drop to reorder the steps. Click on titles to edit them.</p>
+                    
+                    <div id="mc-funnel-steps" class="mc-funnel-steps">
+                        <?php foreach ($config['steps'] as $index => $step_slug): 
+                            if ($step_slug === 'placeholder') continue; // Handle placeholder separately
+                            
+                            $quiz_info = $registered_quizzes[$step_slug] ?? [];
+                            $title = $config['titles'][$step_slug] ?? $quiz_info['title'] ?? ucfirst(str_replace('-', ' ', $step_slug));
+                            $description = $quiz_info['description'] ?? '';
+                        ?>
+                            <div class="mc-funnel-step-admin" data-slug="<?php echo esc_attr($step_slug); ?>">
+                                <div class="mc-funnel-step-header">
+                                    <span class="mc-funnel-step-drag">⋮⋮</span>
+                                    <span class="mc-funnel-step-number"><?php echo $index + 1; ?></span>
+                                    <div class="mc-funnel-step-info">
+                                        <input type="text" 
+                                               class="mc-funnel-step-title-input" 
+                                               name="titles[<?php echo esc_attr($step_slug); ?>]" 
+                                               value="<?php echo esc_attr($title); ?>"
+                                               placeholder="Enter step title" />
+                                        <small class="mc-funnel-step-meta">
+                                            Quiz: <?php echo esc_html($quiz_info['title'] ?? $step_slug); ?>
+                                            <?php if ($description): ?>
+                                                | <?php echo esc_html(wp_trim_words($description, 10)); ?>
+                                            <?php endif; ?>
+                                        </small>
+                                    </div>
+                                    <input type="hidden" name="steps[]" value="<?php echo esc_attr($step_slug); ?>" />
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                
+                <div class="mc-funnel-admin-section">
+                    <h2>Placeholder Step (Optional)</h2>
+                    <p>Configure an optional fourth step that appears after all quizzes are completed.</p>
+                    
+                    <div class="mc-funnel-placeholder-config">
+                        <label class="mc-funnel-checkbox-label">
+                            <input type="checkbox" 
+                                   name="placeholder_enabled" 
+                                   value="1" 
+                                   <?php checked($config['placeholder']['enabled']); ?> />
+                            Enable placeholder step
+                        </label>
+                        
+                        <div class="mc-funnel-placeholder-fields">
+                            <div class="mc-funnel-field">
+                                <label for="placeholder_title">Title:</label>
+                                <input type="text" 
+                                       id="placeholder_title" 
+                                       name="placeholder_title" 
+                                       value="<?php echo esc_attr($config['placeholder']['title']); ?>"
+                                       placeholder="Advanced Self-Discovery Module" />
+                            </div>
+                            
+                            <div class="mc-funnel-field">
+                                <label for="placeholder_description">Description:</label>
+                                <textarea id="placeholder_description" 
+                                          name="placeholder_description" 
+                                          placeholder="Brief description of what's coming..."><?php echo esc_textarea($config['placeholder']['description']); ?></textarea>
+                            </div>
+                            
+                            <div class="mc-funnel-field">
+                                <label for="placeholder_target">Target URL (when ready):</label>
+                                <input type="url" 
+                                       id="placeholder_target" 
+                                       name="placeholder_target" 
+                                       value="<?php echo esc_attr($config['placeholder']['target']); ?>"
+                                       placeholder="https://example.com/new-module" />
+                            </div>
+                        </div>
+                        
+                        <input type="hidden" name="steps[]" value="placeholder" />
+                    </div>
+                </div>
+                
+                <div class="mc-funnel-admin-section">
+                    <h2>Preview</h2>
+                    <p>This is how the funnel will appear to users:</p>
+                    
+                    <div id="mc-funnel-preview">
+                        <?php echo do_shortcode('[quiz_funnel]'); ?>
+                    </div>
+                </div>
+                
+                <p class="submit">
+                    <button type="submit" class="button button-primary" id="mc-funnel-save">Save Configuration</button>
+                    <button type="button" class="button" id="mc-funnel-reset">Reset to Defaults</button>
+                </p>
+            </form>
+        </div>
+        <?php
     }
     
     /**

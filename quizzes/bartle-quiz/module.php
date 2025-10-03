@@ -58,6 +58,9 @@ class Bartle_Quiz_Plugin {
         require __DIR__ . '/questions.php';
 
         $user_data = null;
+        $user_age_group = null;
+        $needs_age_group = false;
+        
         if (is_user_logged_in()) {
             $user = wp_get_current_user();
             $user_data = [
@@ -65,6 +68,15 @@ class Bartle_Quiz_Plugin {
                 'firstName'    => $user->first_name,
                 'savedResults' => get_user_meta($user->ID, self::META_KEY, true) ?: null,
             ];
+            
+            // Get user's age group from profile
+            if (class_exists('MC_User_Profile')) {
+                if (MC_User_Profile::has_age_group($user->ID)) {
+                    $user_age_group = MC_User_Profile::get_user_age_group($user->ID);
+                } else {
+                    $needs_age_group = true;
+                }
+            }
         }
 
         $dashboard_url = $this->_find_page_by_shortcode('quiz_dashboard');
@@ -76,6 +88,8 @@ class Bartle_Quiz_Plugin {
             'ajaxNonce'   => wp_create_nonce('bartle_nonce'),
             'loginUrl'    => wp_login_url(get_permalink()),
             'dashboardUrl' => $dashboard_url,
+            'userAgeGroup' => $user_age_group,
+            'needsAgeGroup' => $needs_age_group,
             'data'        => [
                 'cats'      => $bartle_categories ?? [],
                 'questions' => $bartle_questions ?? [],
@@ -87,6 +101,13 @@ class Bartle_Quiz_Plugin {
 
     public function render_quiz() {
         $dashboard_url = $this->_find_page_by_shortcode('quiz_dashboard');
+        $user_id = get_current_user_id();
+        $needs_age_group = false;
+        
+        if ($user_id && class_exists('MC_User_Profile')) {
+            $needs_age_group = !MC_User_Profile::has_age_group($user_id);
+        }
+        
         ob_start();
         ?>
         <div class="quiz-wrapper">
@@ -95,12 +116,101 @@ class Bartle_Quiz_Plugin {
                     <a href="<?php echo esc_url($dashboard_url); ?>" class="back-link">&larr; Return to Dashboard</a>
                 </div>
             <?php endif; ?>
-        <div id="bartle-dev-tools" style="display:none; padding: 0 2em 1em; text-align: right; margin-top: 1em;">
-            <strong>Dev tools:</strong>
-            <button type="button" id="bartle-autofill-run" class="bartle-quiz-button bartle-quiz-button-small">Auto-Fill</button>
-        </div>
+            
+            <!-- Show funnel for context -->
+            <?php if (class_exists('Micro_Coach_Core') && method_exists('Micro_Coach_Core', 'render_quiz_funnel')): ?>
+                <div class="quiz-funnel-intro">
+                    <h2>Your Progress in the Skill of Self-Discovery Journey</h2>
+                    <?php 
+                    $core = new Micro_Coach_Core();
+                    echo $core->render_quiz_funnel([
+                        'show_description' => 'false',
+                        'style' => 'compact'
+                    ]);
+                    ?>
+                </div>
+            <?php endif; ?>
+            
+            <!-- Bartle Quiz Introduction -->
+            <div class="bartle-quiz-intro">
+                <h2>Bartle Player Type Quiz</h2>
+                <div class="bartle-intro-content">
+                    <p>The Bartle Player Type Quiz is designed to uncover what truly motivates you when you engage with games, challenges, or even everyday learning. Originally created by game researcher Richard Bartle, the model has been widely used to understand different kinds of players — but the same framework also applies to work, school, and personal growth.</p>
+                    
+                    <h3>The Four Player Types</h3>
+                    <ul class="player-types-list">
+                        <li><strong>Explorer (Discovery):</strong> Motivated by curiosity, learning, and uncovering hidden possibilities.</li>
+                        <li><strong>Achiever (Achievement):</strong> Motivated by goals, progress, and measurable success.</li>
+                        <li><strong>Socializer (Social):</strong> Motivated by relationships, teamwork, and shared growth.</li>
+                        <li><strong>Strategist (Competition):</strong> Motivated by challenge, analysis, and proving oneself.</li>
+                    </ul>
+                    
+                    <p><strong>Ready to discover your player type?</strong> You'll answer 40 statements rated on a 1–5 scale to reveal your primary motivations.</p>
+                </div>
+            </div>
+            
+            <div id="bartle-dev-tools" style="display:none; padding: 0 2em 1em; text-align: right; margin-top: 1em;">
+                <strong>Dev tools:</strong>
+                <button type="button" id="bartle-autofill-run" class="bartle-quiz-button bartle-quiz-button-small">Auto-Fill</button>
+            </div>
             <div id="bartle-quiz-container"><div class="bartle-quiz-card"><p>Loading Quiz...</p></div></div>
+            
+            <?php if ($needs_age_group && class_exists('MC_User_Profile')): ?>
+                <?php echo MC_User_Profile::render_age_group_form('bartle-quiz'); ?>
+            <?php endif; ?>
         </div>
+        
+        <style>
+        .quiz-funnel-intro {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .quiz-funnel-intro h2 {
+            margin: 0 0 1rem 0;
+            color: #1a202c;
+            font-size: 1.25rem;
+            text-align: center;
+        }
+        
+        .bartle-quiz-intro {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .bartle-quiz-intro h2 {
+            margin: 0 0 1rem 0;
+            color: #1a202c;
+            font-size: 1.75rem;
+        }
+        
+        .bartle-quiz-intro h3 {
+            margin: 1.5rem 0 0.75rem 0;
+            color: #2d3748;
+            font-size: 1.25rem;
+        }
+        
+        .player-types-list {
+            margin: 0.75rem 0 1.5rem 1.5rem;
+        }
+        
+        .player-types-list li {
+            margin-bottom: 0.5rem;
+            line-height: 1.5;
+        }
+        
+        .bartle-intro-content p {
+            line-height: 1.6;
+            margin-bottom: 1rem;
+            color: #4a5568;
+        }
+        </style>
         <?php
         return ob_get_clean();
     }

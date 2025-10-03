@@ -12,7 +12,8 @@
     let quizState = {
         scores: {},
         sortedScores: [],
-        ageGroup: 'adult'
+        ageGroup: null,
+        needsAgeGroup: false
     };
 
     // --- Utility Functions ---
@@ -40,6 +41,30 @@
     }
 
     // --- Render Functions ---
+    function renderIntro() {
+        // If the platform has the funnel shortcode on this page, do nothing extra.
+        // The PHP should render it above the container.
+        
+        // If user has no age group and is logged in, show the age modal
+        if (isLoggedIn && quizState.needsAgeGroup && typeof window.showAgeGroupModal === 'function') {
+            window.showAgeGroupModal();
+            document.addEventListener('mc-age-group-saved', (e) => {
+                quizState.ageGroup = e.detail.age_group || 'adult';
+                renderQuiz();
+            }, { once: true });
+            return; // Wait for age group to be saved
+        }
+        
+        // If we already know the age group, start quiz
+        if (quizState.ageGroup) {
+            renderQuiz();
+            return;
+        }
+        
+        // Fallback: ask age group only if user isn't logged-in or has no saved group
+        renderAgeGate();
+    }
+
     function renderAgeGate() {
         if (devTools) devTools.style.display = 'none'; // Hide dev tools
         container.innerHTML = `
@@ -308,7 +333,14 @@
 
             const retakeBtn = createActionButton('🔄 Retake Quiz', 'bartle-quiz-button bartle-quiz-button-secondary', () => {
                 if (confirm('Are you sure? Your saved results will be overwritten when you complete the new quiz.')) {
-                    renderAgeGate();
+                    // Reset quiz state
+                    quizState = {
+                        scores: {},
+                        sortedScores: [],
+                        ageGroup: bartle_quiz_data.userAgeGroup || 'adult',
+                        needsAgeGroup: false
+                    };
+                    renderIntro();
                     window.scrollTo(0, 0);
                 }
             });
@@ -327,11 +359,16 @@
                 .then(j => {
                     if (j.success) {
                         currentUser.savedResults = null;
-                        quizState = { scores: {}, sortedScores: [], ageGroup: 'adult' };
+                        quizState = {
+                            scores: {},
+                            sortedScores: [],
+                            ageGroup: bartle_quiz_data.userAgeGroup || 'adult',
+                            needsAgeGroup: false
+                        };
                         alert('Your results have been deleted.');
-                        renderAgeGate();
+                        renderIntro();
                         window.scrollTo(0, 0);
-                    } else {
+                    }
                         alert('Error: ' + (j.data || 'Could not delete results.'));
                         btn.innerHTML = '🗑️ Delete Results';
                         btn.disabled = false;
@@ -363,12 +400,24 @@
             autoBtn.addEventListener('click', autoFill);
         }
 
+        // Check if user has completed quiz
         if (isLoggedIn && currentUser.savedResults && currentUser.savedResults.sortedScores) {
             quizState = currentUser.savedResults;
             renderResults();
-        } else {
-            renderAgeGate();
+            return;
         }
+
+        // Initialize age group from user profile if logged in
+        if (isLoggedIn && bartle_quiz_data.userAgeGroup) {
+            quizState.ageGroup = bartle_quiz_data.userAgeGroup;
+        } else if (isLoggedIn && bartle_quiz_data.needsAgeGroup) {
+            quizState.needsAgeGroup = true;
+        } else {
+            // Default for non-logged-in users
+            quizState.ageGroup = 'adult';
+        }
+
+        renderIntro();
     }
 
     init();

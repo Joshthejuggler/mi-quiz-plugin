@@ -41,6 +41,12 @@ if (!class_exists('MC_DB_Migration')) {
 if (!class_exists('MC_Helpers')) {
     require_once MC_QUIZ_PLATFORM_PATH . 'includes/class-mc-helpers.php';
 }
+if (!class_exists('MC_Funnel')) {
+    require_once MC_QUIZ_PLATFORM_PATH . 'includes/class-mc-funnel.php';
+}
+if (!class_exists('MC_User_Profile')) {
+    require_once MC_QUIZ_PLATFORM_PATH . 'includes/class-mc-user-profile.php';
+}
 
 // Include all the necessary class files.
 // These files should ONLY define classes, not run any code themselves.
@@ -60,6 +66,9 @@ function mc_quiz_platform_init() {
     if (is_admin()) {
         MC_DB_Migration::maybe_migrate();
     }
+    
+    // Initialize user profile management
+    MC_User_Profile::init();
     
     // Instantiate the core platform and AI services.
     new Micro_Coach_Core();

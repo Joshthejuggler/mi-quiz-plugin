@@ -230,6 +230,13 @@ class MC_Cache {
                                               !empty(get_user_meta($user_id, $quiz['results_meta_key'], true));
         }
         
+        // Add funnel data if MC_Funnel class exists
+        if (class_exists('MC_Funnel')) {
+            $data['funnel_config'] = MC_Funnel::get_config();
+            $data['funnel_completion'] = MC_Funnel::get_completion_status($user_id);
+            $data['funnel_unlock'] = MC_Funnel::get_unlock_status($user_id);
+        }
+        
         // Cache for 15 minutes
         wp_cache_set($cache_key, $data, self::CACHE_GROUP, 900);
         

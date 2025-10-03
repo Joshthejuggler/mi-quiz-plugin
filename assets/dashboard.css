@@ -1,3 +1,11 @@
+/* Updated version: 1.0.5 */
+
+/* Hide AI Coach and Saved tabs from dashboard */
+.dashboard-tabs .tab-link[data-tab="tab-ai"],
+.dashboard-tabs .tab-link[data-tab="tab-saved"] {
+    display: none !important;
+}
+
 /* === HEADER & BRANDING ENHANCEMENTS === */
 
 /* Header container with improved spacing and visual weight */
