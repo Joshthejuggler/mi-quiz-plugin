@@ -14,12 +14,12 @@ class MC_Funnel {
      */
     public static function get_config() {
         $defaults = [
-            'steps' => ['mi-quiz', 'cdt-quiz', 'bartle-quiz', 'placeholder'],
+            'steps' => ['mi-quiz', 'cdt-quiz', 'bartle-quiz', 'johari-mi-quiz'],
             'titles' => [
                 'mi-quiz' => 'Multiple Intelligences Assessment',
                 'cdt-quiz' => 'Cognitive Dissonance Tolerance Quiz', 
                 'bartle-quiz' => 'Player Type Discovery',
-                'placeholder' => 'Advanced Self-Discovery Module'
+                'johari-mi-quiz' => 'Johari × MI'
             ],
             'placeholder' => [
                 'title' => 'Advanced Self-Discovery Module',
@@ -80,10 +80,79 @@ class MC_Funnel {
             }
         }
         
-        // Placeholder is never completed
-        $completion_status['placeholder'] = false;
-        
         return $completion_status;
+    }
+    
+    /**
+     * Get detailed status for the Johari quiz including intermediate states
+     * 
+     * @param int|null $user_id User ID, defaults to current user
+     * @return array Status info with 'status', 'badge_text', 'description'
+     */
+    public static function get_johari_status($user_id = null) {
+        if (!$user_id) {
+            $user_id = get_current_user_id();
+        }
+        
+        if (!$user_id) {
+            return [
+                'status' => 'locked',
+                'badge_text' => 'Locked', 
+                'description' => 'Complete previous steps to unlock'
+            ];
+        }
+        
+        global $wpdb;
+        $prefix = $wpdb->prefix;
+        
+        // Check if user has completed the final quiz (has results in user meta)
+        $johari_results = get_user_meta($user_id, 'johari_mi_profile', true);
+        if (!empty($johari_results)) {
+            return [
+                'status' => 'completed',
+                'badge_text' => 'Completed',
+                'description' => 'View your Johari Window with peer insights'
+            ];
+        }
+        
+        // Check if user has done self-assessment
+        $self_table = $prefix . 'jmi_self';
+        $self_exists = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM `$self_table` WHERE user_id = %d", $user_id
+        ));
+        
+        if ($self_exists) {
+            // Check how many peer feedback submissions they have
+            $feedback_table = $prefix . 'jmi_peer_feedback';
+            $peer_count = $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(DISTINCT f.peer_user_id) 
+                 FROM `$feedback_table` f 
+                 INNER JOIN `$self_table` s ON f.self_id = s.id 
+                 WHERE s.user_id = %d", 
+                $user_id
+            ));
+            
+            if ($peer_count >= 2) {
+                return [
+                    'status' => 'ready',
+                    'badge_text' => 'Results Ready',
+                    'description' => 'Click to view your Johari Window results'
+                ];
+            } else {
+                return [
+                    'status' => 'waiting',
+                    'badge_text' => 'Awaiting Feedback',
+                    'description' => "Need " . (2 - $peer_count) . " more peer feedback submissions"
+                ];
+            }
+        }
+        
+        // User hasn't started the self-assessment yet
+        return [
+            'status' => 'available',
+            'badge_text' => 'Available',
+            'description' => 'Start your self-assessment'
+        ];
     }
     
     /**
@@ -101,12 +170,6 @@ class MC_Funnel {
             if ($index === 0) {
                 // First step is always unlocked
                 $unlock_status[$step_slug] = true;
-            } elseif ($step_slug === 'placeholder') {
-                // Placeholder is unlocked only if enabled and previous step completed
-                $prev_slug = $config['steps'][$index - 1] ?? '';
-                $unlock_status[$step_slug] = $config['placeholder']['enabled'] && 
-                                           !empty($prev_slug) && 
-                                           ($completion[$prev_slug] ?? false);
             } else {
                 // Other steps unlock when previous step is completed
                 $prev_slug = $config['steps'][$index - 1] ?? '';
@@ -124,11 +187,6 @@ class MC_Funnel {
      * @return string|null URL or null if not found
      */
     public static function get_step_url($step_slug) {
-        if ($step_slug === 'placeholder') {
-            $config = self::get_config();
-            return $config['placeholder']['target'] ?: null;
-        }
-        
         // Use existing logic to find quiz pages
         $registered_quizzes = Micro_Coach_Core::get_quizzes();
         if (!isset($registered_quizzes[$step_slug])) {
@@ -220,7 +278,7 @@ class MC_Funnel {
         
         // Ensure we have at least the default steps if none provided
         if (empty($sanitized['steps'])) {
-            $sanitized['steps'] = ['mi-quiz', 'cdt-quiz', 'bartle-quiz', 'placeholder'];
+            $sanitized['steps'] = ['mi-quiz', 'cdt-quiz', 'bartle-quiz', 'johari-mi-quiz'];
         }
         
         // Sanitize titles
@@ -253,5 +311,14 @@ class MC_Funnel {
             global $wpdb;
             $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE 'mc_dashboard_data_%'");
         }
+    }
+    
+    /**
+     * Clear the funnel configuration cache and reset to defaults
+     */
+    public static function reset_to_defaults() {
+        delete_option(self::OPTION_KEY);
+        self::clear_all_dashboard_caches();
+        return true;
     }
 }

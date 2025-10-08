@@ -368,7 +368,7 @@
                         alert('Your results have been deleted.');
                         renderIntro();
                         window.scrollTo(0, 0);
-                    }
+                    } else {
                         alert('Error: ' + (j.data || 'Could not delete results.'));
                         btn.innerHTML = '🗑️ Delete Results';
                         btn.disabled = false;

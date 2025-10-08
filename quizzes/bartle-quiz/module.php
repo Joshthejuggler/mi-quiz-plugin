@@ -52,7 +52,7 @@ class Bartle_Quiz_Plugin {
         }
 
         wp_enqueue_style('bartle-quiz-css', plugins_url('quiz.css', __FILE__), [], self::VERSION);
-        wp_register_script('bartle-quiz-js', plugins_url('quiz.js', __FILE__), [], self::VERSION, true);
+        wp_register_script('bartle-quiz-js', plugins_url('quiz.js', __FILE__), ['jquery'], self::VERSION, true);
 
         // Load this quiz's questions.
         require __DIR__ . '/questions.php';
@@ -118,15 +118,12 @@ class Bartle_Quiz_Plugin {
             <?php endif; ?>
             
             <!-- Show funnel for context -->
-            <?php if (class_exists('Micro_Coach_Core') && method_exists('Micro_Coach_Core', 'render_quiz_funnel')): ?>
+            <?php if (class_exists('Micro_Coach_Core')): ?>
                 <div class="quiz-funnel-intro">
                     <h2>Your Progress in the Skill of Self-Discovery Journey</h2>
                     <?php 
-                    $core = new Micro_Coach_Core();
-                    echo $core->render_quiz_funnel([
-                        'show_description' => 'false',
-                        'style' => 'compact'
-                    ]);
+                    // Use the shortcode instead of direct method call to ensure proper context
+                    echo do_shortcode('[quiz_funnel show_description="false" style="compact"]');
                     ?>
                 </div>
             <?php endif; ?>

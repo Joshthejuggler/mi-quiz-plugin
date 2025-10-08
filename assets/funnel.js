@@ -5,6 +5,12 @@
 (function($) {
     'use strict';
     
+    // Ensure jQuery is available
+    if (typeof $ === 'undefined') {
+        console.error('MC Funnel: jQuery is not available');
+        return;
+    }
+    
     // Global funnel object
     window.McFunnel = {
         data: null,
@@ -174,6 +180,11 @@
                 const $step = $(this);
                 const slug = $step.data('slug');
                 
+                // Skip Johari quiz - it has enhanced server-side status that shouldn't be overridden
+                if (slug === 'johari-mi-quiz') {
+                    return; // Keep the server-rendered status for Johari
+                }
+                
                 const isCompleted = self.data.completion[slug] || false;
                 const isUnlocked = self.data.unlock[slug] || false;
                 
@@ -255,18 +266,71 @@
             const message = `Congratulations! You've completed ${data.quizTitle || 'an assessment'}. The next step is now available.`;
             $('#mc-funnel-status').text(message);
             this.showNotification(message, 'success');
+        },
+        
+        updateJohariStatus: function() {
+            // Only update via AJAX if user_id is 0 (not properly detected server-side)
+            // Otherwise, keep the server-rendered enhanced status
+            if (!this.data || this.data.user_id != 0) {
+                return; // Server-side status is accurate, no need for AJAX
+            }
+            
+            const $johariStep = $('.mc-funnel-step[data-slug="johari-mi-quiz"]');
+            if (!$johariStep.length) return;
+            
+            // Only call AJAX if user wasn't detected server-side but might be logged in client-side
+            $.post(this.data.ajax_url, {
+                action: 'get_johari_status'
+            })
+            .done((response) => {
+                if (response.success && response.data.johari_status) {
+                    this.applyJohariStatus($johariStep, response.data.johari_status);
+                }
+            })
+            .fail(() => {
+                console.log('Could not get Johari status via AJAX - user may not be logged in');
+            });
+        },
+        
+        applyJohariStatus: function($step, status) {
+            // Update step classes
+            $step.removeClass('available locked completed johari-waiting johari-ready johari-completed');
+            $step.addClass('johari-' + status.status);
+            
+            // Update icon
+            const $icon = $step.find('.mc-funnel-step-icon span');
+            $icon.removeClass('number lock checkmark waiting ready');
+            
+            if (status.status === 'completed') {
+                $icon.addClass('checkmark').html('✓');
+            } else if (status.status === 'waiting') {
+                $icon.addClass('waiting').html('⏳');
+            } else if (status.status === 'ready') {
+                $icon.addClass('ready').html('🎯');
+            } else {
+                $icon.addClass('number').html($step.data('index'));
+            }
+            
+            // Update status badge
+            const $badge = $step.find('.status-badge');
+            $badge.removeClass('available locked completed waiting ready')
+                  .addClass(status.status)
+                  .text(status.badge_text);
+            
+            // Update description
+            const $description = $step.find('.mc-funnel-step-description p');
+            if ($description.length) {
+                $description.text(status.description);
+            }
         }
     };
     
     // Initialize when document is ready
     $(document).ready(function() {
         McFunnel.init();
-    });
-    
-})(jQuery);
-
-// Add CSS for notifications and tooltips
-$(document).ready(function() {
+        McFunnel.updateJohariStatus();
+        
+        // Add CSS for notifications and tooltips
     if (!$('#mc-funnel-dynamic-styles').length) {
         $('<style id="mc-funnel-dynamic-styles">').html(`
             .mc-funnel-notification {
@@ -377,4 +441,6 @@ $(document).ready(function() {
             }
         `).appendTo('head');
     }
-});
+    });
+    
+})(jQuery);

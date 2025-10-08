@@ -1,0 +1,515 @@
+/* Johari × MI Quiz Styles */
+
+/* Inherit base styles from main MI quiz */
+@import url('../../mi-quiz/css/mi-quiz.css');
+
+/* ===== JOHARI SPECIFIC STYLES ===== */
+
+/* Container and Sections */
+#jmi-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 2em;
+}
+
+.jmi-section {
+    background: #fff;
+    padding: 2em;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 2em;
+}
+
+.jmi-section h3 {
+    margin-top: 0;
+    color: #1a202c;
+    font-size: 1.5em;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 0.5em;
+}
+
+/* Adjective Grid Layout */
+.jmi-domain-section {
+    margin-bottom: 2em;
+    padding: 1.5em;
+    background: #f8fafc;
+    border-radius: 8px;
+    border-left: 4px solid #e2e8f0;
+}
+
+.jmi-domain-title {
+    margin: 0 0 1em 0;
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.jmi-adjectives-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75em;
+}
+
+/* Mixed Adjectives Layout (no domain grouping) */
+.jmi-mixed-adjectives {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75em;
+    justify-content: flex-start;
+    padding: 1.5em;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 2px solid #e2e8f0;
+}
+
+/* Neutral styling for mixed adjectives to avoid domain priming */
+.jmi-mixed-adjectives .jmi-adjective-pill {
+    border-color: #6b7280;
+    color: #374151;
+    font-weight: 500;
+    background: #ffffff;
+}
+
+.jmi-mixed-adjectives .jmi-adjective-pill:hover {
+    border-color: #4b5563;
+    background: #f3f4f6;
+    color: #1f2937;
+}
+
+.jmi-mixed-adjectives .jmi-adjective-checkbox:checked + .jmi-adjective-pill {
+    background: #374151;
+    color: #ffffff;
+    border-color: #1f2937;
+}
+}
+
+.jmi-mixed-adjectives .jmi-adjective-pill:hover {
+    border-color: #4b5563;
+    background: #f9fafb;
+}
+
+.jmi-mixed-adjectives .jmi-adjective-checkbox:checked + .jmi-adjective-pill {
+    background: #374151;
+    color: #fff;
+    border-color: #1f2937;
+}
+
+/* Adjective Pills - Selectable */
+.jmi-adjective-label {
+    display: inline-block;
+    cursor: pointer;
+}
+
+.jmi-adjective-checkbox {
+    display: none;
+}
+
+.jmi-adjective-pill {
+    display: inline-block;
+    padding: 0.5em 1em;
+    background: #fff;
+    border: 2px solid #e2e8f0;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.jmi-adjective-pill:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.jmi-adjective-checkbox:checked + .jmi-adjective-pill {
+    background: #1e40af;
+    color: #fff;
+    border-color: #1c358a;
+}
+
+/* Controls and Counter */
+.jmi-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2em;
+    padding: 1.5em;
+    background: #f1f5f9;
+    border-radius: 8px;
+}
+
+#jmi-counter, #jmi-peer-counter {
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.jmi-counter-valid {
+    color: #10b981;
+}
+
+.jmi-counter-invalid {
+    color: #ef4444;
+}
+
+/* Share Interface */
+.jmi-share-box {
+    display: flex;
+    gap: 10px;
+    margin: 1.5em 0;
+}
+
+#jmi-share-url {
+    flex: 1;
+    padding: 0.75em;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 0.9em;
+    background: #f8fafc;
+}
+
+.jmi-share-actions {
+    display: flex;
+    gap: 1em;
+    justify-content: center;
+    margin: 2em 0;
+}
+
+.jmi-progress-info {
+    background: #fef3c7;
+    padding: 1em;
+    border-radius: 8px;
+    border-left: 4px solid #f59e0b;
+    margin-top: 1.5em;
+}
+
+.jmi-progress-info p {
+    margin: 0;
+    color: #92400e;
+}
+
+/* Success Message */
+.jmi-success {
+    text-align: center;
+    padding: 3em 2em;
+    background: #d1fae5;
+    border-radius: 8px;
+    border: 2px solid #10b981;
+}
+
+.jmi-success h3 {
+    color: #065f46;
+    margin-top: 0;
+}
+
+.jmi-success p {
+    color: #047857;
+    font-size: 1.1em;
+}
+
+/* ===== JOHARI WINDOW VISUALIZATION ===== */
+
+.jmi-results-section {
+    background: #fff;
+    padding: 2em;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.jmi-results-intro {
+    text-align: center;
+    font-size: 1.1em;
+    color: #4a5568;
+    margin-bottom: 2em;
+}
+
+/* Johari Grid - 2x2 Layout */
+.jmi-johari-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5em;
+    margin-bottom: 3em;
+}
+
+.jmi-quadrant {
+    padding: 2em;
+    border-radius: 12px;
+    border: 3px solid;
+    min-height: 200px;
+    position: relative;
+    transition: transform 0.2s ease;
+}
+
+.jmi-quadrant:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+
+.jmi-quadrant h4 {
+    margin: 0 0 1em 0;
+    font-size: 1.2em;
+    font-weight: 700;
+}
+
+/* Quadrant-specific colors applied via inline styles */
+.jmi-open h4 { color: #10b981; }
+.jmi-blind h4 { color: #ef4444; }
+.jmi-hidden h4 { color: #f59e0b; }
+.jmi-unknown h4 { color: #6b7280; }
+
+/* Adjective Lists in Results */
+.jmi-adjective-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5em;
+}
+
+/* Results Adjective Pills (non-interactive) */
+.jmi-adjective-list .jmi-adjective-pill {
+    padding: 0.4em 0.8em;
+    font-size: 0.85em;
+    border-width: 2px;
+    background: rgba(255,255,255,0.8);
+    cursor: default;
+}
+
+.jmi-adjective-list .jmi-adjective-pill:hover {
+    transform: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.jmi-no-adjectives {
+    color: #9ca3af;
+    font-style: italic;
+    padding: 1em;
+    display: block;
+    text-align: center;
+    background: rgba(0,0,0,0.05);
+    border-radius: 8px;
+}
+
+/* Domain Summary Section */
+.jmi-domain-summary {
+    margin: 3em 0;
+    padding: 2em;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.jmi-domain-summary h4 {
+    margin-top: 0;
+    color: #1a202c;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 0.5em;
+}
+
+.jmi-domain-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5em;
+    margin-top: 1.5em;
+}
+
+.jmi-domain-card {
+    background: #fff;
+    padding: 1.5em;
+    border-radius: 8px;
+    border-left: 4px solid #e2e8f0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.jmi-domain-card h5 {
+    margin: 0 0 1em 0;
+    font-size: 1.1em;
+    color: #1a202c;
+}
+
+.jmi-domain-counts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    margin-bottom: 1em;
+}
+
+.jmi-count {
+    font-size: 0.9em;
+    padding: 0.25em 0.5em;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.jmi-count.jmi-open { background: #d1fae5; color: #065f46; }
+.jmi-count.jmi-blind { background: #fee2e2; color: #991b1b; }
+.jmi-count.jmi-hidden { background: #fef3c7; color: #92400e; }
+
+.jmi-domain-total {
+    font-weight: 600;
+    font-size: 1em;
+    color: #374151;
+    border-top: 1px solid #e5e7eb;
+    padding-top: 0.5em;
+}
+
+/* Action Buttons */
+.jmi-actions {
+    display: flex;
+    gap: 1em;
+    justify-content: center;
+    margin-top: 3em;
+    flex-wrap: wrap;
+}
+
+/* Login Required Interface */
+.jmi-login-actions {
+    display: flex;
+    gap: 1em;
+    justify-content: center;
+    margin-top: 2em;
+    flex-wrap: wrap;
+}
+
+.jmi-login-actions .mi-quiz-button {
+    padding: 0.75em 1.5em;
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.jmi-login-actions .mi-quiz-button:hover {
+    transform: translateY(-1px);
+    text-decoration: none;
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+
+@media (max-width: 768px) {
+    #jmi-container {
+        padding: 1em;
+    }
+    
+    .jmi-section {
+        padding: 1.5em;
+    }
+    
+    /* Stack adjectives vertically on mobile */
+    .jmi-adjectives-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    /* Mixed adjectives responsive */
+    .jmi-mixed-adjectives {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .jmi-adjective-pill {
+        text-align: center;
+        padding: 0.75em 1em;
+    }
+    
+    /* Stack Johari quadrants vertically on mobile */
+    .jmi-johari-grid {
+        grid-template-columns: 1fr;
+        gap: 1em;
+    }
+    
+    .jmi-quadrant {
+        padding: 1.5em;
+        min-height: 150px;
+    }
+    
+    /* Stack controls vertically */
+    .jmi-controls {
+        flex-direction: column;
+        gap: 1em;
+        text-align: center;
+    }
+    
+    /* Make share box responsive */
+    .jmi-share-box {
+        flex-direction: column;
+    }
+    
+    #jmi-share-url {
+        font-size: 0.8em;
+    }
+    
+    /* Stack action buttons on mobile */
+    .jmi-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .jmi-share-actions {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 480px) {
+    .jmi-section h3 {
+        font-size: 1.3em;
+    }
+    
+    .jmi-domain-section {
+        padding: 1em;
+    }
+    
+    .jmi-quadrant h4 {
+        font-size: 1em;
+    }
+    
+    .jmi-domain-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ===== ACCESSIBILITY ===== */
+
+/* Focus states */
+.jmi-adjective-checkbox:focus + .jmi-adjective-pill {
+    outline: 3px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .jmi-adjective-pill {
+        border-width: 3px;
+    }
+    
+    .jmi-quadrant {
+        border-width: 4px;
+    }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .jmi-adjective-pill,
+    .jmi-quadrant {
+        transition: none;
+    }
+    
+    .jmi-adjective-pill:hover,
+    .jmi-quadrant:hover {
+        transform: none;
+    }
+}
+
+/* Print styles */
+@media print {
+    .jmi-actions,
+    .jmi-share-actions,
+    .jmi-controls {
+        display: none;
+    }
+    
+    .jmi-section {
+        box-shadow: none;
+        border: 1px solid #ccc;
+    }
+    
+    .jmi-johari-grid {
+        break-inside: avoid;
+    }
+}

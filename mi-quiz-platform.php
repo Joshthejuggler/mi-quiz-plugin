@@ -56,6 +56,12 @@ require_once MC_QUIZ_PLATFORM_PATH . 'micro-coach-ai-lab.php';
 require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/mi-quiz/module.php';
 require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/cdt-quiz/module.php';
 require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/bartle-quiz/module.php';
+require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/johari-mi-quiz/module.php';
+
+// Load admin activation helper for Johari MI
+if (is_admin()) {
+    require_once MC_QUIZ_PLATFORM_PATH . 'admin-activate.php';
+}
 
 /**
  * The main function to initialize the entire quiz platform.
@@ -79,6 +85,7 @@ function mc_quiz_platform_init() {
     new MI_Quiz_Plugin_AI();
     new CDT_Quiz_Plugin();
     new Bartle_Quiz_Plugin();
+    new Johari_MI_Quiz_Module();
 }
 add_action('plugins_loaded', 'mc_quiz_platform_init');
 
@@ -95,6 +102,9 @@ function mc_quiz_platform_activate() {
     }
     if (method_exists('Bartle_Quiz_Plugin', 'activate')) {
         Bartle_Quiz_Plugin::activate();
+    }
+    if (method_exists('Johari_MI_Quiz_Module', 'activate')) {
+        Johari_MI_Quiz_Module::activate();
     }
 }
 register_activation_hook(__FILE__, 'mc_quiz_platform_activate');
@@ -116,6 +126,7 @@ function mc_force_render_quiz_shortcodes_in_elementor($widget_content, $widget) 
             'mi_quiz', 'mi-quiz',
             'cdt_quiz', 'cdt-quiz',
             'bartle_quiz', 'bartle-quiz',
+            'johari_mi_quiz', 'johari-mi-quiz',
         ];
         foreach ($shortcodes as $sc) {
             if (has_shortcode($content, $sc)) {

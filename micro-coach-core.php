@@ -29,6 +29,8 @@ class Micro_Coach_Core {
         
         // AJAX endpoints for funnel management
         add_action('wp_ajax_mc_save_funnel', [$this, 'ajax_save_funnel']);
+        add_action('wp_ajax_get_johari_status', [$this, 'ajax_get_johari_status']);
+        add_action('wp_ajax_nopriv_get_johari_status', [$this, 'ajax_get_johari_status']);
         
         // Add body class for enhanced flow (early hook)
         add_filter('body_class', [$this, 'add_enhanced_flow_body_class']);
@@ -36,6 +38,10 @@ class Micro_Coach_Core {
         // Clear dashboard cache when user meta is updated
         add_action('updated_user_meta', [$this, 'clear_user_dashboard_cache'], 10, 4);
         add_action('added_user_meta', [$this, 'clear_user_dashboard_cache'], 10, 4);
+        
+        // Ensure user session is available before shortcodes render
+        add_action('init', [$this, 'ensure_user_session'], 1);
+        add_action('wp', [$this, 'ensure_user_session'], 1);
     }
 
     /**
@@ -2164,7 +2170,32 @@ class Micro_Coach_Core {
             'style' => 'default'
         ], $atts, 'quiz_funnel');
         
+        // Try multiple methods to get user ID
         $user_id = get_current_user_id();
+        
+        // Alternative methods if get_current_user_id() returns 0
+        if ($user_id == 0) {
+            // Try wp_get_current_user()
+            $current_user = wp_get_current_user();
+            if ($current_user && $current_user->ID > 0) {
+                $user_id = $current_user->ID;
+            }
+            
+            // Try checking authentication cookies directly
+            if ($user_id == 0 && isset($_COOKIE['wordpress_logged_in_' . COOKIEHASH])) {
+                $user_id = wp_validate_auth_cookie($_COOKIE['wordpress_logged_in_' . COOKIEHASH], 'logged_in');
+                if (!$user_id) $user_id = 0;
+            }
+            
+            // As last resort, try to determine user from session data
+            if ($user_id == 0 && function_exists('wp_get_session_token')) {
+                global $wp_current_user;
+                if (isset($wp_current_user) && $wp_current_user->ID > 0) {
+                    $user_id = $wp_current_user->ID;
+                }
+            }
+        }
+        
         $config = MC_Funnel::get_config();
         $completion = MC_Funnel::get_completion_status($user_id);
         $unlock = MC_Funnel::get_unlock_status($user_id);
@@ -2173,14 +2204,15 @@ class Micro_Coach_Core {
         wp_enqueue_style('mc-funnel-css', plugins_url('assets/funnel.css', __FILE__), [], '1.0.0');
         wp_enqueue_script('mc-funnel-js', plugins_url('assets/funnel.js', __FILE__), ['jquery'], '1.0.0', true);
         
-        // Localize script data
+        // Localize script data - include fallback for client-side user detection
         wp_localize_script('mc-funnel-js', 'mc_funnel_data', [
             'config' => $config,
             'completion' => $completion,
             'unlock' => $unlock,
             'user_id' => $user_id,
             'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('mc_funnel')
+            'nonce' => wp_create_nonce('mc_funnel'),
+            'johari_ajax_url' => admin_url('admin-ajax.php?action=get_johari_status')
         ]);
         
         ob_start();
@@ -2192,11 +2224,22 @@ class Micro_Coach_Core {
                     $is_unlocked = $unlock[$step_slug] ?? false;
                     $title = $config['titles'][$step_slug] ?? ucfirst(str_replace('-', ' ', $step_slug));
                     
+                    // Get detailed status for Johari quiz
+                    $johari_status = null;
+                    if ($step_slug === 'johari-mi-quiz') {
+                        $johari_status = MC_Funnel::get_johari_status($user_id);
+                    }
+                    
                     $classes = ['mc-funnel-step'];
                     if ($is_completed) $classes[] = 'completed';
                     if (!$is_unlocked) $classes[] = 'locked';
                     if ($is_unlocked && !$is_completed) $classes[] = 'available';
                     if ($step_slug === 'placeholder') $classes[] = 'placeholder';
+                    
+                    // Add special classes for Johari status
+                    if ($johari_status) {
+                        $classes[] = 'johari-' . $johari_status['status'];
+                    }
                     
                     $step_url = $is_unlocked ? MC_Funnel::get_step_url($step_slug) : null;
                 ?>
@@ -2207,7 +2250,17 @@ class Micro_Coach_Core {
                         
                         <div class="mc-funnel-step-content">
                             <div class="mc-funnel-step-icon">
-                                <?php if ($is_completed): ?>
+                                <?php if ($johari_status): ?>
+                                    <?php if ($johari_status['status'] === 'completed'): ?>
+                                        <span class="checkmark">✓</span>
+                                    <?php elseif ($johari_status['status'] === 'waiting'): ?>
+                                        <span class="waiting">⏳</span>
+                                    <?php elseif ($johari_status['status'] === 'ready'): ?>
+                                        <span class="ready">🎯</span>
+                                    <?php else: ?>
+                                        <span class="number"><?php echo $index + 1; ?></span>
+                                    <?php endif; ?>
+                                <?php elseif ($is_completed): ?>
                                     <span class="checkmark">✓</span>
                                 <?php elseif (!$is_unlocked): ?>
                                     <span class="lock">🔒</span>
@@ -2221,7 +2274,9 @@ class Micro_Coach_Core {
                                 
                                 <?php if ($atts['show_description'] === 'true'): ?>
                                     <div class="mc-funnel-step-description">
-                                        <?php if ($step_slug === 'placeholder'): ?>
+                                        <?php if ($johari_status): ?>
+                                            <p><?php echo esc_html($johari_status['description']); ?></p>
+                                        <?php elseif ($step_slug === 'placeholder'): ?>
                                             <p><?php echo esc_html($config['placeholder']['description']); ?></p>
                                         <?php else: 
                                             $registered_quizzes = self::get_quizzes();
@@ -2236,7 +2291,11 @@ class Micro_Coach_Core {
                                 <?php endif; ?>
                                 
                                 <div class="mc-funnel-step-status">
-                                    <?php if ($is_completed): ?>
+                                    <?php if ($johari_status): ?>
+                                        <span class="status-badge <?php echo esc_attr($johari_status['status']); ?>">
+                                            <?php echo esc_html($johari_status['badge_text']); ?>
+                                        </span>
+                                    <?php elseif ($is_completed): ?>
                                         <span class="status-badge completed">Completed</span>
                                     <?php elseif ($is_unlocked): ?>
                                         <span class="status-badge available">Available</span>
@@ -2379,6 +2438,28 @@ class Micro_Coach_Core {
         } else {
             wp_send_json_error('Failed to save funnel configuration.');
         }
+    }
+    
+    /**
+     * AJAX endpoint to get current Johari status.
+     */
+    public function ajax_get_johari_status() {
+        if (!is_user_logged_in()) {
+            wp_send_json_error('Not logged in');
+        }
+        
+        $user_id = get_current_user_id();
+        
+        if (!class_exists('MC_Funnel')) {
+            wp_send_json_error('MC_Funnel class not available');
+        }
+        
+        $johari_status = MC_Funnel::get_johari_status($user_id);
+        
+        wp_send_json_success([
+            'user_id' => $user_id,
+            'johari_status' => $johari_status
+        ]);
     }
     
     /**
@@ -2532,6 +2613,16 @@ class Micro_Coach_Core {
         
         if (in_array($meta_key, $quiz_meta_keys, true)) {
             MC_Cache::clear_dashboard_cache($user_id);
+        }
+    }
+    
+    /**
+     * Ensure user session is properly initialized before shortcode rendering
+     */
+    public function ensure_user_session() {
+        // Force WordPress to initialize user session early
+        if (!did_action('wp_loaded')) {
+            wp_get_current_user();
         }
     }
 
