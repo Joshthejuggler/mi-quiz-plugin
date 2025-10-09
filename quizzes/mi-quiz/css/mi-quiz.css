@@ -6,15 +6,20 @@
   --mi-light-gray:#e5e7eb;
   --mi-medium-gray:#d1d5db;
   --mi-text-color:#374151;
-  /* New colors for each intelligence */
-  --mi-color-logical: #3b82f6;
-  --mi-color-linguistic: #14b8a6; /* Changed from red to teal */
-  --mi-color-spatial: #8b5cf6;
-  --mi-color-kinesthetic: #f97316;
-  --mi-color-musical: #ec4899;
-  --mi-color-interpersonal: #10b981;
-  --mi-color-intrapersonal: #6366f1;
-  --mi-color-naturalistic: #84cc16;
+  /* Enhanced colors for each intelligence - more harmonious palette */
+  --mi-color-logical: #2563eb;     /* Deep blue */
+  --mi-color-linguistic: #059669;  /* Emerald green */
+  --mi-color-spatial: #7c3aed;     /* Purple */
+  --mi-color-kinesthetic: #dc2626; /* Red */
+  --mi-color-musical: #c026d3;     /* Magenta */
+  --mi-color-interpersonal: #0891b2; /* Cyan */
+  --mi-color-intrapersonal: #4338ca; /* Indigo */
+  --mi-color-naturalistic: #16a34a;  /* Green */
+  /* Johari window quadrant colors - more professional and harmonious */
+  --johari-open: #10b981;      /* Emerald - positive, known strengths */
+  --johari-blind: #f59e0b;     /* Amber - caution, feedback needed */
+  --johari-hidden: #8b5cf6;    /* Purple - personal, introspective */
+  --johari-unknown: #6b7280;   /* Gray - neutral, unexplored */
 }
 .quiz-wrapper {
     max-width: 860px;

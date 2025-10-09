@@ -80,18 +80,6 @@
     color: #ffffff;
     border-color: #1f2937;
 }
-}
-
-.jmi-mixed-adjectives .jmi-adjective-pill:hover {
-    border-color: #4b5563;
-    background: #f9fafb;
-}
-
-.jmi-mixed-adjectives .jmi-adjective-checkbox:checked + .jmi-adjective-pill {
-    background: #374151;
-    color: #fff;
-    border-color: #1f2937;
-}
 
 /* Adjective Pills - Selectable */
 .jmi-adjective-label {
@@ -187,6 +175,58 @@
     color: #92400e;
 }
 
+/* Progress Display */
+.jmi-progress-display {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.jmi-progress-display h4 {
+    margin: 0 0 15px 0;
+    color: #374151;
+    font-size: 16px;
+}
+
+.jmi-progress-bar {
+    width: 100%;
+    height: 40px;
+    background: #e5e7eb;
+    border-radius: 20px;
+    position: relative;
+    margin: 15px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #d1d5db;
+    transition: all 0.3s ease;
+}
+
+.jmi-progress-fill {
+    font-weight: bold;
+    color: #374151;
+    font-size: 14px;
+    z-index: 2;
+    position: relative;
+}
+
+.jmi-progress-text {
+    margin: 10px 0 5px 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6b7280;
+    transition: color 0.3s ease;
+}
+
+.jmi-progress-note {
+    margin: 5px 0 0 0;
+    font-size: 12px;
+    color: #9ca3af;
+    font-style: italic;
+}
+
 /* Success Message */
 .jmi-success {
     text-align: center;
@@ -230,18 +270,46 @@
     margin-bottom: 3em;
 }
 
+/* Three-quadrant layout (without Unknown) */
+.jmi-johari-grid.jmi-three-quadrant {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 1.5em;
+    margin-bottom: 2em;
+}
+
+.jmi-johari-grid.jmi-three-quadrant .jmi-open {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.jmi-johari-grid.jmi-three-quadrant .jmi-blind {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.jmi-johari-grid.jmi-three-quadrant .jmi-hidden {
+    grid-column: 1 / 3;
+    grid-row: 2;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
 .jmi-quadrant {
     padding: 2em;
     border-radius: 12px;
-    border: 3px solid;
+    border: none;
     min-height: 200px;
     position: relative;
     transition: transform 0.2s ease;
+    background: white;
+    color: #2d3748;
+    font-weight: 500;
 }
 
 .jmi-quadrant:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
 }
 
 .jmi-quadrant h4 {
@@ -250,11 +318,28 @@
     font-weight: 700;
 }
 
-/* Quadrant-specific colors applied via inline styles */
-.jmi-open h4 { color: #10b981; }
-.jmi-blind h4 { color: #ef4444; }
-.jmi-hidden h4 { color: #f59e0b; }
-.jmi-unknown h4 { color: #6b7280; }
+/* Quadrant-specific colors using solid backgrounds */
+.jmi-open { 
+    border: none !important;
+    background: #f0fdf4 !important;
+}
+.jmi-blind { 
+    border: none !important;
+    background: #fefce8 !important;
+}
+.jmi-hidden { 
+    border: none !important;
+    background: #f5f3ff !important;
+}
+.jmi-unknown { 
+    border: none !important;
+    background: #f8fafc !important;
+}
+
+.jmi-open h4 { color: #15803d; font-weight: 700; font-size: 1.2em; }
+.jmi-blind h4 { color: #b45309; font-weight: 700; font-size: 1.2em; }
+.jmi-hidden h4 { color: #6d28d9; font-weight: 700; font-size: 1.2em; }
+.jmi-unknown h4 { color: #4b5563; font-weight: 700; font-size: 1.2em; }
 
 /* Adjective Lists in Results */
 .jmi-adjective-list {
@@ -264,17 +349,50 @@
 }
 
 /* Results Adjective Pills (non-interactive) */
-.jmi-adjective-list .jmi-adjective-pill {
-    padding: 0.4em 0.8em;
+/* Base adjective pill styles */
+.jmi-results-section .jmi-adjective-list .jmi-adjective-pill {
+    padding: 0.45em 0.9em;
     font-size: 0.85em;
-    border-width: 2px;
-    background: rgba(255,255,255,0.8);
+    background: white !important;
+    border-radius: 6px;
     cursor: default;
+    color: #374151;
+    font-weight: 500;
+    box-shadow: none;
 }
 
+/* Specific quadrant styles - high specificity */
+.jmi-results-section .jmi-quadrant.jmi-blind .jmi-adjective-list .jmi-adjective-pill {
+    border: 1px solid #f59e0b !important;
+}
+
+.jmi-results-section .jmi-quadrant.jmi-hidden .jmi-adjective-list .jmi-adjective-pill {
+    border: 1px solid #8b5cf6 !important;
+}
+
+.jmi-results-section .jmi-quadrant.jmi-open .jmi-adjective-list .jmi-adjective-pill {
+    border: 1px solid #10b981 !important;
+}
+
+/* Quadrant-specific pill borders */
+.jmi-blind .jmi-adjective-list .jmi-adjective-pill {
+    border: 1px solid #f59e0b;
+    background: white;
+}
+
+.jmi-hidden .jmi-adjective-list .jmi-adjective-pill {
+    border: 1px solid #8b5cf6;
+    background: white;
+}
+
+.jmi-open .jmi-adjective-list .jmi-adjective-pill {
+    border: 1px solid #10b981;
+    background: white;
+}
+
+/* Hover state */
 .jmi-adjective-list .jmi-adjective-pill:hover {
-    transform: none;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background: #f8fafc;
 }
 
 .jmi-no-adjectives {
@@ -337,9 +455,9 @@
     display: inline-block;
 }
 
-.jmi-count.jmi-open { background: #d1fae5; color: #065f46; }
-.jmi-count.jmi-blind { background: #fee2e2; color: #991b1b; }
-.jmi-count.jmi-hidden { background: #fef3c7; color: #92400e; }
+.jmi-count.jmi-open { background: rgba(16, 185, 129, 0.15); color: #064e3b; border: 1px solid rgba(16, 185, 129, 0.5); font-weight: 600; }
+.jmi-count.jmi-blind { background: rgba(245, 158, 11, 0.15); color: #78350f; border: 1px solid rgba(245, 158, 11, 0.5); font-weight: 600; }
+.jmi-count.jmi-hidden { background: rgba(139, 92, 246, 0.15); color: #581c87; border: 1px solid rgba(139, 92, 246, 0.5); font-weight: 600; }
 
 .jmi-domain-total {
     font-weight: 600;
@@ -402,6 +520,7 @@
         flex-direction: column;
         align-items: stretch;
     }
+    }
     
     .jmi-adjective-pill {
         text-align: center;
@@ -412,6 +531,20 @@
     .jmi-johari-grid {
         grid-template-columns: 1fr;
         gap: 1em;
+    }
+    
+    /* Three-quadrant mobile layout */
+    .jmi-johari-grid.jmi-three-quadrant {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
+    }
+    
+    .jmi-johari-grid.jmi-three-quadrant .jmi-open,
+    .jmi-johari-grid.jmi-three-quadrant .jmi-blind,
+    .jmi-johari-grid.jmi-three-quadrant .jmi-hidden {
+        grid-column: 1;
+        max-width: none;
+        margin: 0;
     }
     
     .jmi-quadrant {
@@ -496,6 +629,402 @@
     }
 }
 
+/* ===== PEER ASSESSMENT LOGIN SCREEN STYLES ===== */
+
+/* Main container for peer login flow */
+.jmi-peer-login-container {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 2em;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    border: 1px solid #e5e7eb;
+}
+
+/* Header section with icon and title */
+.jmi-peer-login-header {
+    text-align: center;
+    margin-bottom: 2.5em;
+}
+
+.jmi-peer-icon {
+    margin-bottom: 1.5em;
+    display: flex;
+    justify-content: center;
+}
+
+.jmi-johari-icon {
+    drop-shadow: 0 4px 8px rgba(0,0,0,0.12);
+    transition: transform 0.3s ease;
+}
+
+.jmi-johari-icon:hover {
+    transform: scale(1.05);
+}
+
+.jmi-peer-login-title {
+    font-size: 1.8em;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0 0 0.75em 0;
+    line-height: 1.2;
+}
+
+.jmi-peer-login-subtitle {
+    font-size: 1.1em;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Value proposition grid */
+.jmi-peer-value-section {
+    margin-bottom: 2.5em;
+}
+
+.jmi-value-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1.5em;
+    margin-top: 1.5em;
+}
+
+.jmi-value-item {
+    text-align: center;
+    padding: 1.5em 1em;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 2px solid #e5e7eb;
+    transition: all 0.3s ease;
+}
+
+.jmi-value-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    border-color: #d1d5db;
+}
+
+.jmi-value-icon {
+    font-size: 2em;
+    margin-bottom: 0.5em;
+    display: block;
+}
+
+.jmi-value-item h4 {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: #374151;
+    margin: 0 0 0.5em 0;
+}
+
+.jmi-value-item p {
+    font-size: 0.9em;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Account requirement explanation */
+.jmi-account-requirement {
+    margin-bottom: 2em;
+    padding: 1.5em;
+    background: #fef3c7;
+    border-radius: 8px;
+    border-left: 4px solid #f59e0b;
+}
+
+.jmi-account-requirement h3 {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: #92400e;
+    margin: 0 0 1em 0;
+}
+
+.jmi-account-reason {
+    color: #78350f;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* Expandable sections */
+.jmi-process-section,
+.jmi-privacy-section {
+    margin-bottom: 1.5em;
+}
+
+.jmi-expandable {
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.jmi-expandable-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 1em 1.5em;
+    background: #f9fafb;
+    border: none;
+    font-size: 1em;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    list-style: none;
+}
+
+.jmi-expandable-trigger:hover {
+    background: #f3f4f6;
+}
+
+.jmi-expandable-trigger::-webkit-details-marker {
+    display: none;
+}
+
+.jmi-expandable-trigger span {
+    font-weight: 500;
+}
+
+.jmi-chevron {
+    width: 16px;
+    height: 16px;
+    fill: #6b7280;
+    transition: transform 0.3s ease;
+}
+
+.jmi-expandable[open] .jmi-chevron {
+    transform: rotate(90deg);
+}
+
+.jmi-expandable-content {
+    padding: 1.5em;
+    background: #ffffff;
+    animation: slideDown 0.3s ease-in-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        max-height: 0;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+    to {
+        opacity: 1;
+        max-height: 500px;
+        padding-top: 1.5em;
+        padding-bottom: 1.5em;
+    }
+}
+
+.jmi-process-steps {
+    margin: 0;
+    padding-left: 1.5em;
+    line-height: 1.6;
+}
+
+.jmi-process-steps li {
+    margin-bottom: 0.75em;
+    color: #374151;
+}
+
+.jmi-privacy-points {
+    margin: 0;
+    padding-left: 1.5em;
+    line-height: 1.6;
+}
+
+.jmi-privacy-points li {
+    margin-bottom: 0.5em;
+    color: #374151;
+}
+
+/* Call-to-action section */
+.jmi-cta-section {
+    text-align: center;
+    margin-bottom: 2em;
+}
+
+.jmi-cta-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+    margin-bottom: 1em;
+}
+
+.jmi-cta-register,
+.jmi-cta-login {
+    padding: 1em 2em !important;
+    font-size: 1.1em !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    text-decoration: none !important;
+    transition: all 0.3s ease !important;
+    border: 2px solid transparent !important;
+}
+
+.jmi-cta-register {
+    background: #3b82f6 !important;
+    color: #ffffff !important;
+}
+
+.jmi-cta-register:hover {
+    background: #2563eb !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.jmi-cta-login {
+    background: transparent !important;
+    color: #374151 !important;
+    border-color: #d1d5db !important;
+}
+
+.jmi-cta-login:hover {
+    background: #f3f4f6 !important;
+    border-color: #9ca3af !important;
+    transform: translateY(-2px);
+}
+
+.jmi-cta-note {
+    font-size: 0.9em;
+    color: #6b7280;
+    margin: 0;
+    font-style: italic;
+}
+
+/* Social proof */
+.jmi-social-proof {
+    text-align: center;
+    padding: 1.5em;
+    background: #f0fdf4;
+    border-radius: 8px;
+    border: 1px solid #bbf7d0;
+    margin-bottom: 1.5em;
+}
+
+.jmi-proof-text {
+    margin: 0;
+    color: #166534;
+    font-size: 0.95em;
+}
+
+.jmi-proof-stat {
+    font-weight: 700;
+    color: #15803d;
+}
+
+/* Debug section (development only) */
+.jmi-debug {
+    margin-top: 2em;
+    padding: 1em;
+    background: #f8f9fa;
+    border-radius: 8px;
+    font-size: 0.8em;
+    color: #666;
+    border: 1px solid #e9ecef;
+}
+
+.jmi-debug details summary {
+    cursor: pointer;
+    font-weight: bold;
+    padding: 0.5em 0;
+}
+
+.jmi-debug details[open] summary {
+    margin-bottom: 1em;
+    border-bottom: 1px solid #dee2e6;
+    padding-bottom: 0.5em;
+}
+
+/* ===== RESPONSIVE DESIGN FOR PEER LOGIN ===== */
+
+@media (min-width: 640px) {
+    .jmi-peer-login-container {
+        padding: 3em;
+    }
+    
+    .jmi-cta-buttons {
+        flex-direction: row;
+        justify-content: center;
+    }
+    
+    .jmi-value-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 639px) {
+    .jmi-peer-login-container {
+        margin: 1em;
+        padding: 1.5em;
+    }
+    
+    .jmi-peer-login-title {
+        font-size: 1.5em;
+    }
+    
+    .jmi-peer-login-subtitle {
+        font-size: 1em;
+    }
+    
+    .jmi-value-grid {
+        grid-template-columns: 1fr;
+        gap: 1em;
+    }
+    
+    .jmi-value-item {
+        padding: 1em;
+    }
+    
+    .jmi-cta-register,
+    .jmi-cta-login {
+        padding: 0.875em 1.5em !important;
+        font-size: 1em !important;
+    }
+    
+    .jmi-expandable-trigger {
+        padding: 0.875em 1em;
+        font-size: 0.95em;
+    }
+    
+    .jmi-expandable-content {
+        padding: 1em;
+    }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+    .jmi-johari-icon,
+    .jmi-value-item,
+    .jmi-cta-register,
+    .jmi-cta-login,
+    .jmi-chevron {
+        transition: none;
+    }
+    
+    .jmi-expandable-content {
+        animation: none;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .jmi-peer-login-container {
+        border: 2px solid;
+    }
+    
+    .jmi-value-item {
+        border-width: 2px;
+    }
+    
+    .jmi-expandable {
+        border-width: 2px;
+    }
+}
+
 /* Print styles */
 @media print {
     .jmi-actions,
@@ -511,5 +1040,602 @@
     
     .jmi-johari-grid {
         break-inside: avoid;
+    }
+    
+    .jmi-peer-login-container {
+        box-shadow: none;
+        border: 1px solid #ccc;
+    }
+    
+    .jmi-debug {
+        display: none;
+    }
+}
+
+/* ===== PEER REGISTRATION MODAL STYLES ===== */
+
+/* Modal overlay */
+.jmi-registration-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10001;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Modal content */
+.jmi-registration-modal-content {
+    background: white;
+    border-radius: 12px;
+    padding: 0;
+    max-width: 480px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    animation: slideUp 0.3s ease;
+    position: relative;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Modal header */
+.jmi-registration-header {
+    padding: 2em 2em 1em 2em;
+    text-align: center;
+    border-bottom: 1px solid #e5e7eb;
+    position: relative;
+}
+
+.jmi-registration-header h3 {
+    font-size: 1.5em;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0 0 0.5em 0;
+}
+
+.jmi-registration-header p {
+    color: #6b7280;
+    margin: 0;
+    font-size: 1em;
+}
+
+.jmi-modal-close {
+    position: absolute;
+    top: 1.5em;
+    right: 1.5em;
+    background: none;
+    border: none;
+    font-size: 1.5em;
+    color: #6b7280;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.jmi-modal-close:hover {
+    background: #f3f4f6;
+    color: #374151;
+}
+
+/* Form styles */
+#jmi-registration-form {
+    padding: 1.5em 2em 2em 2em;
+}
+
+.jmi-form-group {
+    margin-bottom: 1.5em;
+}
+
+.jmi-form-group label {
+    display: block;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.5em;
+    font-size: 0.9em;
+}
+
+.jmi-form-group input {
+    width: 100%;
+    padding: 0.875em 1em;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 1em;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    box-sizing: border-box;
+}
+
+.jmi-form-group input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.jmi-form-group input::placeholder {
+    color: #9ca3af;
+}
+
+.jmi-form-actions {
+    display: flex;
+    gap: 1em;
+    margin-bottom: 1em;
+}
+
+.jmi-form-actions .mi-quiz-button {
+    flex: 1;
+    padding: 0.875em 1.5em !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+    border: 2px solid transparent !important;
+    cursor: pointer;
+}
+
+.jmi-form-actions .mi-quiz-button-primary {
+    background: #3b82f6 !important;
+    color: white !important;
+}
+
+.jmi-form-actions .mi-quiz-button-primary:hover {
+    background: #2563eb !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.jmi-form-actions .mi-quiz-button-primary:disabled {
+    background: #9ca3af !important;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.jmi-form-actions .mi-quiz-button-secondary {
+    background: transparent !important;
+    color: #6b7280 !important;
+    border-color: #d1d5db !important;
+}
+
+.jmi-form-actions .mi-quiz-button-secondary:hover {
+    background: #f9fafb !important;
+    color: #374151 !important;
+    border-color: #9ca3af !important;
+    transform: translateY(-1px);
+}
+
+.jmi-form-note {
+    margin: 0;
+    text-align: center;
+    color: #6b7280;
+}
+
+.jmi-form-note small {
+    font-size: 0.8em;
+    line-height: 1.4;
+}
+
+/* Mobile responsiveness for modal */
+@media (max-width: 639px) {
+    .jmi-registration-modal-content {
+        width: 95%;
+        margin: 1em;
+    }
+    
+    .jmi-registration-header {
+        padding: 1.5em 1.5em 1em 1.5em;
+    }
+    
+    .jmi-registration-header h3 {
+        font-size: 1.3em;
+    }
+    
+    #jmi-registration-form {
+        padding: 1em 1.5em 1.5em 1.5em;
+    }
+    
+    .jmi-form-actions {
+        flex-direction: column;
+    }
+    
+    .jmi-modal-close {
+        top: 1em;
+        right: 1em;
+    }
+}
+
+/* Accessibility improvements for modal */
+@media (prefers-reduced-motion: reduce) {
+    .jmi-registration-modal {
+        animation: none;
+    }
+    
+    .jmi-registration-modal-content {
+        animation: none;
+    }
+}
+
+/* High contrast mode support for modal */
+@media (prefers-contrast: high) {
+    .jmi-registration-modal-content {
+        border: 2px solid;
+    }
+    
+    .jmi-form-group input {
+        border-width: 2px;
+    }
+}
+
+/* ===== ENHANCED MI DOMAIN DISPLAY ===== */
+
+/* Category sections within domain cards */
+.jmi-category-section {
+    margin-bottom: 1em;
+    padding: 0.8em;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 6px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.jmi-category-header {
+    margin-bottom: 0.5em;
+}
+
+.jmi-category-label {
+    font-weight: bold;
+    font-size: 0.9em;
+    padding: 0.3em 0.6em;
+    border-radius: 12px;
+    display: inline-block;
+}
+
+.jmi-category-label.jmi-open {
+    background: rgba(16, 185, 129, 0.2);
+    color: #064e3b;
+    border: 1px solid rgba(16, 185, 129, 0.6);
+    font-weight: 700;
+}
+
+.jmi-category-label.jmi-blind {
+    background: rgba(245, 158, 11, 0.2);
+    color: #78350f;
+    border: 1px solid rgba(245, 158, 11, 0.6);
+    font-weight: 700;
+}
+
+.jmi-category-label.jmi-hidden {
+    background: rgba(139, 92, 246, 0.2);
+    color: #581c87;
+    border: 1px solid rgba(139, 92, 246, 0.6);
+    font-weight: 700;
+}
+
+/* Mini adjective displays */
+.jmi-adjectives-mini {
+    margin: 0.5em 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3em;
+}
+
+.jmi-adjective-mini {
+    padding: 0.2em 0.5em;
+    border-radius: 10px;
+    font-size: 0.8em;
+    font-weight: 500;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    cursor: default;
+}
+
+.jmi-adjective-mini.jmi-open {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.5);
+    color: #064e3b;
+    font-weight: 600;
+}
+
+.jmi-adjective-mini.jmi-blind {
+    background: rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.5);
+    color: #78350f;
+    font-weight: 600;
+}
+
+.jmi-adjective-mini.jmi-hidden {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: rgba(139, 92, 246, 0.5);
+    color: #581c87;
+    font-weight: 600;
+}
+
+.jmi-adjective-mini:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Insight text */
+.jmi-insight {
+    font-style: italic;
+    font-size: 0.85em;
+    color: #6b7280;
+    margin: 0.5em 0 0;
+    line-height: 1.3;
+}
+
+/* Enhanced domain card header */
+.jmi-domain-header {
+    margin-bottom: 1em;
+}
+
+/* Domain breakdown section */
+.jmi-domain-breakdown {
+    margin: 1em 0;
+}
+
+/* Domain summary line */
+.jmi-domain-summary-line {
+    margin-top: 1em;
+    padding-top: 0.8em;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+/* Enhanced domain card styling */
+.jmi-domain-card {
+    border-left: 4px solid;
+    padding: 1.2em;
+    margin-bottom: 1em;
+    border-radius: 0 8px 8px 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    background: #fff;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    border-right: 1px solid rgba(0, 0, 0, 0.05);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.jmi-domain-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Overall insights section */
+.jmi-overall-insights {
+    animation: fadeInUp 0.6s ease;
+    border-radius: 8px;
+    border: 1px solid;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive adjustments for enhanced MI display */
+@media (max-width: 768px) {
+    .jmi-adjectives-mini {
+        gap: 0.2em;
+    }
+    
+    .jmi-adjective-mini {
+        font-size: 0.75em;
+        padding: 0.15em 0.4em;
+    }
+    
+    .jmi-category-section {
+        padding: 0.6em;
+    }
+    
+    .jmi-domain-card {
+        padding: 1em;
+    }
+}
+
+/* Enhanced styling for Top 3 MI Strengths cards */
+.jmi-top3-cards {
+    display: flex;
+    gap: 1em;
+    margin: 1.5em 0;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.jmi-strength-card-enhanced {
+    flex: 1;
+    min-width: 280px;
+    max-width: 320px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border: 2px solid;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    overflow: hidden;
+}
+
+.jmi-strength-card-enhanced:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.jmi-strength-card-enhanced.bodily-kinesthetic {
+    border-color: var(--mi-color-kinesthetic);
+}
+
+.jmi-strength-card-enhanced.interpersonal {
+    border-color: var(--mi-color-interpersonal);
+}
+
+.jmi-strength-card-enhanced.naturalistic {
+    border-color: var(--mi-color-naturalistic);
+}
+
+/* Domain-specific styling for MI domain cards */
+.jmi-domain-logical-mathematical {
+    border-left-color: var(--mi-color-logical) !important;
+    border-left-width: 4px !important;
+    background: rgba(37, 99, 235, 0.04) !important;
+}
+
+.jmi-domain-linguistic {
+    border-left-color: var(--mi-color-linguistic) !important;
+    border-left-width: 4px !important;
+    background: rgba(5, 150, 105, 0.04) !important;
+}
+
+.jmi-domain-spatial-visual {
+    border-left-color: var(--mi-color-spatial) !important;
+    border-left-width: 4px !important;
+    background: rgba(124, 58, 237, 0.04) !important;
+}
+
+.jmi-domain-bodily-kinesthetic {
+    border-left-color: var(--mi-color-kinesthetic) !important;
+    border-left-width: 4px !important;
+    background: rgba(220, 38, 38, 0.04) !important;
+}
+
+.jmi-domain-musical-rhythmic {
+    border-left-color: var(--mi-color-musical) !important;
+    border-left-width: 4px !important;
+    background: rgba(192, 38, 211, 0.04) !important;
+}
+
+.jmi-domain-interpersonal {
+    border-left-color: var(--mi-color-interpersonal) !important;
+    border-left-width: 4px !important;
+    background: rgba(8, 145, 178, 0.04) !important;
+}
+
+.jmi-domain-intrapersonal {
+    border-left-color: var(--mi-color-intrapersonal) !important;
+    border-left-width: 4px !important;
+    background: rgba(67, 56, 202, 0.04) !important;
+}
+
+.jmi-domain-naturalistic {
+    border-left-color: var(--mi-color-naturalistic) !important;
+    border-left-width: 4px !important;
+    background: rgba(22, 163, 74, 0.04) !important;
+}
+
+/* Domain title colors - enhanced for better contrast */
+.jmi-domain-logical-mathematical .jmi-domain-title { color: var(--mi-color-logical); font-weight: 700; font-size: 1.1em; }
+.jmi-domain-linguistic .jmi-domain-title { color: var(--mi-color-linguistic); font-weight: 700; font-size: 1.1em; }
+.jmi-domain-spatial-visual .jmi-domain-title { color: var(--mi-color-spatial); font-weight: 700; font-size: 1.1em; }
+.jmi-domain-bodily-kinesthetic .jmi-domain-title { color: var(--mi-color-kinesthetic); font-weight: 700; font-size: 1.1em; }
+.jmi-domain-musical-rhythmic .jmi-domain-title { color: var(--mi-color-musical); font-weight: 700; font-size: 1.1em; }
+.jmi-domain-interpersonal .jmi-domain-title { color: var(--mi-color-interpersonal); font-weight: 700; font-size: 1.1em; }
+.jmi-domain-intrapersonal .jmi-domain-title { color: var(--mi-color-intrapersonal); font-weight: 700; font-size: 1.1em; }
+.jmi-domain-naturalistic .jmi-domain-title { color: var(--mi-color-naturalistic); font-weight: 700; font-size: 1.1em; }
+
+/* Domain description styling */
+.jmi-domain-description {
+    font-size: 0.85em;
+    color: #4a5568;
+    margin: 0 0 1em;
+    line-height: 1.4;
+    font-weight: 500;
+}
+
+/* Domain total styling */
+.jmi-domain-total {
+    font-size: 0.9em;
+    color: #374151;
+}
+
+.jmi-strength-header {
+    padding: 1.2em;
+    text-align: center;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.jmi-strength-title {
+    margin: 0 0 0.5em 0;
+    font-size: 1.2em;
+    font-weight: 600;
+}
+
+.jmi-strength-score {
+    font-size: 1.5em;
+    font-weight: 700;
+    margin: 0.25em 0;
+}
+
+.jmi-strength-activity {
+    font-size: 0.9em;
+    margin: 0;
+    padding: 0.5em 0;
+}
+
+.jmi-peer-validation {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    font-size: 0.8em;
+    font-weight: 600;
+    padding: 0.25em 0.75em;
+    border-radius: 20px;
+    margin-top: 0.5em;
+}
+
+.jmi-peer-validation.peer-validated {
+    background: rgba(34, 197, 94, 0.1);
+    color: #166534;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.jmi-peer-validation.hidden-strength {
+    background: rgba(245, 158, 11, 0.1);
+    color: #92400e;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .jmi-adjective-mini,
+    .jmi-domain-card,
+    .jmi-overall-insights,
+    .jmi-strength-card-enhanced {
+        transition: none;
+        animation: none;
+    }
+    
+    .jmi-adjective-mini:hover,
+    .jmi-domain-card:hover,
+    .jmi-strength-card-enhanced:hover {
+        transform: none;
     }
 }

@@ -26,9 +26,16 @@
             this.bindEvents();
             this.updateStepStates();
             this.setupAccessibility();
+            this.clearNavigatingStates(); // Clean up any stuck loading states
             
             // Listen for quiz completion events to refresh
             $(document).on('mc-quiz-completed', this.handleQuizCompletion.bind(this));
+            
+            // Handle browser back/forward navigation
+            $(window).on('pageshow', this.handlePageShow.bind(this));
+            
+            // Clean up navigation states when user navigates away
+            $(window).on('beforeunload', this.clearNavigatingStates.bind(this));
         },
         
         bindEvents: function() {
@@ -60,8 +67,8 @@
             const slug = $step.data('slug');
             const url = $step.data('url');
             
-            // Check if step is available
-            if (!$step.hasClass('available')) {
+            // Check if step is available or completed
+            if (!$step.hasClass('available') && !$step.hasClass('completed')) {
                 this.showLockedMessage($step);
                 return;
             }
@@ -73,8 +80,16 @@
                 return;
             }
             
-            // Add loading state
+            // Add loading state with timeout backup
             $step.addClass('navigating');
+            
+            // Clear loading state after a reasonable timeout (in case navigation fails)
+            const loadingTimeout = setTimeout(() => {
+                $step.removeClass('navigating');
+            }, 5000); // 5 seconds
+            
+            // Store timeout ID so it can be cleared if needed
+            $step.data('loading-timeout', loadingTimeout);
             
             // Navigate to the quiz
             window.location.href = url;
@@ -229,12 +244,14 @@
                 const $step = $(this);
                 const slug = $step.data('slug');
                 const isUnlocked = $step.hasClass('available');
+                const isCompleted = $step.hasClass('completed');
                 
-                // Make focusable if available
-                if (isUnlocked) {
+                // Make focusable if available or completed
+                if (isUnlocked || isCompleted) {
                     $step.attr('tabindex', '0');
                     $step.attr('role', 'button');
-                    $step.attr('aria-label', `Start ${$step.find('.mc-funnel-step-title').text()}`);
+                    const actionText = isCompleted ? 'View results for' : 'Start';
+                    $step.attr('aria-label', `${actionText} ${$step.find('.mc-funnel-step-title').text()}`);
                 } else {
                     $step.attr('tabindex', '-1');
                     $step.attr('aria-disabled', 'true');
@@ -321,6 +338,38 @@
             const $description = $step.find('.mc-funnel-step-description p');
             if ($description.length) {
                 $description.text(status.description);
+            }
+        },
+        
+        clearNavigatingStates: function() {
+            // Remove any stuck 'navigating' classes that may persist from browser navigation
+            $('.mc-funnel-step.navigating').each(function() {
+                const $step = $(this);
+                
+                // Clear any pending loading timeout
+                const timeoutId = $step.data('loading-timeout');
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    $step.removeData('loading-timeout');
+                }
+                
+                // Remove the navigating class
+                $step.removeClass('navigating');
+            });
+        },
+        
+        handlePageShow: function(event) {
+            // This event fires when the page is shown, including from browser cache (back/forward)
+            // Clean up any stuck loading states
+            this.clearNavigatingStates();
+            
+            // If the page was loaded from cache, we may need to refresh states
+            if (event.originalEvent && event.originalEvent.persisted) {
+                // Page was loaded from cache, refresh the funnel state
+                setTimeout(() => {
+                    this.clearNavigatingStates();
+                    this.setupAccessibility();
+                }, 100);
             }
         }
     };
