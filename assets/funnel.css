@@ -5,6 +5,20 @@
     padding: 0 1rem;
 }
 
+/* Welcome (sosd) overrides — make steps compact, card-like, centered */
+.sosd-wrap .mc-funnel-container { max-width: 100%; margin: 0; padding: 0; }
+.sosd-wrap .mc-funnel-step { background: var(--card); border:1px solid var(--line); border-radius:12px; box-shadow:0 1px 0 rgba(20,30,70,.02); }
+.sosd-wrap .mc-funnel-step.available { border-color: #cfd8ff; background:#ffffff; }
+.sosd-wrap .mc-funnel-step.completed { border-color:#b7f0cf; background:#ffffff; }
+.sosd-wrap .mc-funnel-step.locked { background:#ffffff; border-color: var(--line); filter:none; }
+.sosd-wrap .mc-funnel-step-content { padding:16px 18px; gap:12px; }
+.sosd-wrap .mc-funnel-step-icon { width:32px; height:32px; font-size:.9rem; }
+.sosd-wrap .mc-funnel-step-title { font-size:16px; line-height:24px; margin:0 0 2px; }
+.sosd-wrap .mc-funnel-step-description p { font-size:14px; line-height:20px; }
+.sosd-wrap .status-badge { font-size:12px; padding:4px 8px; }
+/* Hide status chips (Available/Locked/etc.) for logged-out welcome */
+.sosd-wrap .status-badge { display: none !important; }
+
 .mc-funnel {
     display: flex;
     flex-direction: column;
@@ -62,10 +76,10 @@
 }
 
 .mc-funnel-step.locked {
-    background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+    background: linear-gradient(135deg, #f8fafc 0%, #e5e7eb 100%);
     border-color: #cbd5e1;
-    opacity: 0.6;
     cursor: not-allowed;
+    filter: grayscale(0.15);
 }
 
 .mc-funnel-step.locked:before {
@@ -150,9 +164,7 @@
     line-height: 1.3;
 }
 
-.mc-funnel-step.locked .mc-funnel-step-title {
-    color: #64748b;
-}
+.mc-funnel-step.locked .mc-funnel-step-title { color: #475569; }
 
 .mc-funnel-step-description {
     margin: 0.5rem 0;
@@ -165,9 +177,7 @@
     line-height: 1.4;
 }
 
-.mc-funnel-step.locked .mc-funnel-step-description p {
-    color: #94a3b8;
-}
+.mc-funnel-step.locked .mc-funnel-step-description p { color: #6b7280; }
 
 .mc-funnel-step-status {
     margin-top: 0.75rem;

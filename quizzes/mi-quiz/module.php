@@ -314,13 +314,12 @@ class MI_Quiz_Plugin_AI {
             $key = get_password_reset_key($user);
             $reset_url = network_site_url("wp-login.php?action=rp&key=$key&login=" . rawurlencode($user->user_login), 'login');
 
-            $branding_html = '<div style="text-align:center; padding: 20px 0; border-bottom: 1px solid #ddd;">
-                <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
-                    <tbody><tr>
-                        <td style="vertical-align:middle;"><img src="http://mi-test-site.local/wp-content/uploads/2025/09/SOSD-Logo.jpeg" alt="Skill of Self-Discovery Logo" style="height: 45px; width: auto; border:0;" height="45"></td>
-                        <td style="vertical-align:middle; padding-left:15px;"><span style="font-size: 1.3em; font-weight: 600; color: #1a202c; line-height: 1.2;">Skill of Self-Discovery</span></td>
-                    </tr></tbody>
-                </table></div>';
+            $branding_logo = MC_Helpers::logo_url();
+            $branding_html = '<div style="text-align:center; padding: 20px 0; border-bottom: 1px solid #ddd;">'
+                . '<table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;"><tbody><tr>'
+                . '<td style="vertical-align:middle;">' . ($branding_logo ? '<img src="' . esc_url($branding_logo) . '" alt="Skill of Self-Discovery Logo" style="height: 45px; width: auto; border:0;" height="45">' : '') . '</td>'
+                . '<td style="vertical-align:middle; padding-left:15px;"><span style="font-size: 1.3em; font-weight: 600; color: #1a202c; line-height: 1.2;">Skill of Self-Discovery</span></td>'
+                . '</tr></tbody></table></div>';
 
             // Build a more helpful email body for the user.
             $user_email_body = '<!DOCTYPE html><html><body style="font-family: sans-serif; color: #333; background-color: #f4f4f4; padding: 20px;">';
@@ -413,6 +412,7 @@ class MI_Quiz_Plugin_AI {
         $cdt_quiz_url = $this->_find_page_by_shortcode('cdt_quiz');
 
         $user_data = null;
+        $user_age_group = null;
         if (is_user_logged_in()) {
             $user = wp_get_current_user();
             $saved_results = get_user_meta($user->ID, 'miq_quiz_results', true);
@@ -423,7 +423,43 @@ class MI_Quiz_Plugin_AI {
                 'lastName'     => $user->last_name,
                 'savedResults' => is_array($saved_results) && !empty($saved_results) ? $saved_results : null,
             ];
+            if (class_exists('MC_User_Profile')) {
+                $user_age_group = MC_User_Profile::get_user_age_group($user->ID);
+            }
         }
+
+        // Determine the next step URL/title based on funnel completion
+        $next_step_url = '';
+        $next_step_title = '';
+        if (is_user_logged_in()) {
+            $uid = get_current_user_id();
+            if (class_exists('MC_Funnel')) {
+                $config = MC_Funnel::get_config();
+                $completion = MC_Funnel::get_completion_status($uid);
+                // Find first incomplete step in configured order
+                foreach (($config['steps'] ?? []) as $slug) {
+                    if (empty($completion[$slug])) {
+                        $maybe = MC_Funnel::get_step_url($slug);
+                        if ($maybe) {
+                            $next_step_url = $maybe;
+                            $next_step_title = 'Next Step: ' . ($config['titles'][$slug] ?? ucfirst(str_replace('-', ' ', $slug)));
+                            break;
+                        }
+                    }
+                }
+            }
+            // If none found, send to dashboard
+            if (empty($next_step_url)) {
+                $next_step_url = $this->_find_page_by_shortcode('quiz_dashboard');
+                if ($next_step_url) {
+                    $next_step_title = 'View Your Self-Discovery Profile';
+                }
+            }
+        }
+
+        // Enqueue shared About card styles
+        $base_url = plugin_dir_url(MC_QUIZ_PLATFORM_PATH . 'mi-quiz-platform.php');
+        wp_enqueue_style('mc-about-cards', $base_url . 'assets/about-cards.css', [], '1.0.0');
 
         $localized_data = [
             'currentUser' => $user_data,
@@ -431,6 +467,10 @@ class MI_Quiz_Plugin_AI {
             'ajaxNonce'   => wp_create_nonce('miq_nonce'),
             'loginUrl'    => wp_login_url(get_permalink()),
             'cdtQuizUrl'  => $cdt_quiz_url,
+            'nextStepUrl' => $next_step_url,
+            'nextStepTitle' => $next_step_title,
+            'ageGroup'    => $user_age_group,
+            'ageNonce'    => wp_create_nonce('mc_age_group'),
             'data'        => [
                 'cats'   => $cats,
                 'q1'     => $q1,
@@ -559,11 +599,29 @@ class MI_Quiz_Plugin_AI {
         <!-- TEST: MODULE.PHP UPDATED VERSION 9.9.0 - <?php echo date('Y-m-d H:i:s'); ?> -->
         <div class="quiz-wrapper">
             <?php if ($dashboard_url): ?>
-                <div class="back-bar">
+                <div class="back-bar" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
                     <a href="<?php echo esc_url($dashboard_url); ?>" class="back-link">&larr; Return to Dashboard</a>
+                    <button type="button" id="mi-about-top" class="mi-quiz-button mi-quiz-button-secondary" onclick="return window._miAboutToggle ? window._miAboutToggle(event) : (function(e){ e&&e.preventDefault&&e.preventDefault(); var m=document.getElementById('mi-about-modal'), r=document.getElementById('mi-quiz-results'), c=document.getElementById('mi-quiz-container'); if(!m) return false; var show=(m.style.display==='none'||!m.style.display); if(show){ if(r){ m.dataset.prevRes=(r.style.display||''); r.style.display='none'; } if(c){ m.dataset.prevCont=(c.style.display||''); c.style.display='none'; } m.style.display='block'; } else { m.style.display='none'; if(r && ('prevRes' in m.dataset)) r.style.display=m.dataset.prevRes; if(c && ('prevCont' in m.dataset)) c.style.display=m.dataset.prevCont; } return false; })(event)">About</button>
                 </div>
             <?php endif; ?>
-            <div id="mi-quiz-container">
+            <!-- Staging screen -->
+            <div id="mi-stage" class="mi-quiz-card">
+              <h2 class="mi-section-title">Map Your Natural Strengths</h2>
+              <div class="stage-intro">
+                <p>Discover how you learn best across 8 intelligences. Your MI profile powers better decisions and feeds Lab Mode (AI‑assisted experiments).</p>
+                <h3>How It Works</h3>
+                <ul>
+                  <li>Answer quick statements about how you prefer to learn and problem‑solve.</li>
+                  <li>We identify your top intelligences and connect them to strengths you can use right away.</li>
+                  <li>Finish to unlock Lab Mode — AI‑assisted, short experiments tailored to your profile.</li>
+                </ul>
+              </div>
+              <div style="text-align:center; margin-top: 1em;">
+                <button type="button" id="mi-stage-start" class="mi-quiz-button mi-quiz-button-primary">Start MI Quiz</button>
+              </div>
+            </div>
+
+            <div id="mi-quiz-container" style="display:none;">
               <div id="mi-age-gate">
                 <div class="mi-quiz-card">
                   <h2 class="mi-section-title">Welcome!</h2>
@@ -710,6 +768,89 @@ class MI_Quiz_Plugin_AI {
               </div>
             </div>
         </div>
+        <div id="mi-about-modal" class="mi-quiz-card mi-quiz-intro quiz-about-card" style="display:none; text-align:left; max-width:840px; margin:16px auto;">
+            <h2 class="mi-section-title">About the MI Quiz</h2>
+            <p>The Multiple Intelligences (MI) quiz helps you understand the kinds of problems you’re best at solving by mapping your strengths across eight intelligences. These patterns influence which learning paths feel natural, which projects energize you, and which study habits actually stick.</p>
+
+            <h3>What it measures</h3>
+            <ul>
+                <li><strong>Linguistic</strong> — words, expression, storytelling, reading/writing.</li>
+                <li><strong>Logical–Mathematical</strong> — patterns, analysis, systems, problem‑solving.</li>
+                <li><strong>Visual–Spatial</strong> — mental models, diagrams, maps, design.</li>
+                <li><strong>Bodily–Kinesthetic</strong> — building, prototyping, learning by doing.</li>
+                <li><strong>Musical</strong> — rhythm, tone, structure, auditory patterns.</li>
+                <li><strong>Interpersonal</strong> — collaboration, empathy, social cues.</li>
+                <li><strong>Intrapersonal</strong> — reflection, self‑awareness, independent study.</li>
+                <li><strong>Naturalistic</strong> — observation, categorization, patterns in nature.</li>
+            </ul>
+
+            <h3>How it works</h3>
+            <ul>
+                <li>Quick statements rated 1–5 produce a clear profile of strengths.</li>
+                <li>Top strengths surface sub‑skills and real‑world examples.</li>
+                <li>Results connect to personalized suggestions and next steps.</li>
+            </ul>
+
+            <h3>What you’ll get</h3>
+            <ul>
+                <li>A clear snapshot of your top intelligences.</li>
+                <li>Two short sections: what to leverage now and where to grow.</li>
+                <li>Links into related assessments and Lab Mode experiments.</li>
+            </ul>
+
+            <h3>Time & tips</h3>
+            <ul>
+                <li>Most people finish in 4–6 minutes.</li>
+                <li>Answer by instinct — there are no “right” answers.</li>
+            </ul>
+        </div>
+        <script>
+        (function(){
+            function getModal(){ return document.getElementById('mi-about-modal'); }
+            function toggle(){
+                var m = getModal(); if (!m) return false;
+                var results = document.getElementById('mi-quiz-results');
+                var container = document.getElementById('mi-quiz-container');
+                var show = (m.style.display==='none' || !m.style.display);
+                if (show) {
+                    if (results) { m.dataset.prevRes = results.style.display || ''; results.style.display = 'none'; }
+                    if (container) { m.dataset.prevCont = container.style.display || ''; container.style.display = 'none'; }
+                    m.style.display = 'block';
+                } else {
+                    m.style.display = 'none';
+                    if (results && ('prevRes' in m.dataset)) results.style.display = m.dataset.prevRes;
+                    if (container && ('prevCont' in m.dataset)) container.style.display = m.dataset.prevCont;
+                }
+                return false;
+            }
+            function bind(){
+                var btn = document.getElementById('mi-about-top');
+                if (btn && !btn.getAttribute('data-about-bound')){
+                    btn.addEventListener('click', function(e){ e.preventDefault(); toggle(); });
+                    btn.setAttribute('data-about-bound','1');
+                }
+            }
+            if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', bind); } else { bind(); }
+            // Delegated safety net for builders (Elementor, etc.)
+            document.addEventListener('click', function(e){ if (e.target && (e.target.id === 'mi-about-top' || (e.target.closest && e.target.closest('#mi-about-top')))) { e.preventDefault(); toggle(); } }, true);
+            window._miAboutToggle = function(e){ if (e && e.preventDefault) e.preventDefault(); return toggle(); };
+        })();
+        </script>
+        <div class="quiz-wrapper quiz-funnel-card" style="margin: 2em auto;">
+            <div class="mi-quiz-card">
+                <h2 class="mi-section-title">Your Progress So Far</h2>
+                <?php echo do_shortcode('[quiz_funnel show_description="false" style="dashboard"]'); ?>
+            </div>
+        </div>
+        <style>
+        /* Unified About card styling (shared across quizzes) */
+        .quiz-about-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:2rem; }
+        .quiz-about-card h2 { margin:0 0 1rem 0; color:#1a202c; font-size:1.75rem; }
+        .quiz-about-card h3 { margin:1.5rem 0 0.75rem 0; color:#2d3748; font-size:1.25rem; }
+        .quiz-about-card p { line-height:1.6; margin-bottom:1rem; color:#4a5568; }
+        .quiz-about-card ul { margin:0.75rem 0 1.5rem 1.5rem; }
+        .quiz-about-card li { margin-bottom:0.5rem; line-height:1.5; }
+        </style>
         <?php
         return ob_get_clean();
     }

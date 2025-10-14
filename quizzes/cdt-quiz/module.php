@@ -49,6 +49,9 @@ class CDT_Quiz_Plugin {
         }
 
         wp_enqueue_style('cdt-quiz-css', plugins_url('quiz.css', __FILE__), [], self::VERSION);
+        // Enqueue shared About card styles
+        $base_url = plugin_dir_url(MC_QUIZ_PLATFORM_PATH . 'mi-quiz-platform.php');
+        wp_enqueue_style('mc-about-cards', $base_url . 'assets/about-cards.css', [], '1.0.0');
         wp_register_script('cdt-quiz-js', plugins_url('quiz.js', __FILE__), [], self::VERSION, true);
 
         // Load this quiz's questions.
@@ -56,6 +59,7 @@ class CDT_Quiz_Plugin {
         require __DIR__ . '/details.php';
 
         $user_data = null;
+        $user_age_group = null;
         if (is_user_logged_in()) {
             $user = wp_get_current_user();
             $user_data = [
@@ -63,6 +67,9 @@ class CDT_Quiz_Plugin {
                 'firstName'    => $user->first_name,
                 'savedResults' => get_user_meta($user->ID, self::META_KEY, true) ?: null,
             ];
+            if (class_exists('MC_User_Profile')) {
+                $user_age_group = MC_User_Profile::get_user_age_group($user->ID);
+            }
         }
 
         $prediction_data = [];
@@ -112,9 +119,12 @@ class CDT_Quiz_Plugin {
             'currentUser' => $user_data,
             'ajaxUrl'     => admin_url('admin-ajax.php'),
             'ajaxNonce'   => wp_create_nonce('cdt_nonce'),
+            'ageGroup'    => $user_age_group,
+            'ageNonce'    => wp_create_nonce('mc_age_group'),
             'loginUrl'    => wp_login_url(get_permalink()),
             'nextStepUrl' => $next_step_url,
             'nextStepTitle' => $next_step_title,
+            'logoUrl'    => MC_Helpers::logo_url(),
             'predictionData' => $prediction_data,
             'data'        => [
                 'cats'      => $cdt_categories ?? [],
@@ -132,16 +142,104 @@ class CDT_Quiz_Plugin {
         ?>
         <div class="quiz-wrapper">
             <?php if ($dashboard_url): ?>
-                <div class="back-bar">
+                <div class="back-bar" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
                     <a href="<?php echo esc_url($dashboard_url); ?>" class="back-link">&larr; Return to Dashboard</a>
+                    <button type="button" id="cdt-about-top" class="cdt-quiz-button cdt-quiz-button-secondary">About</button>
                 </div>
             <?php endif; ?>
         <div id="cdt-dev-tools" style="display:none; padding: 0 2em 1em; text-align: right; margin-top: 1em;">
             <strong>Dev tools:</strong>
             <button type="button" id="cdt-autofill-run" class="cdt-quiz-button cdt-quiz-button-small">Auto-Fill</button>
         </div>
-            <div id="cdt-quiz-container"><div class="cdt-quiz-card"><p>Loading Quiz...</p></div></div>
+            <!-- Staging screen -->
+            <div id="cdt-stage" class="cdt-quiz-card">
+                <h2 class="cdt-section-title">Build Real Resilience</h2>
+                <div class="stage-intro">
+                    <p>CDT reveals how you handle uncertainty and conflict. It complements your MI profile and completes your Self‑Discovery Profile to unlock Lab Mode.</p>
+                    <h3>How It Works</h3>
+                    <ul>
+                        <li>Answer realistic scenario prompts and quick ratings (about 6–8 minutes).</li>
+                        <li>See strengths and growth areas across five resilience dimensions.</li>
+                        <li>Finish to unlock Lab Mode — AI‑assisted, short experiments that build resilience in context.</li>
+                    </ul>
+                </div>
+                <div style="text-align:center; margin-top: 1em;">
+                    <button type="button" id="cdt-start-btn" class="cdt-quiz-button cdt-quiz-button-primary">Start CDT Quiz</button>
+                </div>
+            </div>
+
+            <div id="cdt-toolbar" style="display:none; text-align:right; padding: 0 2em 0.75em;"></div>
+
+            <div id="cdt-about-modal" class="cdt-quiz-card quiz-about-card" style="display:none; text-align:left;">
+                <h2 class="cdt-section-title">About the CDT Quiz</h2>
+
+                <div style="margin-top:0.5rem;">
+                    <h3 class="cdt-section-title" style="font-size:1.1rem;">What it measures</h3>
+                    <ul style="margin-left:1.25rem; line-height:1.6;">
+                        <li><strong>Ambiguity Tolerance</strong> — staying functional and creative without full clarity.</li>
+                        <li><strong>Value Conflict Navigation</strong> — naming tradeoffs when principles collide.</li>
+                        <li><strong>Self‑Confrontation Capacity</strong> — noticing gaps between what you say and what you do.</li>
+                        <li><strong>Discomfort Regulation</strong> — operating under pressure without shutting down or lashing out.</li>
+                        <li><strong>Growth Orientation</strong> — turning conflict into learning and momentum.</li>
+                    </ul>
+                    <h3 class="cdt-section-title" style="font-size:1.1rem;">What you’ll get</h3>
+                    <ul style="margin-left:1.25rem; line-height:1.6;">
+                        <li>Plain‑language snapshot of strengths and growth areas</li>
+                        <li>Character sketch phrases that feel familiar in real life</li>
+                        <li>Context tips for relationships, teams, and leadership</li>
+                        <li>Quick prompts to practice this week</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div id="cdt-quiz-container" style="display:none;"><div class="cdt-quiz-card"><p>Loading Quiz...</p></div></div>
         </div>
+        <div class="quiz-wrapper quiz-funnel-card" style="margin: 2em auto;">
+            <div class="cdt-quiz-card">
+                <h2 class="cdt-section-title">Your Progress So Far</h2>
+                <?php echo do_shortcode('[quiz_funnel show_description="false" style="dashboard"]'); ?>
+            </div>
+        </div>
+        <script>
+        (function(){
+          // Fallback About toggle, guarded to avoid double-binding with main JS
+          var aboutBtnTop = document.getElementById('cdt-about-top');
+          var aboutModal = document.getElementById('cdt-about-modal');
+          function toggle(){
+            if (!aboutModal) return false;
+            var c = document.getElementById('cdt-quiz-container');
+            var s = document.getElementById('cdt-stage');
+            var t = document.getElementById('cdt-toolbar');
+            var show = (aboutModal.style.display==='none' || !aboutModal.style.display);
+            if (show){
+              if (c) { aboutModal.dataset.prevCont = c.style.display || ''; c.style.display = 'none'; }
+              if (s) { aboutModal.dataset.prevStage = s.style.display || ''; s.style.display = 'none'; }
+              if (t) { aboutModal.dataset.prevTool = t.style.display || ''; t.style.display = 'none'; }
+              aboutModal.style.display = 'block';
+            } else {
+              aboutModal.style.display = 'none';
+              if (c && ('prevCont' in aboutModal.dataset)) c.style.display = aboutModal.dataset.prevCont;
+              if (s && ('prevStage' in aboutModal.dataset)) s.style.display = aboutModal.dataset.prevStage;
+              if (t && ('prevTool' in aboutModal.dataset)) t.style.display = aboutModal.dataset.prevTool;
+            }
+            return false;
+          }
+          if (aboutBtnTop && !aboutBtnTop.getAttribute('data-cdt-about-bound')) {
+              aboutBtnTop.addEventListener('click', function(e){ e.preventDefault(); toggle(); });
+              aboutBtnTop.setAttribute('data-cdt-about-bound','1');
+          }
+          window._cdtAboutToggle = function(e){ if (e && e.preventDefault) e.preventDefault(); return toggle(); };
+        })();
+        </script>
+        <style>
+        /* Unified About card styling (shared across quizzes) */
+        .quiz-about-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:2rem; }
+        .quiz-about-card h2 { margin:0 0 1rem 0; color:#1a202c; font-size:1.75rem; }
+        .quiz-about-card h3 { margin:1.5rem 0 0.75rem 0; color:#2d3748; font-size:1.25rem; }
+        .quiz-about-card p { line-height:1.6; margin-bottom:1rem; color:#4a5568; }
+        .quiz-about-card ul { margin:0.75rem 0 1.5rem 1.5rem; }
+        .quiz-about-card li { margin-bottom:0.5rem; line-height:1.5; }
+        </style>
         <?php
         return ob_get_clean();
     }
@@ -177,13 +275,12 @@ class CDT_Quiz_Plugin {
             $attachments = $pdf_attachment_path ? [$pdf_attachment_path] : [];
 
             // Email to user
-            $branding_html = '<div style="text-align:center; padding: 20px 0; border-bottom: 1px solid #ddd;">
-                <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;">
-                    <tbody><tr>
-                        <td style="vertical-align:middle;"><img src="http://mi-test-site.local/wp-content/uploads/2025/09/SOSD-Logo.jpeg" alt="Skill of Self-Discovery Logo" style="height: 45px; width: auto; border:0;" height="45"></td>
-                        <td style="vertical-align:middle; padding-left:15px;"><span style="font-size: 1.3em; font-weight: 600; color: #1a202c; line-height: 1.2;">Skill of Self-Discovery</span></td>
-                    </tr></tbody>
-                </table></div>';
+            $branding_logo = MC_Helpers::logo_url();
+            $branding_html = '<div style="text-align:center; padding: 20px 0; border-bottom: 1px solid #ddd;">'
+                . '<table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;"><tbody><tr>'
+                . '<td style="vertical-align:middle;">' . ($branding_logo ? '<img src="' . esc_url($branding_logo) . '" alt="Skill of Self-Discovery Logo" style="height: 45px; width: auto; border:0;" height="45">' : '') . '</td>'
+                . '<td style="vertical-align:middle; padding-left:15px;"><span style="font-size: 1.3em; font-weight: 600; color: #1a202c; line-height: 1.2;">Skill of Self-Discovery</span></td>'
+                . '</tr></tbody></table></div>';
 
             $user_subject = $this->maybe_antithread('Your CDT Quiz Results');
             $user_body = '<!DOCTYPE html><html><body style="font-family: sans-serif; color: #333; background-color: #f4f4f4; padding: 20px;">

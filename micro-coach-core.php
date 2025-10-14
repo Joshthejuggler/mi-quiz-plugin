@@ -229,7 +229,7 @@ class Micro_Coach_Core {
             <div class="quiz-dashboard-container">
                 <div class="dashboard-header">
                     <div class="site-branding">
-                        <img src="http://mi-test-site.local/wp-content/uploads/2025/09/SOSD-Logo.jpeg" alt="Skill of Self-Discovery Logo" class="site-logo">
+                        <?php echo MC_Helpers::logo_img(['class'=>'site-logo','alt'=>'Skill of Self-Discovery Logo']); ?>
                         <span class="site-title">Skill of Self-Discovery</span>
                     </div>
                     <!-- User menu can be added here -->
@@ -242,17 +242,18 @@ class Micro_Coach_Core {
                     </div>
                 </div>
                 
-                <!-- Funnel Section -->
+                <!-- Funnel Section (hidden when all quizzes complete) -->
+                <?php if ($completed_quizzes < $total_quizzes): ?>
                 <div class="quiz-dashboard-funnel-section">
                     <?php 
                     // Render the quiz funnel with dashboard styling
-                    $funnel_style = ($completed_quizzes === $total_quizzes && $total_quizzes > 0) ? 'dashboard-compact' : 'dashboard';
                     echo $this->render_quiz_funnel([
                         'show_description' => 'false',
-                        'style' => $funnel_style
+                        'style' => 'dashboard'
                     ]);
                     ?>
                 </div>
+                <?php endif; ?>
  
                 <?php if ($user_id && $completed_quizzes === $total_quizzes && $total_quizzes > 0): 
                     // --- All quizzes are complete, render the tabbed interface ---
@@ -574,6 +575,48 @@ class Micro_Coach_Core {
                                 <?php endif; ?>
                               </section>
 
+                              <?php
+                                $johari_profile = get_user_meta($user_id, 'johari_mi_profile', true);
+                                if (is_array($johari_profile)) {
+                                    $j_open = isset($johari_profile['open']) ? count((array)$johari_profile['open']) : 0;
+                                    $j_blind = isset($johari_profile['blind']) ? count((array)$johari_profile['blind']) : 0;
+                                    $j_hidden = isset($johari_profile['hidden']) ? count((array)$johari_profile['hidden']) : 0;
+                                    $j_unknown = isset($johari_profile['unknown']) ? count((array)$johari_profile['unknown']) : 0;
+                              ?>
+                              <section class="pc-johari">
+                                <h3 class="pc-kicker">Johari Window</h3>
+                                <p class="pc-caption" style="text-align:center; margin:4px 0 10px;">How I see myself vs. how others see me</p>
+                                <p class="pc-caption" style="text-align:center; font-weight:600; margin-bottom:10px;">
+                                  Open: <?php echo (int)$j_open; ?> • Blind: <?php echo (int)$j_blind; ?> • Hidden: <?php echo (int)$j_hidden; ?> • Unknown: <?php echo (int)$j_unknown; ?>
+                                </p>
+                                <?php
+                                  $open_adj   = array_slice(array_values((array)($johari_profile['open']   ?? [])), 0, 6);
+                                  $blind_adj  = array_slice(array_values((array)($johari_profile['blind']  ?? [])), 0, 6);
+                                  $hidden_adj = array_slice(array_values((array)($johari_profile['hidden'] ?? [])), 0, 6);
+                                  $unknown_adj= array_slice(array_values((array)($johari_profile['unknown']?? [])), 0, 6);
+                                  $renderChips = function($list){ echo '<div class="quiz-dashboard-chips">'; foreach ($list as $w) { echo '<span class="chip">' . esc_html($w) . '</span>'; } echo '</div>'; };
+                                ?>
+                                <div class="pc-johari-lists" style="display:grid; gap:10px; grid-template-columns:repeat(2, minmax(0,1fr));">
+                                  <div class="johari-q">
+                                    <div class="pc-caption" style="font-weight:700; margin-bottom:6px;">Open</div>
+                                    <?php $renderChips($open_adj); ?>
+                                  </div>
+                                  <div class="johari-q">
+                                    <div class="pc-caption" style="font-weight:700; margin-bottom:6px;">Blind</div>
+                                    <?php $renderChips($blind_adj); ?>
+                                  </div>
+                                  <div class="johari-q">
+                                    <div class="pc-caption" style="font-weight:700; margin-bottom:6px;">Hidden</div>
+                                    <?php $renderChips($hidden_adj); ?>
+                                  </div>
+                                  <div class="johari-q">
+                                    <div class="pc-caption" style="font-weight:700; margin-bottom:6px;">Unknown</div>
+                                    <?php $renderChips($unknown_adj); ?>
+                                  </div>
+                                </div>
+                              </section>
+                              <?php } ?>
+
                               <section class="pc-cdt">
                                 <h3 class="pc-kicker">CDT Highlights</h3>
                                 <p class="pc-caption" style="text-align:center; margin:4px 0 10px;">How I handle discomfort or internal conflict</p>
@@ -714,6 +757,20 @@ class Micro_Coach_Core {
                                             $mi_profile_content = array_map(function($slug) use ($mi_categories) { return $mi_categories[$slug] ?? ucfirst(str_replace('-', ' ', $slug)); }, $mi_results['top3']);
                                         }
                                     }
+                                    // Add CDT summary
+                                    $cdt_summary = [];
+                                    if ($has_results && $id === 'cdt-quiz') {
+                                        $cdt_results = get_user_meta($user_id, 'cdt_quiz_results', true);
+                                        $cdt_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/cdt-quiz/questions.php';
+                                        if (file_exists($cdt_questions_file)) { require_once $cdt_questions_file; }
+                                        if (!empty($cdt_results['sortedScores'][0]) && isset($cdt_categories)) {
+                                            $sorted = $cdt_results['sortedScores'];
+                                            $top_slug = $sorted[0][0];
+                                            $low_slug = end($sorted)[0];
+                                            $cdt_summary['top'] = $cdt_categories[$top_slug] ?? ucfirst(str_replace('-', ' ', $top_slug));
+                                            $cdt_summary['low'] = $cdt_categories[$low_slug] ?? ucfirst(str_replace('-', ' ', $low_slug));
+                                        }
+                                    }
                                     $bartle_profile_content = ''; $bartle_profile_description = '';
                                     if ($has_results && $id === 'bartle-quiz') {
                                         $bartle_results = get_user_meta($user_id, 'bartle_quiz_results', true);
@@ -721,6 +778,17 @@ class Micro_Coach_Core {
                                             $top_slug = $bartle_results['sortedScores'][0][0];
                                             $bartle_profile_content = $bartle_categories[$top_slug] ?? ucfirst(str_replace('-', ' ', $top_slug));
                                             $bartle_profile_description = $bartle_descriptions[$top_slug] ?? '';
+                                        }
+                                    }
+                                    // Johari mini snapshot
+                                    $johari_snapshot = [];
+                                    if ($has_results && $id === 'johari-mi-quiz') {
+                                        $johari = get_user_meta($user_id, 'johari_mi_profile', true);
+                                        if (is_array($johari)) {
+                                            $johari_snapshot['open']   = isset($johari['open']) ? count((array)$johari['open']) : 0;
+                                            $johari_snapshot['blind']  = isset($johari['blind']) ? count((array)$johari['blind']) : 0;
+                                            $johari_snapshot['hidden'] = isset($johari['hidden']) ? count((array)$johari['hidden']) : 0;
+                                            $johari_snapshot['unknown']= isset($johari['unknown']) ? count((array)$johari['unknown']) : 0;
                                         }
                                     }
                                 ?>
@@ -734,8 +802,19 @@ class Micro_Coach_Core {
                                         <?php if (!empty($mi_profile_content)): ?>
                                             <div class="quiz-dashboard-insight-panel insight-panel-profile"><h4 class="insight-panel-title">Your Top Intelligences</h4><div class="quiz-dashboard-chips"><?php foreach ($mi_profile_content as $name): ?><span class="chip"><?php echo esc_html($name); ?></span><?php endforeach; ?></div></div>
                                         <?php endif; ?>
+                                        <?php if (!empty($cdt_summary)): ?>
+                                            <div class="quiz-dashboard-insight-panel insight-panel-profile"><h4 class="insight-panel-title">Your Resilience Snapshot</h4>
+                                                <p style="margin:0;">Strength: <strong><?php echo esc_html($cdt_summary['top']); ?></strong></p>
+                                                <p style="margin:6px 0 0 0;">Growth Focus: <strong><?php echo esc_html($cdt_summary['low']); ?></strong></p>
+                                            </div>
+                                        <?php endif; ?>
                                         <?php if (!empty($bartle_profile_content)): ?>
                                             <div class="quiz-dashboard-insight-panel insight-panel-profile"><h4 class="insight-panel-title">Your Primary Player Type</h4><div class="quiz-dashboard-chips"><span class="chip"><?php echo esc_html($bartle_profile_content); ?></span></div><?php if (!empty($bartle_profile_description)): ?><p style="margin-top: 8px;"><?php echo esc_html($bartle_profile_description); ?></p><?php endif; ?></div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($johari_snapshot)): ?>
+                                            <div class="quiz-dashboard-insight-panel insight-panel-profile"><h4 class="insight-panel-title">Johari Snapshot</h4>
+                                                <p style="margin:0;">Open: <strong><?php echo (int)$johari_snapshot['open']; ?></strong> • Blind: <strong><?php echo (int)$johari_snapshot['blind']; ?></strong> • Hidden: <strong><?php echo (int)$johari_snapshot['hidden']; ?></strong> • Unknown: <strong><?php echo (int)$johari_snapshot['unknown']; ?></strong></p>
+                                            </div>
                                         <?php endif; ?>
                                     </div>
                                     <div class="quiz-dashboard-actions">
@@ -766,8 +845,8 @@ class Micro_Coach_Core {
                     </div>
                 <?php else: ?>
                     <!-- Your Path Section (for users who have NOT completed all quizzes) -->
-                    <h2 class="quiz-dashboard-section-title">Your Path</h2>
-                    <div class="quiz-dashboard-grid">
+                    <h2 class="quiz-dashboard-section-title" style="display:none;">Your Path</h2>
+                    <div class="quiz-dashboard-grid" style="display:none;">
                         <?php
                         foreach ($quizzes as $id => $quiz):
                             $has_results = $completion_status[$id] ?? false;
@@ -823,28 +902,57 @@ class Micro_Coach_Core {
                                     }
                                 }
                             }
-                            $mi_profile_content = '';
-                            if ($has_results && $id === 'mi-quiz') {
-                                $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
-                                $mi_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/mi-quiz/mi-questions.php';
-                                if (file_exists($mi_questions_file)) {
-                                    require_once $mi_questions_file;
-                                    if (!empty($mi_results['top3']) && isset($mi_categories)) { $mi_profile_content = array_map(function($slug) use ($mi_categories) { return $mi_categories[$slug] ?? ucfirst(str_replace('-', ' ', $slug)); }, $mi_results['top3']); }
-                                }
-                            }
-                            $bartle_profile_content = ''; $bartle_profile_description = '';
-                            if ($has_results && $id === 'bartle-quiz') {
-                                $bartle_results = get_user_meta($user_id, 'bartle_quiz_results', true);
-                                $bartle_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/bartle-quiz/questions.php';
-                                if (file_exists($bartle_questions_file)) {
-                                    require_once $bartle_questions_file;
-                                    if (!empty($bartle_results['sortedScores'][0]) && isset($bartle_categories) && isset($bartle_descriptions)) {
-                                        $top_slug = $bartle_results['sortedScores'][0][0];
-                                        $bartle_profile_content = $bartle_categories[$top_slug] ?? ucfirst(str_replace('-', ' ', $top_slug));
-                                        $bartle_profile_description = $bartle_descriptions[$top_slug] ?? '';
+                                $mi_profile_content = '';
+                                if ($has_results && $id === 'mi-quiz') {
+                                    $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
+                                    $mi_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/mi-quiz/mi-questions.php';
+                                    if (file_exists($mi_questions_file)) {
+                                        require_once $mi_questions_file;
+                                        if (!empty($mi_results['top3']) && isset($mi_categories)) { $mi_profile_content = array_map(function($slug) use ($mi_categories) { return $mi_categories[$slug] ?? ucfirst(str_replace('-', ' ', $slug)); }, $mi_results['top3']); }
                                     }
                                 }
-                            }
+                                // Minimal CDT summary (top + growth)
+                                $cdt_summary = [];
+                                if ($has_results && $id === 'cdt-quiz') {
+                                    $cdt_results = get_user_meta($user_id, 'cdt_quiz_results', true);
+                                    $cdt_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/cdt-quiz/questions.php';
+                                    if (file_exists($cdt_questions_file)) { require_once $cdt_questions_file; }
+                                    if (!empty($cdt_results['sortedScores'][0]) && isset($cdt_categories)) {
+                                        $sorted = $cdt_results['sortedScores'];
+                                        $top_slug = $sorted[0][0];
+                                        $low_slug = end($sorted)[0];
+                                        $cdt_summary['top'] = $cdt_categories[$top_slug] ?? ucfirst(str_replace('-', ' ', $top_slug));
+                                        $cdt_summary['low'] = $cdt_categories[$low_slug] ?? ucfirst(str_replace('-', ' ', $low_slug));
+                                    }
+                                }
+                                $bartle_profile_content = ''; $bartle_profile_description = '';
+                                if ($has_results && $id === 'bartle-quiz') {
+                                    $bartle_results = get_user_meta($user_id, 'bartle_quiz_results', true);
+                                    $bartle_questions_file = MC_QUIZ_PLATFORM_PATH . 'quizzes/bartle-quiz/questions.php';
+                                    if (file_exists($bartle_questions_file)) {
+                                        require_once $bartle_questions_file;
+                                        if (!empty($bartle_results['sortedScores'][0]) && isset($bartle_categories) && isset($bartle_descriptions)) {
+                                            $top_slug = $bartle_results['sortedScores'][0][0];
+                                            $bartle_profile_content = $bartle_categories[$top_slug] ?? ucfirst(str_replace('-', ' ', $top_slug));
+                                            $bartle_profile_description = $bartle_descriptions[$top_slug] ?? '';
+                                        }
+                                    }
+                                }
+                                // Minimal Johari snapshot + adjectives
+                                $johari_snapshot = [];
+                                $johari_open_chips = [];
+                                $johari_blind_chips = [];
+                                if ($has_results && $id === 'johari-mi-quiz') {
+                                    $johari = get_user_meta($user_id, 'johari_mi_profile', true);
+                                    if (is_array($johari)) {
+                                        $johari_snapshot['open']   = isset($johari['open']) ? count((array)$johari['open']) : 0;
+                                        $johari_snapshot['blind']  = isset($johari['blind']) ? count((array)$johari['blind']) : 0;
+                                        $johari_snapshot['hidden'] = isset($johari['hidden']) ? count((array)$johari['hidden']) : 0;
+                                        $johari_snapshot['unknown']= isset($johari['unknown']) ? count((array)$johari['unknown']) : 0;
+                                        $johari_open_chips = array_slice(array_values((array)($johari['open'] ?? [])), 0, 5);
+                                        $johari_blind_chips = array_slice(array_values((array)($johari['blind'] ?? [])), 0, 3);
+                                    }
+                                }
                             ?>
                             <div class="quiz-dashboard-item <?php if (!$dependency_met) echo 'is-locked'; ?>">
                                 <div class="quiz-dashboard-item-header">
@@ -858,8 +966,38 @@ class Micro_Coach_Core {
                                     <?php if (!empty($mi_profile_content)): ?>
                                         <div class="quiz-dashboard-insight-panel insight-panel-profile"><h4 class="insight-panel-title">Your Top Intelligences</h4><div class="quiz-dashboard-chips"><?php foreach ($mi_profile_content as $name): ?><span class="chip"><?php echo esc_html($name); ?></span><?php endforeach; ?></div></div>
                                     <?php endif; ?>
+                                    <?php if ($has_results && $id === 'cdt-quiz'): ?>
+                                        <div class="quiz-dashboard-insight-panel insight-panel-profile"><h4 class="insight-panel-title">Your Resilience Snapshot</h4>
+                                            <?php if (!empty($cdt_summary)): ?>
+                                                <p style="margin:0;">Strength: <strong><?php echo esc_html($cdt_summary['top']); ?></strong></p>
+                                                <p style="margin:6px 0 0 0;">Growth Focus: <strong><?php echo esc_html($cdt_summary['low']); ?></strong></p>
+                                            <?php else: ?>
+                                                <p style="margin:0;">Results ready — view details to see your strongest dimension and growth focus.</p>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
                                     <?php if (!empty($bartle_profile_content)): ?>
                                         <div class="quiz-dashboard-insight-panel insight-panel-profile"><h4 class="insight-panel-title">Your Primary Player Type</h4><div class="quiz-dashboard-chips"><span class="chip"><?php echo esc_html($bartle_profile_content); ?></span></div><?php if (!empty($bartle_profile_description)): ?><p style="margin-top: 8px;"><?php echo esc_html($bartle_profile_description); ?></p><?php endif; ?></div>
+                                    <?php endif; ?>
+                                    <?php if ($has_results && $id === 'johari-mi-quiz'): ?>
+                                        <div class="quiz-dashboard-insight-panel insight-panel-profile"><h4 class="insight-panel-title">Johari Snapshot</h4>
+                                            <?php if (!empty($johari_snapshot)): ?>
+                                                <p style="margin:0 0 8px 0;">Open: <strong><?php echo (int)$johari_snapshot['open']; ?></strong> • Blind: <strong><?php echo (int)$johari_snapshot['blind']; ?></strong> • Hidden: <strong><?php echo (int)$johari_snapshot['hidden']; ?></strong> • Unknown: <strong><?php echo (int)$johari_snapshot['unknown']; ?></strong></p>
+                                            <?php else: ?>
+                                                <p style="margin:0 0 8px 0;">Results ready — view details to see your Johari Window.</p>
+                                            <?php endif; ?>
+                                            <?php if (!empty($johari_open_chips)): ?>
+                                                <div class="quiz-dashboard-chips" style="margin-top:6px;">
+                                                    <?php foreach ($johari_open_chips as $w): ?><span class="chip"><?php echo esc_html($w); ?></span><?php endforeach; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                            <?php if (!empty($johari_blind_chips)): ?>
+                                                <p style="margin:10px 0 4px 0; font-weight:600;">Peers see (Blind):</p>
+                                                <div class="quiz-dashboard-chips">
+                                                    <?php foreach ($johari_blind_chips as $w): ?><span class="chip"><?php echo esc_html($w); ?></span><?php endforeach; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
                                     <?php endif; ?>
                                     <?php if (!empty($bartle_prediction_paragraph)): ?>
                                         <div class="quiz-dashboard-insight-panel insight-panel-prediction"><h4 class="insight-panel-title">Your Personalized Bartle Prediction</h4><p><?php echo wp_kses_post($bartle_prediction_paragraph); ?></p></div>
@@ -884,7 +1022,8 @@ class Micro_Coach_Core {
                     </div>
                 <?php endif; ?>
  
-                <!-- Insights & Activity Section (Placeholders) -->
+                <?php if ($completed_quizzes === $total_quizzes && $total_quizzes > 0): ?>
+                <!-- Insights & Activity Section (only when all quizzes complete) -->
                 <h2 class="quiz-dashboard-section-title">Insights &amp; Activity</h2>
                 <div class="quiz-dashboard-lower-grid">
                     <div class="insight-panel">
@@ -977,6 +1116,7 @@ class Micro_Coach_Core {
                         </ul>
                     </div>
                 </div>
+                <?php endif; ?>
  
                 <!-- Resources Section (Placeholder) -->
                 <div class="quiz-dashboard-resources">
@@ -1042,9 +1182,17 @@ class Micro_Coach_Core {
             <?php endif; ?>
  
         <?php } else { // Logged-out user view
+            // Ensure welcome styles are available for logged-out visitors
+            wp_enqueue_style('dashboard-enhanced-css', plugins_url('assets/dashboard.css', __FILE__), [], '1.0.5');
             // Find the URL for the primary starting quiz.
             $mi_quiz_url = $this->find_page_by_shortcode('mi_quiz');
             ?>
+            <div class="dashboard-header">
+                <div class="site-branding">
+                    <?php echo MC_Helpers::logo_img(['class'=>'site-logo','alt'=>'Skill of Self-Discovery Logo']); ?>
+                    <span class="site-title">Skill of Self-Discovery</span>
+                </div>
+            </div>
             <style>
                 .quiz-dashboard-auth-wrapper { max-width: 900px; margin: 2em auto; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif; }
                 .dashboard-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 1.5em; margin-bottom: 1.5em; border-bottom: 1px solid #e2e8f0; }
@@ -1109,36 +1257,133 @@ class Micro_Coach_Core {
                     color: #92400e;
                 }
             </style>
-            <div class="quiz-dashboard-auth-wrapper">
-                <div class="dashboard-header">
-                    <div class="site-branding">
-                        <img src="http://mi-test-site.local/wp-content/uploads/2025/09/SOSD-Logo.jpeg" alt="Skill of Self-Discovery Logo" class="site-logo">
-                        <span class="site-title">Skill of Self-Discovery</span>
+            <?php /* Removed legacy hero block in favor of new sosd-wrap hero */ ?>
+            <style>
+                /* Public landing page (logged-out) */
+                .sosd-wrap { --primary:#5C7CFA; --primary600:#4A6EF2; --ink:#0E1B3D; --muted:#5C6B8A; --line:#E9ECF8; --bg:#FAFBFF; }
+                .sosd-wrap .container{ max-width:1120px; margin:0 auto; padding:0 24px; }
+                .sosd-nav{ position:sticky; top:0; z-index:50; background:#fff; transition:background .2s, box-shadow .2s; border-bottom:1px solid var(--line); }
+                .sosd-nav.scrolled{ background:#fff; border-bottom-color:var(--line); box-shadow:0 2px 8px rgba(20,30,70,.06); }
+                .sosd-nav.scrolled{ background:#fff; border-bottom-color:var(--line); box-shadow:0 2px 8px rgba(20,30,70,.06); }
+                .sosd-nav .container{ display:flex; align-items:center; justify-content:space-between; padding:14px 24px; }
+                .sosd-nav .brand{ display:flex; align-items:center; gap:12px; }
+                .sosd-nav .brand__logo{ height:48px; width:auto; border-radius:10px; box-shadow:0 4px 20px rgba(92,124,250,.25); }
+                .sosd-nav .brand__name{ font-weight:700; font-size:20px; color:var(--ink); letter-spacing:.2px; }
+                .sosd-nav .nav-ctas .btn{ margin-left:8px; }
+
+                .sosd-wrap .hero{ background:linear-gradient(180deg, #ffffff 0%, #f7f9ff 70%); padding:56px 0 24px; }
+                /* Full-width hero content (right preview removed) */
+                .sosd-wrap .hero__grid{ display:grid; grid-template-columns: 1fr; gap:32px; align-items:center; }
+                .sosd-wrap .hero h1{ font-size:40px; line-height:48px; color:var(--ink); margin:0 0 12px; font-weight:600; }
+                .sosd-wrap .hero .sub{ color:var(--muted); font-size:16px; line-height:24px; margin:0 0 16px; }
+                .sosd-wrap .hero__ctas{ display:flex; gap:12px; flex-wrap:wrap; }
+                .sosd-wrap .btn{ display:inline-flex; align-items:center; justify-content:center; padding:12px 18px; border-radius:12px; font-weight:600; text-decoration:none; border:1px solid transparent; }
+                .sosd-wrap .btn--primary{ background:var(--primary); color:#fff; }
+                .sosd-wrap .btn--primary:hover{ background:var(--primary600); }
+                .sosd-wrap .btn--ghost{ background:#fff; color:#1f2937; border-color:var(--line); }
+                .sosd-wrap .micro-trust{ margin-top:10px; color:#6b7a99; font-size:13px; display:flex; align-items:center; gap:8px; }
+                .sosd-wrap .micro-trust .lock{ font-size:14px; }
+                /* Remove right preview box for now */
+                .sosd-wrap .hero__right{ display:none; }
+                .sosd-wrap .id-row{ height:14px; border-radius:8px; background:#eef1fb; margin:10px 0; }
+                .sosd-wrap .id-row.short{ width:60%; }
+                .sosd-wrap .id-head{ height:64px; border-radius:12px; background:#eef1fb; margin-bottom:10px; }
+                .sosd-wrap .shimmer{ position:relative; overflow:hidden; }
+                .sosd-wrap .shimmer:after{ content:''; position:absolute; inset:0; background:linear-gradient(100deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.6) 50%, rgba(255,255,255,0) 100%); transform:translateX(-100%); animation:sh 1.8s infinite; }
+                @keyframes sh{ to{ transform:translateX(100%);} }
+
+                /* No outer box */
+                .sosd-column-card{ background:transparent; border:none; box-shadow:none; padding:0; margin:24px auto 8px; max-width:1120px; }
+                /* Headline-format section heading */
+                .sosd-column-card .intro-heading{ margin:0 0 16px; font-size:40px; line-height:48px; color:var(--ink); font-weight:600; }
+                .flow{ display:grid; gap:28px; }
+                .flow .step{ display:grid; grid-template-columns:72px 1fr; gap:18px; align-items:start; }
+                .step__icon{ width:72px; height:72px; display:grid; place-items:center; background:#f2f5ff; border:1px solid var(--line); border-radius:16px; }
+                .step-kicker{ color:#6b7a99; font-weight:600; text-transform:uppercase; letter-spacing:.06em; font-size:12px; }
+                .step h2{ margin:6px 0 8px; font-size:20px; color:var(--ink); }
+                .step .sub{ color:#5c6b8a; margin:0 0 10px; }
+                .cards{ display:grid; grid-template-columns:repeat(auto-fit, minmax(260px,1fr)); gap:14px; }
+                /* Match funnel card look */
+                .card{ border:2px solid #e5e7eb; border-radius:12px; padding:14px; background:#fff; transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+                .card:hover{ transform:translateY(-2px); box-shadow:0 4px 12px rgba(59,130,246,.12); border-color:#3b82f6; }
+                .card__left{ display:flex; gap:10px; align-items:flex-start; }
+                .card__icon{ width:28px; height:28px; display:grid; place-items:center; background:#eef1fb; border-radius:8px; }
+                .card__title{ font-weight:600; color:#1a2238; }
+                .card__sub{ color:#56627f; font-size:14px; line-height:20px; }
+                /* Full-width horizontal cards */
+                .cards--full{ grid-template-columns: 1fr; }
+                .cards--full .card{ display:flex; align-items:flex-start; padding:16px; }
+                .cards--full .card__left{ gap:14px; }
+                .cards--full .card__icon{ width:40px; height:40px; font-size:18px; }
+                .cards--full .card__title{ font-size:16px; }
+                .cards--full .card__sub{ font-size:15px; line-height:22px; }
+                .cta-bottom{ text-align:center; padding:8px 24px 32px; }
+
+                /* Mobile adjustments */
+                @media (max-width: 720px){
+                  .sosd-nav .brand__logo{ height:56px; }
+                  .sosd-wrap .hero__grid{ grid-template-columns:1fr; }
+                  .sosd-wrap .hero{ padding-top:36px; }
+                  .sosd-wrap .hero__ctas .btn{ width:100%; }
+                  .sosd-nav .nav-ctas .btn{ display:none; }
+                  /* Stack step icon above title on mobile */
+                  .flow .step{ grid-template-columns: 1fr; text-align:center; }
+                  .flow .step .step__icon{ margin: 0 auto 10px; }
+                  .flow .step .sub{ text-align:center; }
+                }
+            </style>
+            <div id="mc-age-gate-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center;">
+                <style>
+                    #mc-age-gate-overlay .mc-age-opt { color:#1f2937 !important; background:#fff; border:2px solid #e2e8f0; border-radius:8px; padding:12px; text-align:left; cursor:pointer; }
+                    #mc-age-gate-overlay .mc-age-opt:hover { background:#f8fafc; border-color:#3b82f6; color:#1f2937 !important; }
+                    #mc-age-gate-overlay #mc-age-cancel { color:#1f2937; }
+                </style>
+                <div style="background:#fff; border-radius:12px; padding:24px; max-width:520px; width:92%; box-shadow:0 20px 40px rgba(0,0,0,0.1);">
+                    <h3 style="margin:0 0 8px; color:#1a202c;">Tell us about yourself</h3>
+                    <p style="margin:0 0 16px; color:#4b5563;">Pick the option that best fits you to tailor questions.</p>
+                    <div style="display:flex; flex-direction:column; gap:10px;">
+                        <button data-age="teen" class="mc-age-opt">Teen / High School</button>
+                        <button data-age="graduate" class="mc-age-opt">Student / Recent Graduate</button>
+                        <button data-age="adult" class="mc-age-opt">Adult / Professional</button>
                     </div>
-                </div>
-                <div class="quiz-dashboard-auth-prompt">
-                    <h2>Welcome to Skill of Self-Discovery</h2>
-                    <p>Explore guided assessments and AI-powered tools that help you understand your strengths, navigate challenges, and grow with intention. Please select an option below to start your journey or view your progress.</p>
-                    <div class="quiz-dashboard-auth-actions">
-                        <?php if ($mi_quiz_url): ?>
-                            <a href="<?php echo esc_url($mi_quiz_url); ?>" class="quiz-dashboard-button">Start Your Journey (Free)</a>
-                        <?php else: ?>
-                            <span class="quiz-dashboard-button is-disabled" title="The starting quiz has not been set up yet.">Start Your Journey (Free)</span>
-                        <?php endif; ?>
-                        <a href="<?php echo esc_url(wp_login_url(get_permalink())); ?>" class="quiz-dashboard-button quiz-dashboard-button-secondary">Returning User? Log In</a>
+                    <div style="text-align:center; margin-top:12px;">
+                        <button id="mc-age-cancel" style="background:#f3f4f6; border:1px solid #e5e7eb; border-radius:8px; padding:8px 14px; cursor:pointer;">Cancel</button>
                     </div>
-                    <?php if ( ! $mi_quiz_url && current_user_can('manage_options') ): ?>
-                        <div class="quiz-dashboard-admin-notice">
-                            <strong>Admin Notice:</strong> The "Start Your Journey" button is disabled because no published page contains the <code>[mi_quiz]</code> shortcode. Please create a page for the MI Quiz and add its shortcode.
-                        </div>
-                    <?php endif; ?>
                 </div>
             </div>
         <?php } ?>
- 
+
         <script>
             // Simple tabs controller for the dashboard tabs
             document.addEventListener('DOMContentLoaded', function() {
+                // Age gate on Start Journey (logged-out landing)
+                var startBtn = document.getElementById('mc-start-journey');
+                var startBtnHero = document.querySelector('.sosd-wrap .hero .btn--primary');
+                var overlay = document.getElementById('mc-age-gate-overlay');
+                function attach(btn){
+                  if (!btn || !overlay) return;
+                  btn.addEventListener('click', function(e){
+                        e.preventDefault();
+                        overlay.style.display = 'flex';
+                  });
+                }
+                attach(startBtn); attach(startBtnHero);
+                if (overlay){
+                  overlay.addEventListener('click', function(ev){ if (ev.target === overlay) overlay.style.display='none'; });
+                  var cancelBtn = document.getElementById('mc-age-cancel');
+                  if (cancelBtn) cancelBtn.addEventListener('click', function(){ overlay.style.display='none'; });
+                  var opts = overlay.querySelectorAll('.mc-age-opt');
+                  opts.forEach(function(opt){
+                      opt.addEventListener('click', function(){
+                          var age = opt.getAttribute('data-age') || 'adult';
+                          try { localStorage.setItem('mc_age_group', age); } catch(e) {}
+                          var target = (startBtnHero && startBtnHero.getAttribute('href')) || (startBtn && startBtn.getAttribute('href')) || '#';
+                          var sep = target.indexOf('?') === -1 ? '?' : '&';
+                          window.location.href = target + sep + 'age=' + encodeURIComponent(age);
+                      });
+                  });
+                }
+
                 const tabContainer = document.querySelector('.dashboard-tabs');
                 if (!tabContainer) return;
                 const tabLinks = tabContainer.querySelectorAll('.tab-link');
@@ -1162,6 +1407,17 @@ class Micro_Coach_Core {
                         const detailsBtn = tabContainer.querySelector('.tab-link[data-tab="tab-path"]');
                         if (detailsBtn) detailsBtn.click();
                     });
+                }
+
+                // Logged-out landing sticky nav behavior
+                const nav = document.getElementById('sosdNav');
+                if (nav) {
+                    const onScroll = () => {
+                        if (window.scrollY > 24) nav.classList.add('scrolled');
+                        else nav.classList.remove('scrolled');
+                    };
+                    onScroll();
+                    window.addEventListener('scroll', onScroll, { passive: true });
                 }
                 
                 // CDT Grid Layout Helper (for browsers without :has() support)
@@ -1207,6 +1463,15 @@ class Micro_Coach_Core {
             .mi-gauge::after{ content: attr(data-val); font-size:14px; }
             .mi-icon{ font-size:20px; }
             .mi-label{ font-weight:700; text-align:left; }
+            /* Johari section styles */
+            .pc-johari{ border:none; border-radius:14px; padding:12px 14px; background:#f8fafc; margin:10px 0 16px; }
+            @media (prefers-color-scheme: dark){ .pc-johari{ background:#111827; } }
+            .pc-johari-lists .johari-q{ background:#fff; border:1px solid #e6e9f2; border-radius:10px; padding:10px; }
+            @media (prefers-color-scheme: dark){ .pc-johari-lists .johari-q{ background:#0f1220; border-color:#26304a; } }
+            .pc-johari + .pc-cdt{ border-top:none; padding-top:18px; margin-top:10px; }
+            /* Increase contrast of CDT chip titles */
+            .sosd-playercard .cdt-chip .cdt-name{ color:#0f172a; font-weight:700; }
+            @media (prefers-color-scheme: dark){ .sosd-playercard .cdt-chip .cdt-name{ color:#e6e9f2; } }
             .mi-val{ font-weight:800; justify-self:end; }
             .pc-cdt{ margin-top:10px; }
             .pc-cdt-grid{ display:grid; gap:10px; grid-template-columns:1fr 1fr 1fr; }
@@ -1426,8 +1691,14 @@ class Micro_Coach_Core {
             .quiz-dashboard-section-title { margin-top: 2.5em; margin-bottom: 1em; font-size: 1.5em; font-weight: 600; color: #1a202c; padding-bottom: 0.5em; border-bottom: 1px solid #e2e8f0; }
 
             /* Tabs + Composite card styles */
-            .dashboard-tabs{ position: sticky; top: 0; z-index: 5; background: #fff; display:flex; gap:8px; flex-wrap:wrap; border-bottom:1px solid #e2e8f0; padding: 8px 0; margin-bottom: 1em; }
-            .tab-link{ background: #f8fafc; color: #51607a; border:1px solid transparent; border-radius: 8px; padding:8px 14px; font-weight:600; font-size: 15px; line-height: 1.2; cursor:pointer; user-select:none; transition: all .2s ease; }
+            .dashboard-tabs{ position: sticky; top: 0; z-index: 5; background: #fff; display:flex; gap:8px; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling: touch; border-bottom:1px solid #e2e8f0; padding: 8px 0; margin-bottom: 1em; }
+            .dashboard-tabs::-webkit-scrollbar{ height:8px; }
+            .dashboard-tabs::-webkit-scrollbar-thumb{ background:#e5e7eb; border-radius:4px; }
+            .tab-link{ flex: 0 0 auto; background: #f8fafc; color: #51607a; border:1px solid transparent; border-radius: 8px; padding:8px 14px; font-weight:600; font-size: 15px; line-height: 1.2; cursor:pointer; user-select:none; transition: all .2s ease; }
+            @media (max-width: 720px){
+              .dashboard-tabs{ flex-direction: column; align-items: stretch; gap:10px; overflow: visible; }
+              .tab-link{ width:100%; text-align:center; }
+            }
             .tab-link.active{ color:#fff; background:#1e40af; }
             .tab-content{ display:none; }
             .tab-content.active{ display:block; }
@@ -2153,6 +2424,114 @@ class Micro_Coach_Core {
             }
         });
         </script>
+        
+        <?php if (!is_user_logged_in()) : ?>
+            <section class="sosd-wrap">
+                <?php $mi_url = $this->find_page_by_shortcode('mi_quiz'); $login_url = wp_login_url(get_permalink()); ?>
+                <nav class="sosd-nav" id="sosdNav">
+                    <div class="container">
+                        <div class="brand">
+                            <?php echo MC_Helpers::logo_img(['class'=>'brand__logo','alt'=>'Skill of Self-Discovery']); ?>
+                            <span class="brand__name">Skill of Self-Discovery</span>
+                        </div>
+                        <div class="nav-ctas">
+                            <?php if (!empty($mi_url)): ?><a class="btn btn--primary" href="<?php echo esc_url($mi_url); ?>">Sign up free</a><?php endif; ?>
+                            <a class="btn btn--ghost" href="<?php echo esc_url($login_url); ?>">Log in</a>
+                        </div>
+                    </div>
+                </nav>
+
+                <header class="hero">
+                    <div class="container hero__grid">
+                        <div class="hero__left">
+                            <h1>Discover how you think, decide, and grow.</h1>
+                            <p class="sub">Take short assessments and get AI-generated experiments tailored to you. Start small, learn fast, and evolve with intention.</p>
+                            <div class="hero__ctas">
+                                <?php if ($mi_url): ?><a class="btn btn--primary" id="mc-start-journey" href="<?php echo esc_url($mi_url); ?>">Start your journey (Free)</a><?php endif; ?>
+                            </div>
+                            <div class="micro-trust">
+                                <span class="lock" aria-hidden="true">🔒</span>
+                                <span>Private by default • No spam • 3–5 min to start</span>
+                            </div>
+                        </div>
+                        <div class="hero__right">
+                            <div class="id-card">
+                                <div class="id-head shimmer"></div>
+                                <div class="id-row shimmer"></div>
+                                <div class="id-row shimmer"></div>
+                                <div class="id-row short shimmer"></div>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+                <div class="sosd-column-card">
+                  <section class="intro-blurb">
+                    <h2 class="intro-heading">How It Works</h2>
+                  </section>
+
+                  <div class="flow">
+                    <!-- Step 1: Assess -->
+                    <section class="step">
+                        <div class="step__icon" aria-hidden="true">
+                            <!-- Simple funnel SVG -->
+                            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><path d="M6 10h52l-22 20v16l-8 6V30L6 10z" fill="#c7d2fe" stroke="#6366f1" stroke-width="2"/></svg>
+                        </div>
+                        <div class="step__body">
+                            <div class="step-kicker">Step 1</div>
+                            <h2>Assess</h2>
+                            <p class="sub">Complete quick assessments to build your Self‑Discovery Profile.</p>
+                            <?php echo do_shortcode('[quiz_funnel show_description="true" style="dashboard"]'); ?>
+                        </div>
+                    </section>
+
+                    <!-- Step 2: Generate (Lab Mode) -->
+                    <section class="step">
+                        <div class="step__icon" aria-hidden="true">
+                            <svg viewBox="0 0 72 72" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#4f46e5" stroke-width="2"><path d="M22 10h28m-20 0v10l-14 24a12 12 0 0 0 10 18h24a12 12 0 0 0 10-18L46 20V10"/><path d="M48 14l10-6"/><path d="M56 22l6 10"/></g><circle cx="36" cy="44" r="3" fill="#6366f1"/><circle cx="44" cy="50" r="2" fill="#6366f1"/><circle cx="28" cy="50" r="2" fill="#6366f1"/></svg>
+                        </div>
+                        <div class="step__body">
+                            <div class="step-kicker">Step 2</div>
+                            <h2>Generate Experiments with AI Lab</h2>
+                            <p class="sub">Create personalized experiments based on your unique strengths, curiosities, and growth areas.</p>
+                            <div class="cards cards--full">
+                                <div class="card"><div class="card__left"><div class="card__icon">🎯</div><div><div class="card__title">Tailored to You</div><div class="card__sub">Experiments are generated from your MI, CDT, and motivator profile so they fit how you learn best.</div></div></div></div>
+                                <div class="card"><div class="card__left"><div class="card__icon">⏱️</div><div><div class="card__title">Quick & Focused</div><div class="card__sub">Small, time‑boxed reps (5–20 minutes) that are easy to try and easy to repeat.</div></div></div></div>
+                                <div class="card"><div class="card__left"><div class="card__icon">🔁</div><div><div class="card__title">Iterative Learning</div><div class="card__sub">Each run captures what resonated so the next suggestion adapts to your feedback.</div></div></div></div>
+                                <div class="card"><div class="card__left"><div class="card__icon">🧩</div><div><div class="card__title">Mix of Formats</div><div class="card__sub">Solo and social options, indoors or outdoors, with varying energy and risk levels.</div></div></div></div>
+                            </div>
+                            <?php /* No Lab Mode buttons on logged-out screen */ ?>
+                        </div>
+                    </section>
+
+                    <!-- Step 3: Reflect (four horizontal cards) -->
+                    <section class="step">
+                        <div class="step__icon" aria-hidden="true">
+                            <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg"><path d="M18 20a14 14 0 1 1 10 24h-8" fill="none" stroke="#6366f1" stroke-width="2"/><path d="M18 20v-8m0 8h8" stroke="#6366f1" stroke-width="2"/></svg>
+                        </div>
+                        <div class="step__body">
+                            <div class="step-kicker">Step 3</div>
+                            <h2>Reflect, Reassess, Recalibrate, Repeat</h2>
+                            <p class="sub">Review what resonated, capture a quick note, and adjust your next rep — small, steady iterations build momentum.</p>
+                            <div class="cards cards--full">
+                                <div class="card"><div class="card__left"><div class="card__icon">📝</div><div><div class="card__title">Reflect</div><div class="card__sub">Capture one insight after each rep — what energized you or felt easy to repeat?</div></div></div></div>
+                                <div class="card"><div class="card__left"><div class="card__icon">🔍</div><div><div class="card__title">Reassess</div><div class="card__sub">Spot patterns across weeks: people vs. solo, short vs. long, indoor vs. outdoor.</div></div></div></div>
+                                <div class="card"><div class="card__left"><div class="card__icon">⚙️</div><div><div class="card__title">Recalibrate</div><div class="card__sub">Tweak scope, time, or format to keep difficulty just‑right and progress continuous.</div></div></div></div>
+                                <div class="card"><div class="card__left"><div class="card__icon">🔁</div><div><div class="card__title">Repeat</div><div class="card__sub">Run another tiny rep this week and update your notes — improvement is a loop.</div></div></div></div>
+                            </div>
+                        </div>
+                    </section>
+                  </div>
+                </div>
+
+                <!-- Bottom call to action -->
+                <div class="hero__ctas cta-bottom">
+                    <?php if (!empty($mi_url)): ?>
+                        <a class="btn btn--primary" href="<?php echo esc_url($mi_url); ?>">Start Your Journey (Free)</a>
+                    <?php endif; ?>
+                    <a class="btn btn--ghost" href="<?php echo esc_url($login_url); ?>">Returning User? Log in</a>
+                </div>
+            </section>
+        <?php endif; ?>
         <?php
         return ob_get_clean();
     }
@@ -2167,7 +2546,8 @@ class Micro_Coach_Core {
         
         $atts = shortcode_atts([
             'show_description' => 'true',
-            'style' => 'default'
+            'style' => 'default',
+            'context' => ''
         ], $atts, 'quiz_funnel');
         
         // Try multiple methods to get user ID
@@ -2216,6 +2596,13 @@ class Micro_Coach_Core {
         ]);
         
         ob_start();
+        // Global, friendly step descriptions used everywhere
+        $step_descriptions = [
+            'mi-quiz'        => 'Multiple Intelligences shows the kinds of problems you’re best at solving.',
+            'cdt-quiz'       => 'CDT reveals where you get stuck and how to move through it.',
+            'bartle-quiz'    => 'Core motivators (Player Type) highlight the fuel that keeps you engaged.',
+            'johari-mi-quiz' => 'Johari Window surfaces blind spots and strengths others see in you.'
+        ];
         ?>
         <div class="mc-funnel-container" data-style="<?php echo esc_attr($atts['style']); ?>">
             <div class="mc-funnel">
@@ -2228,6 +2615,16 @@ class Micro_Coach_Core {
                     $johari_status = null;
                     if ($step_slug === 'johari-mi-quiz') {
                         $johari_status = MC_Funnel::get_johari_status($user_id);
+                        // Enforce unlock dependency: if previous step not unlocked,
+                        // force Johari to show as locked (not available) even if
+                        // get_johari_status() returns 'available'.
+                        if (!$is_unlocked) {
+                            $johari_status = [
+                                'status' => 'locked',
+                                'badge_text' => 'Locked',
+                                'description' => 'Complete previous steps to unlock'
+                            ];
+                        }
                     }
                     
                     $classes = ['mc-funnel-step'];
@@ -2246,7 +2643,13 @@ class Micro_Coach_Core {
                     <div class="<?php echo esc_attr(implode(' ', $classes)); ?>" 
                          data-slug="<?php echo esc_attr($step_slug); ?>"
                          data-index="<?php echo esc_attr($index + 1); ?>"
-                         <?php if ($step_url): ?>data-url="<?php echo esc_url($step_url); ?>"<?php endif; ?>>
+                         <?php
+                            // Always link to this step's own page. Completed steps
+                            // should open their results view rather than jumping
+                            // ahead to another assessment.
+                            $final_url = $step_url;
+                         ?>
+                         <?php if (!empty($final_url)): ?>data-url="<?php echo esc_url($final_url); ?>"<?php endif; ?>>
                         
                         <div class="mc-funnel-step-content">
                             <div class="mc-funnel-step-icon">
@@ -2275,15 +2678,29 @@ class Micro_Coach_Core {
                                 <?php if ($atts['show_description'] === 'true'): ?>
                                     <div class="mc-funnel-step-description">
                                         <?php if ($johari_status): ?>
-                                            <p><?php echo esc_html($johari_status['description']); ?></p>
+                                            <?php
+                                                // If still locked due to dependency, show locked copy.
+                                                if ($johari_status['status'] === 'locked') {
+                                                    $desc_text = 'Complete previous steps to unlock';
+                                                } else {
+                                                    // Show dynamic Johari text when actively in progress/ready/completed,
+                                                    // otherwise fall back to the global description for clarity.
+                                                    $j_status = $johari_status['status'];
+                                                    $use_dynamic = in_array($j_status, ['waiting','ready','completed'], true);
+                                                    $j_text = $use_dynamic ? ($johari_status['description'] ?? '') : '';
+                                                    $desc_text = $j_text ?: ($step_descriptions['johari-mi-quiz'] ?? '');
+                                                }
+                                            ?>
+                                            <p><?php echo esc_html($desc_text); ?></p>
                                         <?php elseif ($step_slug === 'placeholder'): ?>
                                             <p><?php echo esc_html($config['placeholder']['description']); ?></p>
                                         <?php else: 
                                             $registered_quizzes = self::get_quizzes();
                                             $quiz_info = $registered_quizzes[$step_slug] ?? [];
-                                            $description = $is_completed ? 
-                                                ($quiz_info['description_completed'] ?? $quiz_info['description'] ?? '') :
-                                                ($quiz_info['description'] ?? '');
+                                            // Use global description map everywhere for consistency
+                                            $description = $step_descriptions[$step_slug] ?? (
+                                                $quiz_info['description'] ?? ''
+                                            );
                                         ?>
                                             <p><?php echo esc_html($description); ?></p>
                                         <?php endif; ?>

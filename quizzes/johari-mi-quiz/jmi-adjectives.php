@@ -99,8 +99,8 @@ $jmi_quadrant_colors = [
 
 // Create a flat list of all adjectives for calculations
 $jmi_all_adjectives = [];
-foreach ($jmi_adjective_map as $domain => $adjectives) {
-    $jmi_all_adjectives = array_merge($jmi_all_adjectives, $adjectives);
+foreach ($jmi_adjective_map as $domain => $domain_adjectives) {
+    $jmi_all_adjectives = array_merge($jmi_all_adjectives, $domain_adjectives);
 }
 
 // Return the data for use by the module

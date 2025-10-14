@@ -32,9 +32,14 @@
 #bartle-quiz-container{
   padding: 2em;
 }
-.bartle-quiz-card{
-  background:#fff;
-  text-align:center
+.bartle-quiz-card{ background:#fff; text-align:center }
+/* Staging card: left-align content + comfortable padding */
+#bartle-stage.bartle-quiz-card { padding: 1.75em 2em 1.5em; text-align: left; }
+#bartle-stage .bartle-intro-content h3 { margin: 1em 0 0.5em; text-align: left; }
+#bartle-stage .bartle-intro-content ul { margin: 0.25em 0 0 1.5em; list-style: disc; }
+/* Funnel card spacing */
+.quiz-funnel-card .bartle-quiz-card {
+  padding: 1.25em 1.5em 1.5em;
 }
 /* --- Button Styles --- */
 .bartle-quiz-button {

@@ -2189,7 +2189,7 @@
                                 <button class="lab-btn lab-btn-primary lab-start-experiment-btn" data-experiment-id="${exp.originalIndex}">Try This</button>
                                 <button class="lab-btn lab-btn-secondary lab-iterate-btn" data-experiment-id="${exp.originalIndex}" title="Iteratively refine this experiment">Tweak</button>
                                 <button class="lab-btn lab-btn-secondary lab-regenerate-ai-btn" data-experiment-id="${exp.originalIndex}" title="Generate a new AI-powered variant">New Version</button>
-                                <button class="lab-btn lab-btn-tertiary lab-debug-toggle-btn" data-experiment-id="${exp.originalIndex}">Why This?</button>
+                                <button class="lab-btn lab-btn-tertiary lab-debug-toggle-btn" data-experiment-id="${exp.originalIndex}">Debug Info</button>
                             </div>
                             
                             <div class="experiment-debug" id="debug-${exp.originalIndex}" style="display: none;">
@@ -2302,7 +2302,7 @@
                 
                 if (debugSection.is(':visible')) {
                     debugSection.slideUp(200);
-                    button.text('Why This?');
+                    button.text('Debug Info');
                 } else {
                     debugSection.slideDown(200);
                     button.text('Hide Info');

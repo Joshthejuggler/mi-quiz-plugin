@@ -362,6 +362,22 @@ class Micro_Coach_AI_Lab {
                 console.log("Lab Mode tab clicked, initializing...");
                 setTimeout(initializeLabModeOnce, 100); // Small delay to let tab content show
             });
+
+            // If URL requests Lab tab (e.g., ?tab=lab or #tab-lab), activate it
+            try {
+                var params = new URLSearchParams(window.location.search);
+                var wantsLab = (params.get('tab') === 'lab') || (window.location.hash === '#tab-lab' || window.location.hash === '#lab');
+                if (wantsLab) {
+                    var labBtn = document.querySelector('[data-tab="tab-lab"]');
+                    if (labBtn) {
+                        // Switch tab and initialize
+                        labBtn.click();
+                        setTimeout(initializeLabModeOnce, 150);
+                    }
+                }
+            } catch (e) {
+                console.warn('Lab Mode: unable to parse URL params for tab switch');
+            }
         });
         </script>
         <?php

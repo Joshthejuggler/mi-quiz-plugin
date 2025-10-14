@@ -65,20 +65,29 @@ class Johari_MI_Quiz_Module {
         add_action('wp_ajax_jmi_get_original_user', [$this, 'ajax_get_original_user']);
         add_action('wp_ajax_nopriv_jmi_get_original_user', [$this, 'ajax_get_original_user']);
 
+        // User action: delete their Johari results and reset assessment
+        add_action('wp_ajax_miq_jmi_delete_results', [$this, 'ajax_delete_results']);
+
         add_action('delete_user', [$this, 'handle_user_deletion']);
         
         // Admin AJAX endpoints
         add_action('wp_ajax_jmi_export_subs', [$this, 'ajax_export_subs']);
         add_action('wp_ajax_jmi_delete_subs', [$this, 'ajax_delete_subs']);
+        add_action('wp_ajax_jmi_view_user_results', [$this, 'ajax_view_user_results']);
         
         // Admin testing interface AJAX endpoints
         add_action('wp_ajax_jmi_get_assessment_data', [$this, 'ajax_get_assessment_data']);
         add_action('wp_ajax_jmi_admin_simulate_peer', [$this, 'ajax_admin_simulate_peer']);
         add_action('wp_ajax_jmi_admin_clear_test_data', [$this, 'ajax_admin_clear_test_data']);
-        add_action('wp_ajax_jmi_admin_clear_cached_results', [$this, 'ajax_admin_clear_cached_results']);
+        add_action('wp_ajax_miq_jmi_admin_clear_cached_results', [$this, 'ajax_admin_clear_cached_results']);
+        add_action('wp_ajax_miq_jmi_create_test_peer', [$this, 'ajax_create_test_peer']);
+        add_action('wp_ajax_miq_jmi_cleanup_test_users', [$this, 'ajax_cleanup_test_users']);
+        add_action('wp_ajax_miq_jmi_return_to_admin', [$this, 'ajax_return_to_admin']);
+        add_action('wp_ajax_miq_jmi_reset_assessment', [$this, 'ajax_reset_assessment']);
         add_action('wp_ajax_jmi_admin_clear_all_peer_data', [$this, 'ajax_admin_clear_all_peer_data']);
         add_action('wp_ajax_jmi_admin_add_mi_test_data', [$this, 'ajax_admin_add_mi_test_data']);
         add_action('wp_ajax_jmi_admin_clear_mi_test_data', [$this, 'ajax_admin_clear_mi_test_data']);
+        add_action('wp_ajax_jmi_debug_user_data', [$this, 'ajax_debug_user_data']);
         
         // Security & cleanup hooks
         add_action('jmi_cleanup_expired_links', [$this, 'cleanup_expired_links']);
@@ -107,7 +116,9 @@ class Johari_MI_Quiz_Module {
         add_action('delete_user', [$this, 'handle_user_deletion']);
         
         // Special admin URL handler for adding MI test data
-        add_action('admin_init', [$this, 'handle_mi_test_data_url']);
+        add_action('init', [$this, 'handle_mi_test_data_url']);
+        add_action('init', [$this, 'handle_temp_login']);
+        add_action('init', [$this, 'handle_admin_return']);
         
         // Ensure database tables exist
         $this->ensure_tables();
@@ -241,6 +252,10 @@ class Johari_MI_Quiz_Module {
         wp_register_style('jmi-css', plugins_url('css/johari-mi-quiz.css', __FILE__), [], self::VERSION);
         wp_enqueue_style('jmi-css');
 
+        // Enqueue shared About card styles
+        $base_url = plugin_dir_url(MC_QUIZ_PLATFORM_PATH . 'mi-quiz-platform.php');
+        wp_enqueue_style('mc-about-cards', $base_url . 'assets/about-cards.css', [], '1.0.0');
+
         wp_register_script('jmi-js', plugins_url('johari-mi-quiz.js', __FILE__), [], self::VERSION, true);
 
         // Load adjective data
@@ -263,6 +278,9 @@ class Johari_MI_Quiz_Module {
             $johari_profile = get_user_meta($user->ID, 'johari_mi_profile', true);
             $self_uuid = get_user_meta($user->ID, 'jmi_self_uuid', true);
             
+            // Debug logging for problematic users
+            error_log("JMI Debug - User {$user->ID}: self_uuid from meta = " . ($self_uuid ?: 'NULL'));
+            
             // Check if user has a recent assessment in awaiting-peers state
             $existing_state = null;
             $peer_link_uuid = null;
@@ -276,15 +294,56 @@ class Johari_MI_Quiz_Module {
                     "SELECT * FROM `$self_table` WHERE uuid = %s AND user_id = %d", $self_uuid, $user->ID
                 ));
                 
+                error_log("JMI Debug - User {$user->ID}: Looking for self_row with uuid={$self_uuid}, found: " . ($self_row ? 'YES (id=' . $self_row->id . ')' : 'NO'));
+                
                 if ($self_row) {
                     $peer_count = $wpdb->get_var($wpdb->prepare(
                         "SELECT COUNT(*) FROM `$feedback_table` WHERE self_id = %d", $self_row->id
                     ));
                     
-                    // Get the peer link UUID
+                    error_log("JMI Debug - User {$user->ID}: self_id={$self_row->id}, peer_count={$peer_count}");
+                    
+                    // Get the peer link UUID (active links only)
                     $peer_link_uuid = $wpdb->get_var($wpdb->prepare(
                         "SELECT uuid FROM `$links_table` WHERE self_id = %d AND expires_at > NOW()", $self_row->id
                     ));
+                    
+                    error_log("JMI Debug - User {$user->ID}: peer_link_uuid query result = " . ($peer_link_uuid ?: 'NULL'));
+                    
+                    // If no active link but user is in awaiting-peers state, create/extend a link
+                    if (!$peer_link_uuid && $peer_count < 2) {
+                        // Check if there's an existing link we can extend
+                        $existing_link = $wpdb->get_row($wpdb->prepare(
+                            "SELECT * FROM `$links_table` WHERE self_id = %d ORDER BY created_at DESC LIMIT 1", $self_row->id
+                        ));
+                        
+                        if ($existing_link) {
+                            // Extend the existing link by 30 days
+                            $new_expiry = date('Y-m-d H:i:s', strtotime('+30 days'));
+                            $wpdb->update(
+                                $links_table,
+                                ['expires_at' => $new_expiry],
+                                ['id' => $existing_link->id],
+                                ['%s'],
+                                ['%d']
+                            );
+                            $peer_link_uuid = $existing_link->uuid;
+                            error_log("JMI Debug - Extended existing link for user {$user->ID}: {$peer_link_uuid}");
+                        } else {
+                            // Create a new peer link
+                            $peer_link_uuid = wp_generate_uuid4();
+                            $expires_at = date('Y-m-d H:i:s', strtotime('+30 days'));
+                            
+                            $wpdb->insert($links_table, [
+                                'uuid' => $peer_link_uuid,
+                                'self_id' => $self_row->id,
+                                'expires_at' => $expires_at,
+                                'created_at' => current_time('mysql')
+                            ], ['%s', '%d', '%s', '%s']);
+                            
+                            error_log("JMI Debug - Created new link for user {$user->ID}: {$peer_link_uuid}");
+                        }
+                    }
                     
                     if ($peer_count >= 2) {
                         $existing_state = 'results-ready';
@@ -292,6 +351,72 @@ class Johari_MI_Quiz_Module {
                         $existing_state = 'awaiting-peers';
                     }
                 }
+            } else {
+                // User has no self_uuid in meta - check if they have orphaned data in database
+                global $wpdb;
+                $self_table = $this->table(self::TABLE_SELF);
+                $orphaned_assessment = $wpdb->get_row($wpdb->prepare(
+                    "SELECT * FROM `$self_table` WHERE user_id = %d ORDER BY created_at DESC LIMIT 1", $user->ID
+                ));
+                
+                if ($orphaned_assessment) {
+                    error_log("JMI Debug - User {$user->ID}: Found orphaned assessment with UUID: {$orphaned_assessment->uuid}");
+                    // Repair the user meta
+                    update_user_meta($user->ID, 'jmi_self_uuid', $orphaned_assessment->uuid);
+                    $self_uuid = $orphaned_assessment->uuid;
+                    
+                    // Now process as normal
+                    $feedback_table = $this->table(self::TABLE_FEEDBACK);
+                    $links_table = $this->table(self::TABLE_LINKS);
+                    
+                    $peer_count = $wpdb->get_var($wpdb->prepare(
+                        "SELECT COUNT(*) FROM `$feedback_table` WHERE self_id = %d", $orphaned_assessment->id
+                    ));
+                    
+                    // Get the peer link UUID (active links only)
+                    $peer_link_uuid = $wpdb->get_var($wpdb->prepare(
+                        "SELECT uuid FROM `$links_table` WHERE self_id = %d AND expires_at > NOW()", $orphaned_assessment->id
+                    ));
+                    
+                    // If no active link but user is in awaiting-peers state, create/extend a link
+                    if (!$peer_link_uuid && $peer_count < 2) {
+                        // Check if there's an existing link we can extend
+                        $existing_link = $wpdb->get_row($wpdb->prepare(
+                            "SELECT * FROM `$links_table` WHERE self_id = %d ORDER BY created_at DESC LIMIT 1", $orphaned_assessment->id
+                        ));
+                        
+                        if ($existing_link) {
+                            // Extend the existing link by 30 days
+                            $new_expiry = date('Y-m-d H:i:s', strtotime('+30 days'));
+                            $wpdb->update(
+                                $links_table,
+                                ['expires_at' => $new_expiry],
+                                ['id' => $existing_link->id],
+                                ['%s'],
+                                ['%d']
+                            );
+                            $peer_link_uuid = $existing_link->uuid;
+                            error_log("JMI Debug - Extended existing link for orphaned assessment user {$user->ID}: {$peer_link_uuid}");
+                        }
+                    }
+                    
+                    if ($peer_count >= 2) {
+                        $existing_state = 'results-ready';
+                    } else {
+                        $existing_state = 'awaiting-peers';
+                    }
+                    
+                    error_log("JMI Debug - User {$user->ID}: Repaired orphaned assessment, state: $existing_state, peer_link_uuid: " . ($peer_link_uuid ?: 'NULL'));
+                }
+            }
+            
+            // Check if current user is a test peer
+            $is_test_peer = get_user_meta($user->ID, '_jmi_test_peer', true);
+            $admin_return_available = false;
+            if ($is_test_peer) {
+                $admin_return_token = get_user_meta($user->ID, '_jmi_admin_return_token', true);
+                $admin_return_expires = get_user_meta($user->ID, '_jmi_admin_return_expires', true);
+                $admin_return_available = $admin_return_token && $admin_return_expires && time() < intval($admin_return_expires);
             }
             
             $user_data = [
@@ -299,6 +424,10 @@ class Johari_MI_Quiz_Module {
                 'email'     => $user->user_email,
                 'firstName' => $user->first_name,
                 'lastName'  => $user->last_name,
+                'role'      => $user->roles[0] ?? 'subscriber', // Primary role
+                'isAdmin'   => user_can($user, 'manage_options'),
+                'isTestPeer' => (bool) $is_test_peer,
+                'adminReturnAvailable' => $admin_return_available,
                 'johari'    => is_array($johari_profile) ? $johari_profile : null,
                 'selfUuid'  => $self_uuid,
                 'peerLinkUuid' => $peer_link_uuid,
@@ -306,11 +435,15 @@ class Johari_MI_Quiz_Module {
             ];
         }
 
+        // Find dashboard URL (for Lab Mode CTA after results)
+        $dashboard_url = $this->_find_page_by_shortcode('quiz_dashboard');
+
         $localized = [
             'currentUser' => $user_data,
             'ajaxUrl'     => admin_url('admin-ajax.php'),
             'ajaxNonce'   => wp_create_nonce('jmi_nonce'),
             'data'        => $adjective_data,
+            'dashboardUrl'=> $dashboard_url,
         ];
         wp_localize_script('jmi-js', 'jmi_quiz_data', $localized);
         wp_enqueue_script('jmi-js');
@@ -318,8 +451,31 @@ class Johari_MI_Quiz_Module {
 
     public function render_quiz() {
         ob_start(); ?>
+        <?php $dashboard_url = $this->_find_page_by_shortcode('quiz_dashboard'); ?>
         <div class="quiz-wrapper">
-          <div id="jmi-container">
+          <?php if ($dashboard_url): ?>
+            <div class="back-bar" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+              <a href="<?php echo esc_url($dashboard_url); ?>" class="back-link">&larr; Return to Dashboard</a>
+              <button type="button" id="jmi-about-top" class="mi-quiz-button mi-quiz-button-secondary" onclick="return window._jmiAboutToggle ? window._jmiAboutToggle(event) : (function(e){ e&&e.preventDefault&&e.preventDefault(); var m=document.getElementById('jmi-about-modal'), c=document.getElementById('jmi-container'); if(!m) return false; var show=(m.style.display==='none'||!m.style.display); if(show){ if(c){ m.dataset.prevCont=(c.style.display||''); c.style.display='none'; } m.style.display='block'; } else { m.style.display='none'; if(c && ('prevCont' in m.dataset)) c.style.display=m.dataset.prevCont; } return false; })(event)">About</button>
+            </div>
+          <?php endif; ?>
+          <!-- Staging screen -->
+          <div id="jmi-stage" class="mi-quiz-card">
+            <h2 class="mi-section-title">Bring In Trusted Perspectives</h2>
+            <div class="stage-intro">
+              <p>Ask a few peers to select adjectives that describe you. You’ll see your Johari Window mapped to MI strengths — the final piece to unlock Lab Mode.</p>
+              <h3>How It Works</h3>
+              <ul>
+                <li>Invite 2–5 peers with a private link; they choose adjectives in minutes.</li>
+                <li>We map their responses with yours into the Johari Window (Open, Blind, Hidden, Unknown).</li>
+                <li>Finish to unlock Lab Mode — AI‑assisted, high‑leverage experiments informed by peer insight.</li>
+              </ul>
+            </div>
+            <div style="text-align:center; margin-top: 1em;">
+              <button type="button" id="jmi-stage-start" class="mi-quiz-button mi-quiz-button-primary">Start Johari × MI</button>
+            </div>
+          </div>
+          <div id="jmi-container" style="display:none;">
             <div class="mi-quiz-card">
               <h2 class="mi-section-title">Johari × MI</h2>
               <p>Select adjectives that describe you. Then invite peers to do the same. We’ll map results to the Johari Window and MI domains.</p>
@@ -329,7 +485,132 @@ class Johari_MI_Quiz_Module {
             <div id="jmi-results" style="display:none;"></div>
           </div>
         </div>
+        <div id="jmi-about-modal" class="mi-quiz-card quiz-about-card" style="display:none; text-align:left; max-width:840px; margin:16px auto;">
+          <h2 class="mi-section-title">About Johari × MI</h2>
+          <p>Johari × MI blends a simple adjective‑based self/peer reflection with your Multiple Intelligences profile. You’ll choose adjectives for yourself, then invite peers to choose the ones that fit you. The overlap and gaps populate the Johari Window with MI‑aware summaries that are easy to act on.</p>
+
+          <h3>What it reveals</h3>
+          <ul>
+            <li><strong>Open</strong> — strengths both you and others recognize.</li>
+            <li><strong>Blind</strong> — qualities others see that you underrate.</li>
+            <li><strong>Hidden</strong> — traits you see that others don’t notice.</li>
+            <li><strong>Unknown</strong> — potential areas to explore together.</li>
+          </ul>
+
+          <h3>How it works</h3>
+          <ul>
+            <li>Select 6–10 adjectives that best describe you.</li>
+            <li>Share a private link; each peer selects adjectives in about a minute.</li>
+            <li>Results unlock when two peers respond; your window generates instantly.</li>
+          </ul>
+
+          <h3>What you’ll get</h3>
+          <ul>
+            <li>A clear Johari window plus MI domain summaries.</li>
+            <li>Prompts to discuss differences productively (1:1s, team reviews).</li>
+            <li>Links into Lab Mode to turn insights into short experiments.</li>
+          </ul>
+
+          <h3>Time & tips</h3>
+          <ul>
+            <li>Self‑selection: ~1–2 minutes; each peer: ~1–2 minutes.</li>
+            <li>Pick peers who’ve seen you in action (not just friends).</li>
+            <li>Share one concrete experiment you’ll try based on the results.</li>
+          </ul>
+        </div>
+        <script>
+        (function(){
+          function ensureStageHandlers(){
+            var btn = document.getElementById('jmi-stage-start');
+            var stage = document.getElementById('jmi-stage');
+            var cont = document.getElementById('jmi-container');
+            
+            // Check if user has existing assessment - if so, skip staging screen
+            var userData = window.jmi_quiz_data && window.jmi_quiz_data.currentUser;
+            if (userData && userData.existingState && stage && cont) {
+              console.log('JMI: User has existing assessment, auto-skipping staging screen');
+              stage.style.display = 'none';
+              cont.style.display = 'block';
+              return; // Don't add click handler since we're skipping
+            }
+            
+            if (btn && stage && cont) {
+              btn.addEventListener('click', function(){ 
+                stage.style.display='none'; 
+                cont.style.display='block';
+                // Re-run initialization to ensure correct interface is shown
+                if (window.jmiInit && typeof window.jmiInit === 'function') {
+                  window.jmiInit();
+                }
+              });
+            }
+          }
+          function ensureAboutToggle(){
+            function getModal(){ return document.getElementById('jmi-about-modal'); }
+            function toggle(){
+              var m = getModal(); if (!m) return false;
+              var cont = document.getElementById('jmi-container');
+              var show = (m.style.display==='none' || !m.style.display);
+              if (show){
+                if (cont){ m.dataset.prevCont = cont.style.display || ''; cont.style.display = 'none'; }
+                m.style.display = 'block';
+              } else {
+                m.style.display = 'none';
+                if (cont && ('prevCont' in m.dataset)) cont.style.display = m.dataset.prevCont;
+              }
+              return false;
+            }
+            var aboutBtn = document.getElementById('jmi-about-top');
+            if (aboutBtn && !aboutBtn.getAttribute('data-about-bound')){
+              aboutBtn.addEventListener('click', function(e){ e.preventDefault(); toggle(); });
+              aboutBtn.setAttribute('data-about-bound','1');
+            }
+            // Delegate as safety for page builders
+            document.addEventListener('click', function(e){
+              var t = e.target;
+              if (!t) return;
+              if (t.id === 'jmi-about-top' || (t.closest && t.closest('#jmi-about-top'))){ e.preventDefault(); toggle(); }
+            }, true);
+            window._jmiAboutToggle = function(e){ if (e && e.preventDefault) e.preventDefault(); return toggle(); };
+          }
+          if (document.readyState === 'loading'){
+            document.addEventListener('DOMContentLoaded', function(){ ensureStageHandlers(); ensureAboutToggle(); });
+          } else {
+            ensureStageHandlers(); ensureAboutToggle();
+          }
+        })();
+        </script>
+        <div class="quiz-wrapper quiz-funnel-card" style="margin: 2em auto;">
+          <div class="mi-quiz-card">
+            <h2 class="mi-section-title">Your Progress So Far</h2>
+            <?php echo do_shortcode('[quiz_funnel show_description="false" style="dashboard"]'); ?>
+          </div>
+        </div>
         <?php return ob_get_clean();
+    }
+    
+
+    /**
+     * Finds the permalink of the first page that contains a given shortcode.
+     */
+    private function _find_page_by_shortcode($shortcode_tag) {
+        if (empty($shortcode_tag)) return null;
+        $transient_key = 'mc_page_url_for_' . $shortcode_tag;
+        if (false !== ($cached = get_transient($transient_key))) return $cached;
+        $query = new WP_Query([
+            'post_type' => ['page','post'],
+            'post_status' => 'publish',
+            'posts_per_page' => -1,
+            's' => '[' . $shortcode_tag
+        ]);
+        $url = null;
+        if ($query->have_posts()) {
+            foreach ($query->posts as $p) {
+                if (has_shortcode($p->post_content, $shortcode_tag)) { $url = get_permalink($p->ID); break; }
+            }
+        }
+        set_transient($transient_key, $url, DAY_IN_SECONDS);
+        return $url;
     }
 
     private function maybe_antithread($subject){
@@ -370,6 +651,40 @@ class Johari_MI_Quiz_Module {
             
             wp_mail($user->user_email, $subject, $message);
         }
+    }
+
+    /**
+     * AJAX: Delete current user's Johari results and reset assessment
+     */
+    public function ajax_delete_results() {
+        check_ajax_referer('jmi_nonce', '_ajax_nonce');
+
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            wp_send_json_error('Not logged in');
+        }
+
+        global $wpdb;
+        $self_table = $this->table(self::TABLE_SELF);
+        $links_table = $this->table(self::TABLE_LINKS);
+        $feedback_table = $this->table(self::TABLE_FEEDBACK);
+        $agg_table = $this->table(self::TABLE_AGG);
+
+        // Find user's assessment row
+        $self_row = $wpdb->get_row($wpdb->prepare("SELECT * FROM `$self_table` WHERE user_id = %d ORDER BY id DESC LIMIT 1", $user_id));
+        if ($self_row) {
+            // Delete related data
+            $wpdb->delete($feedback_table, ['self_id' => $self_row->id]);
+            $wpdb->delete($links_table, ['self_id' => $self_row->id]);
+            $wpdb->delete($agg_table, ['self_id' => $self_row->id]);
+            $wpdb->delete($self_table, ['id' => $self_row->id]);
+        }
+
+        // Clear user meta so UI returns to initial state
+        delete_user_meta($user_id, 'johari_mi_profile');
+        delete_user_meta($user_id, 'jmi_self_uuid');
+
+        wp_send_json_success(['message' => 'Johari results deleted']);
     }
     
     private function calculate_johari_window($self_id) {
@@ -623,65 +938,266 @@ class Johari_MI_Quiz_Module {
             return;
         }
         
-        echo '<div class="tablenav top"><div class="alignleft actions bulkactions">
-                <button type="button" class="button" id="jmi-select-all-btn">Select All</button>
-                <button type="button" class="button" id="jmi-deselect-all-btn">Deselect All</button>
-                <button type="button" class="button button-primary" id="jmi-del-selected">Delete Selected</button>
-              </div></div>';
-              
         echo '<table class="widefat striped"><thead><tr>
-                <th class="jmi-subs-checkbox-col"><input type="checkbox" id="jmi-check-all"></th>
-                <th>ID</th><th>Date</th><th>User</th><th>Email</th><th>Peer Count</th><th>Status</th>
+                <th>ID</th><th>Date</th><th>User</th><th>Email</th><th>Peer Count</th><th>Status</th><th>Actions</th>
               </tr></thead><tbody>';
               
         foreach ($rows as $r) {
             $status = (int)$r['peer_count'] >= 2 ? '<span style="color: green;">✓ Complete</span>' : '<span style="color: orange;">⏳ Awaiting Peers</span>';
-            echo '<tr>'.
-              '<th scope="row" class="check-column"><input type="checkbox" class="jmi-row" value="'.intval($r['id']).'"></th>'.
+            $row_id = intval($r['id']);
+            echo '<tr data-assessment-id="'.$row_id.'">'.
               '<td>'.intval($r['id']).'</td>'.
               '<td>'.esc_html($r['created_at']).'</td>'.
               '<td>'.esc_html($r['display_name'] ?: 'Guest').'</td>'.
               '<td>'.esc_html($r['user_email'] ?: 'N/A').'</td>'.
               '<td>'.intval($r['peer_count']).'</td>'.
               '<td>'.$status.'</td>'.
+              '<td>'.
+                '<button type="button" class="button button-secondary button-small jmi-view-results-btn" data-assessment-id="'.$row_id.'">View Results</button> '.
+                '<button type="button" class="button button-primary button-small jmi-delete-btn" data-assessment-id="'.$row_id.'">Delete</button>'.
+              '</td>'.
+            '</tr>';
+            // Add accordion row for results (initially hidden)
+            echo '<tr id="jmi-results-row-'.$row_id.'" class="jmi-results-accordion" style="display: none;">'.
+              '<td colspan="7">'.
+                '<div id="jmi-results-content-'.$row_id.'" style="padding: 20px; background: #f8f9fa; border-radius: 8px;"></div>'.
+                '<div style="text-align: center; padding: 10px;">'.
+                  '<button type="button" class="button button-secondary jmi-close-results" data-assessment-id="'.$row_id.'">Close Results</button>'.
+                '</div>'.
+              '</td>'.
             '</tr>';
         }
-        echo '</tbody></table></div>';
+        echo '</tbody></table>';
+        echo '</div>';
         ?>
         <script>
-        (function(){
+        var ajaxurl = '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
+        console.log('JMI Admin: Script loaded, ajaxurl =', ajaxurl);
+        
+        document.addEventListener('DOMContentLoaded', function() {
+          console.log('JMI Admin: DOM ready, initializing inline buttons...');
           const $ = s => document.querySelector(s);
           const $$ = s => Array.from(document.querySelectorAll(s));
           const nonce = '<?php echo esc_js(wp_create_nonce('jmi_admin_nonce')); ?>';
-          const selectAllBtn = $('#jmi-select-all-btn');
-          const deselectAllBtn = $('#jmi-deselect-all-btn');
+          console.log('JMI Admin: nonce =', nonce);
 
-          const setChecks = (checked) => {
-            $$('.jmi-row').forEach(cb => cb.checked = checked);
-            $('#jmi-check-all').checked = checked;
-          };
-
-          const all = $('#jmi-check-all');
-          all && all.addEventListener('change', () => setChecks(all.checked));
-          selectAllBtn && selectAllBtn.addEventListener('click', () => setChecks(true));
-          deselectAllBtn && deselectAllBtn.addEventListener('click', () => setChecks(false));
+          // Handle View Results button clicks
+          $$('.jmi-view-results-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+              const assessmentId = this.getAttribute('data-assessment-id');
+              console.log('JMI Admin: View Results clicked for assessment:', assessmentId);
+              
+              // Close any other open accordion results first
+              $$('.jmi-results-accordion').forEach(row => {
+                if (row.id !== 'jmi-results-row-' + assessmentId) {
+                  row.style.display = 'none';
+                }
+              });
+              
+              const resultRow = $('#jmi-results-row-' + assessmentId);
+              const resultContent = $('#jmi-results-content-' + assessmentId);
+              
+              if (resultRow && resultContent) {
+                // Show the accordion row
+                resultRow.style.display = 'table-row';
+                
+                // Show loading state
+                resultContent.innerHTML = '<div style="text-align: center; padding: 40px;"><p>Loading results...</p></div>';
+                
+                // Fetch and display results
+                fetch(ajaxurl, {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                  body: new URLSearchParams({action: 'jmi_view_user_results', _ajax_nonce: nonce, assessment_id: assessmentId})
+                }).then(r => {
+                  console.log('JMI Admin: Raw response status:', r.status);
+                  return r.text();
+                }).then(text => {
+                  console.log('JMI Admin: Raw response received');
+                  try {
+                    const j = JSON.parse(text);
+                    if (j.success) {
+                      resultContent.innerHTML = j.data.html;
+                    } else {
+                      resultContent.innerHTML = '<div style="padding: 20px; color: red; text-align: center;">Error loading results: ' + (j.data || 'Unknown error') + '</div>';
+                    }
+                  } catch (parseError) {
+                    console.error('JMI Admin: JSON parse error:', parseError);
+                    resultContent.innerHTML = '<div style="padding: 20px; color: red;">Server returned invalid response. Check console for details.</div>';
+                  }
+                }).catch(err => {
+                  console.error('JMI Admin: Network error:', err);
+                  resultContent.innerHTML = '<div style="padding: 20px; color: red; text-align: center;">Network error: ' + err.message + '</div>';
+                });
+              }
+            });
+          });
           
-          const del = $('#jmi-del-selected');
-          del && del.addEventListener('click', ()=>{
-            const ids = $$('.jmi-row').filter(c=>c.checked).map(c=>c.value);
-            if(!ids.length) return alert('Select rows first');
-            if(!confirm('Delete selected assessments and all associated peer feedback?')) return;
-            
-            fetch(ajaxurl, {
-              method:'POST', 
-              headers:{'Content-Type':'application/x-www-form-urlencoded'},
-              body: new URLSearchParams({action:'jmi_delete_subs', _ajax_nonce:nonce, ids: ids.join(',')})
-            }).then(r=>r.json()).then(j=>{
-              if(j.success) location.reload(); else alert('Delete failed: ' + (j.data || 'Unknown error'));
+          // Handle Close Results button clicks
+          $$('.jmi-close-results').forEach(btn => {
+            btn.addEventListener('click', function() {
+              const assessmentId = this.getAttribute('data-assessment-id');
+              console.log('JMI Admin: Close Results clicked for assessment:', assessmentId);
+              
+              const resultRow = $('#jmi-results-row-' + assessmentId);
+              if (resultRow) {
+                resultRow.style.display = 'none';
+              }
+            });
+          });
+          
+          // Handle Delete button clicks
+          $$('.jmi-delete-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+              const assessmentId = this.getAttribute('data-assessment-id');
+              console.log('JMI Admin: Delete clicked for assessment:', assessmentId);
+              
+              if (!confirm('Delete this assessment and all associated peer feedback?')) {
+                return;
+              }
+              
+              // Disable button during request
+              this.disabled = true;
+              this.textContent = 'Deleting...';
+              
+              fetch(ajaxurl, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: new URLSearchParams({action: 'jmi_delete_subs', _ajax_nonce: nonce, ids: assessmentId})
+              }).then(r => r.json()).then(j => {
+                if (j.success) {
+                  // Remove the row from the table
+                  const row = this.closest('tr');
+                  const nextRow = row.nextElementSibling;
+                  if (nextRow && nextRow.classList.contains('jmi-results-accordion')) {
+                    nextRow.remove();
+                  }
+                  row.remove();
+                } else {
+                  alert('Delete failed: ' + (j.data || 'Unknown error'));
+                  this.disabled = false;
+                  this.textContent = 'Delete';
+                }
+              }).catch(err => {
+                alert('Network error: ' + err.message);
+                this.disabled = false;
+                this.textContent = 'Delete';
+              });
             });
           });
         });
         </script>
+        <style>
+        /* Unified About card styling (shared across quizzes) */
+        .quiz-about-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:2rem; }
+        .quiz-about-card h2 { margin:0 0 1rem 0; color:#1a202c; font-size:1.75rem; }
+        .quiz-about-card h3 { margin:1.5rem 0 0.75rem 0; color:#2d3748; font-size:1.25rem; }
+        .quiz-about-card p { line-height:1.6; margin-bottom:1rem; color:#4a5568; }
+        .quiz-about-card ul { margin:0.75rem 0 1.5rem 1.5rem; }
+        .quiz-about-card li { margin-bottom:0.5rem; line-height:1.5; }
+        
+        /* Results display styling */
+        #jmi-results-display {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        #jmi-results-display h3 {
+            color: #1a202c;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .jmi-quadrant-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .jmi-quadrant-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .jmi-quadrant {
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .jmi-quadrant h5 {
+            margin-top: 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .jmi-adjective-tag {
+            display: inline-block;
+            margin: 2px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            text-decoration: none;
+        }
+        
+        .jmi-mi-integration {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f5e8;
+            border-radius: 8px;
+            border-left: 4px solid #28a745;
+        }
+        
+        /* Disabled button styling */
+        button[disabled], button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        button[disabled]:hover, button:disabled:hover {
+            background-color: initial;
+            border-color: initial;
+        }
+        
+        /* Accordion results styling */
+        .jmi-results-accordion {
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .jmi-results-accordion td {
+            padding: 0 !important;
+            border-top: 1px solid #c3c4c7;
+            background: #f6f7f7;
+        }
+        
+        /* Small button styling for table actions */
+        .button-small {
+            padding: 3px 8px;
+            font-size: 11px;
+            line-height: 1.4;
+            height: auto;
+        }
+        
+        /* Action column styling */
+        .widefat td:last-child {
+            white-space: nowrap;
+        }
+        
+        /* Results content styling */
+        .jmi-results-accordion #jmi-results-content {
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        </style>
         <?php
     }
     
@@ -819,7 +1335,12 @@ class Johari_MI_Quiz_Module {
         </style>
         
         <script>
+        // Make sure ajaxurl is available for both scripts
+        if (typeof ajaxurl === 'undefined') {
+            var ajaxurl = '<?php echo esc_js(admin_url('admin-ajax.php')); ?>';
+        }
         jQuery(document).ready(function($) {
+            console.log('JMI Admin Testing: jQuery script initialized');
             const nonce = '<?php echo wp_create_nonce('jmi_admin_nonce'); ?>';
             let currentAssessmentId = null;
             let currentAssessmentData = null;
@@ -1284,14 +1805,15 @@ class Johari_MI_Quiz_Module {
             update_user_meta($user_id, 'jmi_self_uuid', $uuid);
         }
         
-        // Get the current page URL properly
-        $current_page_id = get_queried_object_id();
-        if ($current_page_id) {
-            $base_url = get_permalink($current_page_id);
-        } else {
-            $base_url = get_permalink();
+        // Build a public share URL that always points to the Johari × MI page
+        $assess_url = $this->_find_page_by_shortcode('johari_mi_quiz');
+        if (!$assess_url) {
+            $assess_url = $this->_find_page_by_shortcode('johari-mi-quiz');
         }
-        $share_url = add_query_arg('jmi', $link_uuid, $base_url);
+        if (!$assess_url) {
+            $assess_url = home_url('/');
+        }
+        $share_url = add_query_arg('jmi', $link_uuid, $assess_url);
         
         wp_send_json_success([
             'uuid' => $uuid,
@@ -1633,6 +2155,277 @@ class Johari_MI_Quiz_Module {
         $deleted += $wpdb->query($wpdb->prepare("DELETE FROM `".$this->table(self::TABLE_SELF)."` WHERE id IN ($placeholders)", $ids));
         
         wp_send_json_success(['deleted' => $deleted]);
+    }
+    
+    public function ajax_view_user_results() {
+        error_log('JMI Admin: ajax_view_user_results called');
+        if (!current_user_can('manage_options')) {
+            error_log('JMI Admin: No permission for user');
+            wp_send_json_error('No permission');
+        }
+        
+        try {
+            check_ajax_referer('jmi_admin_nonce');
+        } catch (Exception $e) {
+            error_log('JMI Admin: Nonce check failed: ' . $e->getMessage());
+            wp_send_json_error('Security check failed');
+        }
+        
+        $assessment_id = intval($_POST['assessment_id']);
+        error_log('JMI Admin: Received assessment_id: ' . $assessment_id);
+        if (!$assessment_id) {
+            error_log('JMI Admin: Invalid assessment ID');
+            wp_send_json_error('Invalid assessment ID');
+        }
+        
+        global $wpdb;
+        
+        // Get self assessment data
+        $self_table = $this->table(self::TABLE_SELF);
+        $self_row = $wpdb->get_row($wpdb->prepare(
+            "SELECT s.*, u.display_name, u.user_email 
+             FROM `$self_table` s 
+             LEFT JOIN {$wpdb->users} u ON s.user_id = u.ID 
+             WHERE s.id = %d", $assessment_id
+        ));
+        
+        if (!$self_row) {
+            wp_send_json_error('Assessment not found');
+        }
+        
+        // Get peer feedback count
+        $feedback_table = $this->table(self::TABLE_FEEDBACK);
+        $peer_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM `$feedback_table` WHERE self_id = %d", $assessment_id
+        ));
+        
+        // Parse self-selected adjectives
+        $self_adjectives = json_decode($self_row->adjectives, true) ?: [];
+        
+        // Check if assessment has enough peers for results
+        if ($peer_count < 2) {
+            $html = '<div style="padding: 20px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 5px;">';
+            $html .= '<h4 style="color: #856404; margin-top: 0;">⏳ Results Not Ready</h4>';
+            $html .= '<p><strong>User:</strong> ' . esc_html($self_row->display_name ?: 'Guest') . '</p>';
+            $html .= '<p><strong>Email:</strong> ' . esc_html($self_row->user_email ?: 'N/A') . '</p>';
+            $html .= '<p><strong>Assessment Date:</strong> ' . esc_html($self_row->created_at) . '</p>';
+            $html .= '<p><strong>Peer Responses:</strong> ' . $peer_count . ' (need 2 minimum)</p>';
+            $html .= '<p><strong>Self-Selected Adjectives:</strong></p>';
+            $html .= '<div style="margin: 10px 0;">';
+            foreach ($self_adjectives as $adj) {
+                $html .= '<span style="display: inline-block; margin: 3px; padding: 4px 8px; background: #e9ecef; border-radius: 12px; font-size: 12px;">' . esc_html($adj) . '</span>';
+            }
+            $html .= '</div>';
+            $html .= '<p style="color: #856404;">This assessment needs at least 2 peer responses to generate Johari Window results.</p>';
+            $html .= '</div>';
+            
+            wp_send_json_success(['html' => $html]);
+            return;
+        }
+        
+        // Generate the Johari results
+        try {
+            $results = $this->calculate_johari_window($self_row->id);
+            
+            // Create HTML display of results
+            $html = '<div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0;">';
+            
+            // User info header
+            $html .= '<div style="margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid #e2e8f0;">';
+            $html .= '<h4 style="color: #1a202c; margin-top: 0;">Assessment Results</h4>';
+            $html .= '<p><strong>User:</strong> ' . esc_html($self_row->display_name ?: 'Guest') . '</p>';
+            $html .= '<p><strong>Email:</strong> ' . esc_html($self_row->user_email ?: 'N/A') . '</p>';
+            $html .= '<p><strong>Assessment Date:</strong> ' . esc_html($self_row->created_at) . '</p>';
+            $html .= '<p><strong>Peer Responses:</strong> ' . $peer_count . '</p>';
+            $html .= '</div>';
+            
+            // Johari Window results
+            $html .= '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">';
+            
+            // Open quadrant (green)
+            $html .= '<div style="padding: 15px; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px;">';
+            $html .= '<h5 style="color: #155724; margin-top: 0;">🔓 Open (' . count($results['open']) . ')</h5>';
+            $html .= '<p style="font-size: 12px; color: #155724; margin-bottom: 10px;">Known to self and others</p>';
+            foreach ($results['open'] as $adj) {
+                $html .= '<span style="display: inline-block; margin: 2px; padding: 4px 8px; background: #155724; color: white; border-radius: 12px; font-size: 11px;">' . esc_html($adj) . '</span>';
+            }
+            $html .= '</div>';
+            
+            // Blind quadrant (orange)
+            $html .= '<div style="padding: 15px; background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px;">';
+            $html .= '<h5 style="color: #856404; margin-top: 0;">👁️ Blind (' . count($results['blind']) . ')</h5>';
+            $html .= '<p style="font-size: 12px; color: #856404; margin-bottom: 10px;">Known to others, unknown to self</p>';
+            foreach ($results['blind'] as $adj) {
+                $html .= '<span style="display: inline-block; margin: 2px; padding: 4px 8px; background: #856404; color: white; border-radius: 12px; font-size: 11px;">' . esc_html($adj) . '</span>';
+            }
+            $html .= '</div>';
+            
+            // Hidden quadrant (blue)
+            $html .= '<div style="padding: 15px; background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 8px;">';
+            $html .= '<h5 style="color: #0c5460; margin-top: 0;">🔒 Hidden (' . count($results['hidden']) . ')</h5>';
+            $html .= '<p style="font-size: 12px; color: #0c5460; margin-bottom: 10px;">Known to self, unknown to others</p>';
+            foreach ($results['hidden'] as $adj) {
+                $html .= '<span style="display: inline-block; margin: 2px; padding: 4px 8px; background: #0c5460; color: white; border-radius: 12px; font-size: 11px;">' . esc_html($adj) . '</span>';
+            }
+            $html .= '</div>';
+            
+            // Unknown quadrant (gray)
+            $html .= '<div style="padding: 15px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px;">';
+            $html .= '<h5 style="color: #495057; margin-top: 0;">❓ Unknown (' . count($results['unknown']) . ')</h5>';
+            $html .= '<p style="font-size: 12px; color: #495057; margin-bottom: 10px;">Unknown to both self and others</p>';
+            $unknown_display = array_slice($results['unknown'], 0, 20); // Show first 20 to avoid overwhelming display
+            foreach ($unknown_display as $adj) {
+                $html .= '<span style="display: inline-block; margin: 2px; padding: 4px 8px; background: #6c757d; color: white; border-radius: 12px; font-size: 11px;">' . esc_html($adj) . '</span>';
+            }
+            if (count($results['unknown']) > 20) {
+                $html .= '<p style="font-size: 12px; color: #6c757d; margin-top: 10px;">... and ' . (count($results['unknown']) - 20) . ' more</p>';
+            }
+            $html .= '</div>';
+            
+            $html .= '</div>'; // Close grid
+            
+            // MI Integration (if available)
+            if (!empty($results['mi_profile'])) {
+                $mi = $results['mi_profile'];
+                $html .= '<div style="margin-top: 20px; padding: 15px; background: #e8f5e8; border-radius: 8px; border-left: 4px solid #28a745;">';
+                $html .= '<h5 style="color: #155724; margin-top: 0;">🧠 Multiple Intelligences Integration</h5>';
+                $html .= '<p><strong>Top 3 MI Strengths:</strong> ' . implode(', ', $mi['top3_names']) . '</p>';
+                if (!empty($mi['assessment_date'])) {
+                    $html .= '<p><strong>MI Assessment Date:</strong> ' . esc_html($mi['assessment_date']) . '</p>';
+                }
+                $html .= '</div>';
+            }
+            
+            // Add detailed peer responses section for admin debugging
+            $html .= $this->generate_admin_peer_details($assessment_id, $self_adjectives, $results);
+            
+            $html .= '</div>';
+            
+            wp_send_json_success(['html' => $html]);
+            
+        } catch (Exception $e) {
+            wp_send_json_error('Error generating results: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Generate detailed peer response breakdown for admin testing
+     */
+    private function generate_admin_peer_details($assessment_id, $self_adjectives, $johari_results) {
+        global $wpdb;
+        
+        $feedback_table = $this->table(self::TABLE_FEEDBACK);
+        
+        // Get all peer responses for this assessment
+        $peer_responses = $wpdb->get_results($wpdb->prepare(
+            "SELECT f.*, u.display_name, u.user_email 
+             FROM `$feedback_table` f 
+             LEFT JOIN {$wpdb->users} u ON f.peer_user_id = u.ID 
+             WHERE f.self_id = %d 
+             ORDER BY f.created_at ASC", $assessment_id
+        ));
+        
+        if (empty($peer_responses)) {
+            return '<div style="margin-top: 30px; padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">' .
+                   '<h5 style="color: #856404; margin-top: 0;">⚠️ No Peer Responses</h5>' .
+                   '<p>This assessment has no peer responses yet.</p></div>';
+        }
+        
+        $html = '<div style="margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #6c757d;">';
+        $html .= '<h4 style="color: #495057; margin-top: 0; margin-bottom: 20px;">🔍 Admin Debug: Peer Response Details</h4>';
+        
+        // Self-selected adjectives summary
+        $html .= '<div style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 6px; border-left: 3px solid #17a2b8;">';
+        $html .= '<h5 style="color: #17a2b8; margin-top: 0;">📝 Self-Selected Adjectives (' . count($self_adjectives) . ')</h5>';
+        foreach ($self_adjectives as $adj) {
+            $html .= '<span style="display: inline-block; margin: 2px; padding: 4px 8px; background: #17a2b8; color: white; border-radius: 12px; font-size: 11px;">' . esc_html($adj) . '</span>';
+        }
+        $html .= '</div>';
+        
+        // Individual peer responses
+        foreach ($peer_responses as $index => $peer) {
+            $peer_adjectives = json_decode($peer->adjectives, true) ?: [];
+            $peer_name = $peer->display_name ?: 'Guest';
+            $peer_email = $peer->user_email ?: 'N/A';
+            
+            // Determine if this is a test peer (user IDs 999001, 999002)
+            $is_test_peer = in_array($peer->peer_user_id, [999001, 999002]);
+            $peer_label = $is_test_peer ? '🧪 Test Peer ' . ($peer->peer_user_id == 999001 ? '1' : '2') : '👤 Peer ' . ($index + 1);
+            $border_color = $is_test_peer ? '#fd7e14' : '#28a745';
+            
+            $html .= '<div style="margin-bottom: 15px; padding: 15px; background: white; border-radius: 6px; border-left: 3px solid ' . $border_color . ';">';
+            $html .= '<h5 style="color: ' . $border_color . '; margin-top: 0; margin-bottom: 10px;">' . $peer_label . '</h5>';
+            $html .= '<p style="font-size: 12px; color: #6c757d; margin-bottom: 10px;">';
+            $html .= '<strong>Name:</strong> ' . esc_html($peer_name) . ' | ';
+            $html .= '<strong>Email:</strong> ' . esc_html($peer_email) . ' | ';
+            $html .= '<strong>User ID:</strong> ' . $peer->peer_user_id . ' | ';
+            $html .= '<strong>Date:</strong> ' . $peer->created_at;
+            $html .= '</p>';
+            
+            // Show peer's selected adjectives with categorization
+            $html .= '<div style="margin-bottom: 10px;">';
+            $html .= '<strong>Selected Adjectives (' . count($peer_adjectives) . '):</strong><br>';
+            
+            foreach ($peer_adjectives as $adj) {
+                // Determine the Johari category for this adjective
+                $category = 'unknown';
+                $category_color = '#6c757d';
+                $category_label = 'Unknown';
+                
+                if (in_array($adj, $johari_results['open'])) {
+                    $category = 'open';
+                    $category_color = '#28a745';
+                    $category_label = 'Open';
+                } elseif (in_array($adj, $johari_results['blind'])) {
+                    $category = 'blind';
+                    $category_color = '#ffc107';
+                    $category_label = 'Blind';
+                } elseif (in_array($adj, $johari_results['hidden'])) {
+                    $category = 'hidden';
+                    $category_color = '#17a2b8';
+                    $category_label = 'Hidden';
+                }
+                
+                $html .= '<span style="display: inline-block; margin: 2px; padding: 4px 8px; background: ' . $category_color . '; color: white; border-radius: 12px; font-size: 10px;" title="Category: ' . $category_label . '">' . esc_html($adj) . '</span>';
+            }
+            $html .= '</div>';
+            
+            // Show overlap with self-selected adjectives
+            $overlap = array_intersect($self_adjectives, $peer_adjectives);
+            $html .= '<div style="font-size: 11px; color: #495057;">';
+            $html .= '<strong>Overlap with Self:</strong> ' . count($overlap) . ' adjectives';
+            if (!empty($overlap)) {
+                $html .= ' (' . implode(', ', $overlap) . ')';
+            }
+            $html .= '</div>';
+            
+            $html .= '</div>';
+        }
+        
+        // Summary statistics
+        $html .= '<div style="margin-top: 20px; padding: 15px; background: white; border-radius: 6px; border-left: 3px solid #6f42c1;">';
+        $html .= '<h5 style="color: #6f42c1; margin-top: 0;">📊 Processing Summary</h5>';
+        $html .= '<ul style="margin: 0; padding-left: 20px; font-size: 13px;">';
+        $html .= '<li><strong>Total Peers:</strong> ' . count($peer_responses) . '</li>';
+        
+        // Calculate unique adjectives mentioned by peers
+        $all_peer_adjectives = [];
+        foreach ($peer_responses as $peer) {
+            $peer_adjectives = json_decode($peer->adjectives, true) ?: [];
+            $all_peer_adjectives = array_merge($all_peer_adjectives, $peer_adjectives);
+        }
+        $unique_peer_adjectives = array_unique($all_peer_adjectives);
+        
+        $html .= '<li><strong>Unique Adjectives from Peers:</strong> ' . count($unique_peer_adjectives) . '</li>';
+        $html .= '<li><strong>Self-Peer Overlaps:</strong> ' . count($johari_results['open']) . ' (Open quadrant)</li>';
+        $html .= '<li><strong>Peer-Only Adjectives:</strong> ' . count($johari_results['blind']) . ' (Blind quadrant)</li>';
+        $html .= '<li><strong>Self-Only Adjectives:</strong> ' . count($johari_results['hidden']) . ' (Hidden quadrant)</li>';
+        $html .= '</ul>';
+        $html .= '</div>';
+        
+        $html .= '</div>';
+        
+        return $html;
     }
     
     public function cleanup_expired_links() {
@@ -2593,5 +3386,434 @@ class Johari_MI_Quiz_Module {
                 wp_die('❌ Failed to calculate results for assessment ID ' . $assessment_id, 'Debug Results Calculation Failed');
             }
         }
+    }
+    
+    /**
+     * AJAX: Create test peer user for admin testing (frontend)
+     */
+    public function ajax_create_test_peer() {
+        // Verify nonce
+        check_ajax_referer('jmi_nonce');
+        
+        // Check admin permissions
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $share_url = sanitize_url($_POST['share_url'] ?? '');
+        $peer_name = sanitize_text_field($_POST['peer_name'] ?? 'Test Peer');
+        
+        if (empty($share_url)) {
+            wp_send_json_error('Share URL is required');
+        }
+        
+        // Extract the UUID from the share URL
+        $parsed_url = parse_url($share_url);
+        parse_str($parsed_url['query'] ?? '', $query_params);
+        $peer_uuid = $query_params['jmi'] ?? '';
+        
+        if (empty($peer_uuid)) {
+            wp_send_json_error('Invalid share URL format');
+        }
+        
+        global $wpdb;
+        
+        // Find the link and get assessment info
+        $links_table = $this->table(self::TABLE_LINKS);
+        $link = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM `$links_table` WHERE uuid = %s AND expires_at > NOW()", $peer_uuid
+        ));
+        
+        if (!$link) {
+            wp_send_json_error('Share link has expired or is invalid');
+        }
+        
+        // Create a temporary test user
+        $username = 'test_peer_' . time() . '_' . wp_rand(1000, 9999);
+        $email = $username . '@testpeer.local';
+        $password = wp_generate_password(12, false);
+        
+        $user_id = wp_create_user($username, $password, $email);
+        
+        if (is_wp_error($user_id)) {
+            wp_send_json_error('Failed to create test user: ' . $user_id->get_error_message());
+        }
+        
+        // Update user display name
+        wp_update_user([
+            'ID' => $user_id,
+            'display_name' => $peer_name,
+            'first_name' => $peer_name,
+            'nickname' => $peer_name
+        ]);
+        
+        // Add user meta to mark as test user
+        update_user_meta($user_id, '_jmi_test_peer', true);
+        update_user_meta($user_id, '_jmi_created_by', get_current_user_id());
+        update_user_meta($user_id, '_jmi_created_at', current_time('mysql'));
+        
+        // Store admin context for returning after test completion
+        $admin_user = wp_get_current_user();
+        $admin_return_token = wp_generate_password(32, false);
+        update_user_meta($user_id, '_jmi_admin_return_token', $admin_return_token);
+        update_user_meta($user_id, '_jmi_admin_return_user_id', get_current_user_id());
+        update_user_meta($user_id, '_jmi_admin_return_expires', time() + 7200); // 2 hours
+        
+        // Auto-login the user by creating a temporary login URL
+        $login_token = wp_generate_password(32, false);
+        update_user_meta($user_id, '_jmi_temp_login_token', $login_token);
+        update_user_meta($user_id, '_jmi_temp_login_expires', time() + 3600); // 1 hour
+        
+        // Build login URL that will auto-login and redirect to peer assessment
+        $login_url = add_query_arg([
+            'jmi_temp_login' => $login_token,
+            'redirect_to' => urlencode($share_url)
+        ], home_url('/'));
+        
+        wp_send_json_success([
+            'user_id' => $user_id,
+            'username' => $username,
+            'display_name' => $peer_name,
+            'email' => $email,
+            'login_url' => $login_url,
+            'share_url' => $share_url,
+            'message' => 'Test peer user created successfully'
+        ]);
+    }
+    
+    /**
+     * Handle temporary login for test peer users
+     */
+    public function handle_temp_login() {
+        if (!isset($_GET['jmi_temp_login'])) {
+            return;
+        }
+        
+        $token = sanitize_text_field($_GET['jmi_temp_login']);
+        $redirect_to = isset($_GET['redirect_to']) ? urldecode($_GET['redirect_to']) : home_url('/');
+        
+        // Find user with this token
+        $users = get_users([
+            'meta_key' => '_jmi_temp_login_token',
+            'meta_value' => $token,
+            'number' => 1
+        ]);
+        
+        if (empty($users)) {
+            wp_die('Invalid or expired login token.');
+        }
+        
+        $user = $users[0];
+        
+        // Check if token has expired
+        $expires = get_user_meta($user->ID, '_jmi_temp_login_expires', true);
+        if (!$expires || time() > intval($expires)) {
+            wp_die('Login token has expired.');
+        }
+        
+        // Log in the user
+        wp_set_current_user($user->ID);
+        wp_set_auth_cookie($user->ID, true);
+        
+        // Clean up the token
+        delete_user_meta($user->ID, '_jmi_temp_login_token');
+        delete_user_meta($user->ID, '_jmi_temp_login_expires');
+        
+        // Redirect to the assessment
+        wp_safe_redirect($redirect_to);
+        exit;
+    }
+    
+    /**
+     * AJAX: Cleanup test peer users created by current admin
+     */
+    public function ajax_cleanup_test_users() {
+        // Verify nonce
+        check_ajax_referer('jmi_nonce');
+        
+        // Check admin permissions
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $current_user_id = get_current_user_id();
+        
+        // Find all test peer users created by current admin
+        $test_users = get_users([
+            'meta_key' => '_jmi_created_by',
+            'meta_value' => $current_user_id,
+            'fields' => 'ID'
+        ]);
+        
+        $deleted_count = 0;
+        
+        foreach ($test_users as $user_id) {
+            // Double-check this is a test peer
+            $is_test_peer = get_user_meta($user_id, '_jmi_test_peer', true);
+            if ($is_test_peer) {
+                // Remove user and all their data
+                require_once(ABSPATH . 'wp-admin/includes/user.php');
+                if (wp_delete_user($user_id)) {
+                    $deleted_count++;
+                }
+            }
+        }
+        
+        wp_send_json_success([
+            'deleted_count' => $deleted_count,
+            'message' => "Cleaned up {$deleted_count} test users"
+        ]);
+    }
+    
+    /**
+     * AJAX: Return to admin account after test peer completion
+     */
+    public function ajax_return_to_admin() {
+        // Verify nonce
+        check_ajax_referer('jmi_nonce');
+        
+        if (!is_user_logged_in()) {
+            wp_send_json_error('Not logged in');
+        }
+        
+        $current_user_id = get_current_user_id();
+        
+        // Check if current user is a test peer
+        $is_test_peer = get_user_meta($current_user_id, '_jmi_test_peer', true);
+        if (!$is_test_peer) {
+            wp_send_json_error('Not a test peer user');
+        }
+        
+        // Get admin return context
+        $admin_return_token = get_user_meta($current_user_id, '_jmi_admin_return_token', true);
+        $admin_user_id = get_user_meta($current_user_id, '_jmi_admin_return_user_id', true);
+        $admin_return_expires = get_user_meta($current_user_id, '_jmi_admin_return_expires', true);
+        
+        if (!$admin_return_token || !$admin_user_id || !$admin_return_expires) {
+            wp_send_json_error('Admin return context not found');
+        }
+        
+        // Check if token has expired
+        if (time() > intval($admin_return_expires)) {
+            wp_send_json_error('Admin return token has expired');
+        }
+        
+        // Verify admin user still exists and has proper permissions
+        $admin_user = get_user_by('id', $admin_user_id);
+        if (!$admin_user || !user_can($admin_user, 'manage_options')) {
+            wp_send_json_error('Admin user not found or insufficient permissions');
+        }
+        
+        // Generate return URL with token
+        $return_url = add_query_arg([
+            'jmi_admin_return' => $admin_return_token,
+            'from_test_peer' => $current_user_id
+        ], home_url('/'));
+        
+        wp_send_json_success([
+            'return_url' => $return_url,
+            'admin_name' => $admin_user->display_name ?: $admin_user->user_login,
+            'message' => 'Return URL generated successfully'
+        ]);
+    }
+    
+    /**
+     * Handle admin return after test peer completion
+     */
+    public function handle_admin_return() {
+        if (!isset($_GET['jmi_admin_return'])) {
+            return;
+        }
+        
+        $return_token = sanitize_text_field($_GET['jmi_admin_return']);
+        $test_peer_id = intval($_GET['from_test_peer'] ?? 0);
+        
+        if (!$return_token || !$test_peer_id) {
+            wp_die('Invalid admin return parameters.');
+        }
+        
+        // Find test peer user and validate token
+        $stored_token = get_user_meta($test_peer_id, '_jmi_admin_return_token', true);
+        $admin_user_id = get_user_meta($test_peer_id, '_jmi_admin_return_user_id', true);
+        $expires = get_user_meta($test_peer_id, '_jmi_admin_return_expires', true);
+        
+        if (!$stored_token || $stored_token !== $return_token) {
+            wp_die('Invalid or expired admin return token.');
+        }
+        
+        if (!$expires || time() > intval($expires)) {
+            wp_die('Admin return token has expired.');
+        }
+        
+        // Verify admin user
+        $admin_user = get_user_by('id', $admin_user_id);
+        if (!$admin_user || !user_can($admin_user, 'manage_options')) {
+            wp_die('Admin user not found or insufficient permissions.');
+        }
+        
+        // Log back in as admin
+        wp_set_current_user($admin_user_id);
+        wp_set_auth_cookie($admin_user_id, true);
+        
+        // Clean up the return tokens
+        delete_user_meta($test_peer_id, '_jmi_admin_return_token');
+        delete_user_meta($test_peer_id, '_jmi_admin_return_expires');
+        
+        // Find the assessment page to redirect back to
+        $assess_url = $this->_find_page_by_shortcode('johari_mi_quiz');
+        if (!$assess_url) {
+            $assess_url = $this->_find_page_by_shortcode('johari-mi-quiz');
+        }
+        if (!$assess_url) {
+            $assess_url = admin_url('admin.php?page=johari-mi-subs');
+        }
+        
+        // Add success message as query parameter
+        $redirect_url = add_query_arg([
+            'jmi_admin_returned' => '1',
+            'test_peer_name' => urlencode(get_userdata($test_peer_id)->display_name ?? 'Test Peer')
+        ], $assess_url);
+        
+        wp_safe_redirect($redirect_url);
+        exit;
+    }
+    
+    /**
+     * AJAX: Reset user's assessment (admin only)
+     */
+    public function ajax_reset_assessment() {
+        // Verify nonce
+        check_ajax_referer('jmi_nonce');
+        
+        if (!is_user_logged_in()) {
+            wp_send_json_error('Not logged in');
+        }
+        
+        $current_user_id = get_current_user_id();
+        
+        global $wpdb;
+        
+        // Get all self assessments for this user
+        $self_table = $this->table(self::TABLE_SELF);
+        $self_assessments = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM `$self_table` WHERE user_id = %d", $current_user_id
+        ));
+        
+        $deleted_count = 0;
+        
+        foreach ($self_assessments as $assessment) {
+            // Delete related feedback
+            $feedback_table = $this->table(self::TABLE_FEEDBACK);
+            $wpdb->delete($feedback_table, ['self_id' => $assessment->id]);
+            
+            // Delete related links
+            $links_table = $this->table(self::TABLE_LINKS);
+            $wpdb->delete($links_table, ['self_id' => $assessment->id]);
+            
+            // Delete aggregated results
+            $agg_table = $this->table(self::TABLE_AGG);
+            $wpdb->delete($agg_table, ['self_id' => $assessment->id]);
+            
+            // Delete the self assessment
+            $result = $wpdb->delete($self_table, ['id' => $assessment->id]);
+            if ($result) {
+                $deleted_count++;
+            }
+        }
+        
+        // Clear user meta
+        delete_user_meta($current_user_id, 'jmi_self_uuid');
+        delete_user_meta($current_user_id, 'johari_mi_profile');
+        
+        wp_send_json_success([
+            'deleted_count' => $deleted_count,
+            'message' => "Reset complete. Deleted {$deleted_count} assessments."
+        ]);
+    }
+    
+    /**
+     * AJAX: Debug user data (admin only)
+     */
+    public function ajax_debug_user_data() {
+        // Verify nonce and admin permissions
+        check_ajax_referer('jmi_nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Access denied');
+        }
+        
+        $user_id = intval($_POST['user_id'] ?? get_current_user_id());
+        $self_uuid = get_user_meta($user_id, 'jmi_self_uuid', true);
+        
+        global $wpdb;
+        $self_table = $this->table(self::TABLE_SELF);
+        $links_table = $this->table(self::TABLE_LINKS);
+        $feedback_table = $this->table(self::TABLE_FEEDBACK);
+        
+        $debug_info = [
+            'user_id' => $user_id,
+            'self_uuid_from_meta' => $self_uuid ?: 'NULL',
+            'self_table_entries' => [],
+            'specific_assessment' => null,
+            'peer_links' => [],
+            'peer_feedback_count' => 0
+        ];
+        
+        // Get all self table entries for this user
+        $self_rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM `$self_table` WHERE user_id = %d ORDER BY created_at DESC", $user_id
+        ));
+        
+        foreach ($self_rows as $row) {
+            $debug_info['self_table_entries'][] = [
+                'id' => $row->id,
+                'uuid' => $row->uuid,
+                'created_at' => $row->created_at
+            ];
+        }
+        
+        // If we have a self_uuid from meta, get specific info
+        if ($self_uuid) {
+            $specific_row = $wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM `$self_table` WHERE uuid = %s", $self_uuid
+            ));
+            
+            if ($specific_row) {
+                $debug_info['specific_assessment'] = [
+                    'found' => true,
+                    'id' => $specific_row->id,
+                    'user_id' => $specific_row->user_id,
+                    'uuid' => $specific_row->uuid,
+                    'created_at' => $specific_row->created_at
+                ];
+                
+                // Get peer links
+                $links = $wpdb->get_results($wpdb->prepare(
+                    "SELECT * FROM `$links_table` WHERE self_id = %d", $specific_row->id
+                ));
+                
+                foreach ($links as $link) {
+                    $expired = strtotime($link->expires_at) < time();
+                    $debug_info['peer_links'][] = [
+                        'uuid' => $link->uuid,
+                        'expires_at' => $link->expires_at,
+                        'expired' => $expired
+                    ];
+                }
+                
+                // Get feedback count
+                $debug_info['peer_feedback_count'] = $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM `$feedback_table` WHERE self_id = %d", $specific_row->id
+                ));
+                
+            } else {
+                $debug_info['specific_assessment'] = [
+                    'found' => false,
+                    'message' => 'UUID from meta not found in database!'
+                ];
+            }
+        }
+        
+        wp_send_json_success($debug_info);
     }
 }

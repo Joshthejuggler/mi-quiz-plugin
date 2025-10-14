@@ -1,6 +1,6 @@
 (function(){
   console.log('MI Quiz JS loaded - Version 9.8.1');
-  const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, cdtQuizUrl } = miq_quiz_data;
+  const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, cdtQuizUrl, ageGroup, ageNonce } = miq_quiz_data;
   const { cats: CATS, q1: Q1, q2: Q2, career: CAREER, lev: LEV, grow: GROW, skills: SKILLS, pairs: PAIRS, likert: LIKERT, cdtPrompts } = data;
   const isLoggedIn = !!currentUser;
 
@@ -193,29 +193,37 @@
       });
   }
   
-  // Age → start Part 1
-  ageGate.querySelectorAll('.mi-quiz-button').forEach(btn=>{
-    btn.addEventListener('click', e=>{
-      age = e.currentTarget.dataset.ageGroup || 'adult';
-      ageGate.style.display='none';
-      if (devTools) devTools.style.display = 'block';
-      form1.style.display='block';
+  function getUrlAge(){
+    try { const p=new URLSearchParams(window.location.search); return p.get('age'); } catch(e){ return null; }
+  }
+  function startPart1(initialAge){
+    age = initialAge || getUrlAge() || ((()=>{ try { return localStorage.getItem('mc_age_group'); } catch(e){ return null; } })()) || ageGroup || 'adult';
+    try { localStorage.setItem('mc_age_group', age); } catch(e) {}
+    if (ageGate) ageGate.style.display='none';
+    if (devTools) devTools.style.display = 'block';
+    form1.style.display='block';
 
-      build(form1, part1Items(), steps=>{
-        const scores={}; Object.keys(CATS).forEach(k=>scores[k]=0);
-        steps.forEach(s=>{
-          const cat=s.getAttribute('data-cat'), v=s.querySelector('input[type=radio]:checked')?.value;
-          if(cat && v) scores[cat]=(scores[cat]||0)+parseInt(v,10);
-        });
-        part1Scores = scores;
-        top3 = Object.entries(scores).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k])=>k);
-        $id('mi-top3-list').innerHTML = top3.map(sl=>`<li>${CATS[sl]||sl}</li>`).join('');
-        form1.style.display='none'; devTools && (devTools.style.display='none'); inter.style.display='block';
+    build(form1, part1Items(), steps=>{
+      const scores={}; Object.keys(CATS).forEach(k=>scores[k]=0);
+      steps.forEach(s=>{
+        const cat=s.getAttribute('data-cat'), v=s.querySelector('input[type=radio]:checked')?.value;
+        if(cat && v) scores[cat]=(scores[cat]||0)+parseInt(v,10);
       });
-
-      const sbtn=form1.querySelector('.mi-submit-final'); if(sbtn){ sbtn.id='mi-submit-part1'; sbtn.textContent='Submit Part 1'; }
+      part1Scores = scores;
+      top3 = Object.entries(scores).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k])=>k);
+      $id('mi-top3-list').innerHTML = top3.map(sl=>`<li>${CATS[sl]||sl}</li>`).join('');
+      form1.style.display='none'; devTools && (devTools.style.display='none'); inter.style.display='block';
     });
-  });
+
+    const sbtn=form1.querySelector('.mi-submit-final'); if(sbtn){ sbtn.id='mi-submit-part1'; sbtn.textContent='Submit Part 1'; }
+  }
+
+  // Keep age buttons functional if present, but we no longer require them
+  if (ageGate) {
+    ageGate.querySelectorAll('.mi-quiz-button').forEach(btn=>{
+      btn.addEventListener('click', e=> startPart1(e.currentTarget.dataset.ageGroup || 'adult'));
+    });
+  }
 
   // Start Part 2
   $id('mi-start-part2').addEventListener('click', ()=>{
@@ -357,7 +365,7 @@
     const titleHtml = `
       <div class="results-main-header">
           <div class="site-branding">
-              <img src="http://mi-test-site.local/wp-content/uploads/2025/09/SOSD-Logo.jpeg" alt="Skill of Self-Discovery Logo" class="site-logo">
+                    <img src="${miq_quiz_data.logoUrl || ''}" alt="Skill of Self-Discovery Logo" class="site-logo">
               <span class="site-title">Skill of Self-Discovery</span>
           </div>
       </div>
@@ -542,6 +550,14 @@
   }
 
   function renderResults() {
+    // Ensure any staging UI is hidden when showing results
+    try {
+        const stageEl = document.getElementById('mi-stage');
+        if (stageEl) stageEl.style.display = 'none';
+        const containerEl = document.getElementById('mi-quiz-container');
+        if (containerEl) containerEl.style.display = 'block';
+    } catch(e) {}
+
     resultsDiv.innerHTML = `
         <div id="mi-results-content">${generateResultsHtml()}</div>
         <div id="mi-results-actions" class="results-actions-container"></div>
@@ -614,7 +630,7 @@
             if (confirm('Are you sure? Your saved results will be overwritten when you complete the new quiz.')) {
                 resultsDiv.style.display = 'none';
                 resultsDiv.innerHTML = '';
-                ageGate.style.display = 'block';
+                startPart1();
                 window.scrollTo(0, 0);
             }
         });
@@ -638,7 +654,7 @@
                         alert('Your results have been deleted.');
                         resultsDiv.style.display = 'none';
                         resultsDiv.innerHTML = '';
-                        ageGate.style.display = 'block';
+                        startPart1();
                         window.scrollTo(0,0);
                     } else {
                         alert('Error: ' + (j.data || 'Could not delete results.'));
@@ -650,26 +666,37 @@
         actionsContainer.appendChild(deleteBtn);
     }
 
-    // --- Add CDT Prompt Section (after buttons) ---
-    if (cdtPrompts && cdtQuizUrl && top3 && top3.length >= 3) {
-        const sortedTop3 = [...top3].sort();
-        const promptKey = sortedTop3.join('_');
-        const promptData = cdtPrompts[promptKey];
-
-        if (promptData && promptData.prompt) {
-            const cdtPromptHtml = `
-                <div class="mi-results-section cdt-prompt-section">
-                    <h2 class="mi-section-title">🧭 Your Next Step: The Skill of Self-Discovery</h2>
-                    <p>${promptData.prompt}</p>
-                    <div style="text-align: center; margin-top: 1.5em;">
-                        <a href="${cdtQuizUrl}" class="mi-quiz-button mi-quiz-button-primary mi-quiz-button-next-step">Take the CDT Quiz Now</a>
+    // --- Generic Next Step CTA (preferred) ---
+    try {
+        const nextUrl = (window.miq_quiz_data && window.miq_quiz_data.nextStepUrl) ? window.miq_quiz_data.nextStepUrl : '';
+        const nextTitle = (window.miq_quiz_data && window.miq_quiz_data.nextStepTitle) ? window.miq_quiz_data.nextStepTitle : '';
+        if (nextUrl) {
+            const nextHtml = `
+                <div class="mi-results-section mi-next-steps-section">
+                    <h2 class="mi-section-title">Your Next Step</h2>
+                    <div style="text-align: center; margin-top: 1em;">
+                        <a href="${nextUrl}" class="mi-quiz-button mi-quiz-button-primary mi-quiz-button-next-step">${nextTitle || 'Continue'}</a>
                     </div>
-                </div>
-            `;
-            // Append this section to the main results container, so it appears after the action buttons.
-            resultsDiv.insertAdjacentHTML('beforeend', cdtPromptHtml);
+                </div>`;
+            resultsDiv.insertAdjacentHTML('beforeend', nextHtml);
+        } else if (cdtPrompts && cdtQuizUrl && top3 && top3.length >= 3) {
+            // Fallback: legacy CDT prompt based on MI triad
+            const sortedTop3 = [...top3].sort();
+            const promptKey = sortedTop3.join('_');
+            const promptData = cdtPrompts[promptKey];
+            if (promptData && promptData.prompt) {
+                const cdtPromptHtml = `
+                    <div class="mi-results-section cdt-prompt-section">
+                        <h2 class="mi-section-title">🧭 Your Next Step: The Skill of Self-Discovery</h2>
+                        <p>${promptData.prompt}</p>
+                        <div style="text-align: center; margin-top: 1.5em;">
+                            <a href="${cdtQuizUrl}" class="mi-quiz-button mi-quiz-button-primary mi-quiz-button-next-step">Take the CDT Quiz Now</a>
+                        </div>
+                    </div>`;
+                resultsDiv.insertAdjacentHTML('beforeend', cdtPromptHtml);
+            }
         }
-    }
+    } catch(e) {}
 
 
     // --- Finalize Display ---
@@ -680,6 +707,17 @@
 
   // On page load, check for any existing results to display
   if (currentUser) {
+      // If age in profile missing but we have a local selection, save it once
+      try {
+          const localAge = (getUrlAge() || localStorage.getItem('mc_age_group'));
+          if (localAge && (!ageGroup || ageGroup === 'adult')) {
+              fetch(ajaxUrl, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                  body: new URLSearchParams({ action: 'mc_save_age_group', _ajax_nonce: ageNonce || '', age_group: localAge })
+              }).catch(()=>{});
+          }
+      } catch(e) {}
       if (currentUser.savedResults) {
           const r = currentUser.savedResults;
           age = r.age || 'adult';
@@ -694,6 +732,35 @@
 
           return;
       }
+  }
+
+  // If a staging start button is present, wait until clicked
+  const stageBtn = document.getElementById('mi-stage-start');
+  const stage = document.getElementById('mi-stage');
+  const containerEl = document.getElementById('mi-quiz-container');
+  // Hide any page content before/after our wrapper (About sections placed in page body)
+  (function(){
+    const wrapper = document.querySelector('.quiz-wrapper');
+    if (!wrapper || !wrapper.parentElement) return;
+    const shouldHide = (el)=> {
+      if (!el || !el.classList) return true;
+      // Keep the funnel preview card visible and keep the About modal visible
+      if (el.classList.contains('quiz-funnel-card')) return false;
+      if (el.id === 'mi-about-modal') return false;
+      return true;
+    };
+    let el = wrapper.previousElementSibling; while (el) { if (shouldHide(el)) el.style.display='none'; el = el.previousElementSibling; }
+    el = wrapper.nextElementSibling; while (el) { if (shouldHide(el)) el.style.display='none'; el = el.nextElementSibling; }
+  })();
+  if (stageBtn && stage && containerEl) {
+    stageBtn.addEventListener('click', () => {
+      if (stage) stage.style.display = 'none';
+      if (containerEl) containerEl.style.display = 'block';
+      startPart1();
+    });
+  } else {
+    // Start immediately on legacy pages
+    startPart1();
   }
 
 })();

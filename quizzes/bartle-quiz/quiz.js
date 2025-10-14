@@ -1,6 +1,6 @@
 (function() {
     // --- Setup ---
-    const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, dashboardUrl } = bartle_quiz_data;
+    const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, dashboardUrl, progress } = bartle_quiz_data;
     const { cats: CATS, questions: QUESTIONS, likert: LIKERT } = data;
     const isLoggedIn = !!currentUser;
     const container = document.getElementById('bartle-quiz-container');
@@ -42,27 +42,9 @@
 
     // --- Render Functions ---
     function renderIntro() {
-        // If the platform has the funnel shortcode on this page, do nothing extra.
-        // The PHP should render it above the container.
-        
-        // If user has no age group and is logged in, show the age modal
-        if (isLoggedIn && quizState.needsAgeGroup && typeof window.showAgeGroupModal === 'function') {
-            window.showAgeGroupModal();
-            document.addEventListener('mc-age-group-saved', (e) => {
-                quizState.ageGroup = e.detail.age_group || 'adult';
-                renderQuiz();
-            }, { once: true });
-            return; // Wait for age group to be saved
-        }
-        
-        // If we already know the age group, start quiz
-        if (quizState.ageGroup) {
-            renderQuiz();
-            return;
-        }
-        
-        // Fallback: ask age group only if user isn't logged-in or has no saved group
-        renderAgeGate();
+        // Start quiz immediately; age gating happens at signup only.
+        quizState.ageGroup = quizState.ageGroup || 'adult';
+        renderQuiz();
     }
 
     function renderAgeGate() {
@@ -208,6 +190,15 @@
     }
 
     function renderResults() {
+        // Ensure any staging UI is hidden when showing results
+        try {
+            const stageEl = document.getElementById('bartle-stage');
+            if (stageEl) stageEl.style.display = 'none';
+            const toolbar = document.getElementById('bartle-toolbar');
+            if (toolbar) toolbar.style.display = 'none';
+            const containerEl = document.getElementById('bartle-quiz-container');
+            if (containerEl) containerEl.style.display = 'block';
+        } catch(e) {}
         if (devTools) devTools.style.display = 'none'; // Hide dev tools
         const { sortedScores, ageGroup } = quizState;
         const maxScore = (QUESTIONS[ageGroup]?.[sortedScores[0]?.[0]]?.length || 10) * 5;
@@ -222,7 +213,7 @@
         const headerHtml = `
             <div class="results-main-header">
                 <div class="site-branding">
-                    <img src="http://mi-test-site.local/wp-content/uploads/2025/09/SOSD-Logo.jpeg" alt="Skill of Self-Discovery Logo" class="site-logo">
+                    <img src="${bartle_quiz_data.logoUrl || ''}" alt="Skill of Self-Discovery Logo" class="site-logo">
                     <span class="site-title">Skill of Self-Discovery</span>
                 </div>
             </div>
@@ -250,13 +241,30 @@
             </div>`;
 
         let nextStepsHtml = '';
-        if (dashboardUrl) {
+        const miDone = progress && !!progress.miComplete;
+        const cdtDone = progress && !!progress.cdtComplete;
+        const johariDone = progress && !!progress.johariComplete;
+        if (progress && !johariDone && (miDone && cdtDone)) {
+            // Prompt the Johari × MI step
+            const jUrl = progress.johariUrl || '#';
             nextStepsHtml = `
                 <div class="bartle-results-section bartle-next-steps-section">
-                    <h3 class="bartle-section-title">Initial Assessments Complete!</h3>
-                    <p>Great work—your <em>Self-Discovery Profile</em> is now unlocked. Review it below, then let our <strong>AI Coach</strong> translate your strengths into real-world experiments that have a <em>high likelihood of success</em>.</p>
+                    <h3 class="bartle-section-title">Unlock Peer‑Powered Insights</h3>
+                    <p>Invite 2–5 trusted peers to quickly choose adjectives that describe you. In minutes, you’ll reveal your Johari Window and see how it connects to your MI strengths — and <strong>unlock Lab Mode</strong>, your AI coach that turns insights into ready‑to‑run experiments.</p>
                     <div class="bartle-results-actions">
-                        <a href="${dashboardUrl}" class="bartle-quiz-button bartle-quiz-button-primary">View Your Self-Discovery Profile</a>
+                        <a href="${jUrl}" class="bartle-quiz-button bartle-quiz-button-primary">Start Johari × MI Now</a>
+                    </div>
+                </div>`;
+        } else if (dashboardUrl) {
+            // All assessments complete
+            const labUrl = dashboardUrl + (dashboardUrl.includes('?') ? '&' : '?') + 'tab=lab';
+            nextStepsHtml = `
+                <div class="bartle-results-section bartle-next-steps-section">
+                    <h3 class="bartle-section-title">You’ve Unlocked Lab Mode</h3>
+                    <p>Your <em>Self‑Discovery Profile</em> is complete. Now let our <strong>AI Coach</strong> turn your strengths and peer insights into short, high‑leverage experiments — tailored to your goals, schedule, and risk comfort.</p>
+                    <div class="bartle-results-actions">
+                        <a href="${labUrl}" class="bartle-quiz-button bartle-quiz-button-primary">🚀 Open Lab Mode</a>
+                        <a href="${dashboardUrl}" class="bartle-quiz-button bartle-quiz-button-secondary">View Your Profile</a>
                     </div>
                 </div>`;
         }
@@ -411,7 +419,9 @@
         if (isLoggedIn && bartle_quiz_data.userAgeGroup) {
             quizState.ageGroup = bartle_quiz_data.userAgeGroup;
         } else if (isLoggedIn && bartle_quiz_data.needsAgeGroup) {
-            quizState.needsAgeGroup = true;
+            // Do not prompt here; default to adult
+            quizState.needsAgeGroup = false;
+            quizState.ageGroup = 'adult';
         } else {
             // Default for non-logged-in users
             quizState.ageGroup = 'adult';

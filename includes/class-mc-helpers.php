@@ -248,6 +248,48 @@ class MC_Helpers {
         
         return human_time_diff($timestamp);
     }
+
+    /**
+     * Get the absolute URL for the site's logo.
+     * Uses the Custom Logo if set, otherwise falls back to the Site Icon,
+     * and finally returns null if neither is available.
+     *
+     * @return string|null
+     */
+    public static function logo_url() {
+        // Custom Logo (Customizer)
+        $custom_logo_id = get_theme_mod('custom_logo');
+        if ($custom_logo_id) {
+            $url = wp_get_attachment_image_url($custom_logo_id, 'full');
+            if ($url) return $url;
+        }
+        // Site Icon (favicon) fallback
+        $site_icon = get_site_icon_url();
+        if (!empty($site_icon)) {
+            return $site_icon;
+        }
+        return null;
+    }
+
+    /**
+     * Render a logo <img> tag with sensible defaults.
+     * Example: echo MC_Helpers::logo_img(['class' => 'site-logo', 'alt' => 'Brand']);
+     *
+     * @param array $attrs
+     * @return string
+     */
+    public static function logo_img($attrs = []) {
+        $src = self::logo_url();
+        if (!$src) return '';
+        $defaults = [
+            'class' => 'site-logo',
+            'alt'   => get_bloginfo('name'),
+            'height'=> ''
+        ];
+        $a = wp_parse_args($attrs, $defaults);
+        $height_attr = $a['height'] !== '' ? ' height="' . esc_attr($a['height']) . '"' : '';
+        return '<img src="' . esc_url($src) . '" alt="' . esc_attr($a['alt']) . '" class="' . esc_attr($a['class']) . '"' . $height_attr . ' />';
+    }
     
     /**
      * Get plugin version

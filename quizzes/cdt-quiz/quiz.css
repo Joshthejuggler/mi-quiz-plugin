@@ -37,6 +37,16 @@
   /* Border, padding, and shadow are now on the wrapper/container */
   text-align:center
 }
+/* Ensure About modal has comfortable padding */
+#cdt-about-modal.cdt-quiz-card { padding: 1.5em 1.75em; text-align: left; }
+/* Staging intro layout */
+#cdt-stage.cdt-quiz-card { padding: 1.75em 2em 1.5em; text-align: left; }
+#cdt-stage .stage-intro h3 { margin: 1em 0 0.5em; }
+#cdt-stage .stage-intro ul { margin: 0.25em 0 0 1.5em; }
+/* Funnel card spacing */
+.quiz-funnel-card .cdt-quiz-card {
+  padding: 1.25em 1.5em 1.5em;
+}
 /* --- Button Styles (consistent with MI Quiz) --- */
 .cdt-quiz-button {
     display: inline-block;
@@ -47,6 +57,8 @@
     cursor: pointer;
     transition: all .2s;
     text-decoration: none;
+    text-align: center; /* Center multiline text */
+    white-space: normal; /* Allow wrapping while centered */
 }
 .cdt-quiz-button:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
 

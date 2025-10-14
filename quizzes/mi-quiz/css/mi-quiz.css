@@ -52,6 +52,14 @@
   /* Border, padding, and shadow are now on the wrapper/container */
   text-align:center
 }
+/* Staging intro layout */
+#mi-stage.mi-quiz-card { padding: 1.75em 2em 1.5em; text-align: left; }
+#mi-stage .stage-intro h3 { margin: 1em 0 0.5em; }
+#mi-stage .stage-intro ul { margin: 0.25em 0 0 1.5em; }
+/* Funnel card spacing */
+.quiz-funnel-card .mi-quiz-card {
+  padding: 1.25em 1.5em 1.5em;
+}
 /* --- New Button Styles --- */
 .mi-quiz-button {
     display: inline-block;

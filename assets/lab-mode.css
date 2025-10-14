@@ -2270,11 +2270,9 @@ body.lab-typeform-active .tab-content:not(#tab-lab) {
 }
 
 /* Simplified Navigation */
-.desktop-nav,
-.mobile-nav {
-    display: flex;
-    justify-content: center;
-}
+/* Show desktop-style tabs by default; hide mobile duplicate */
+.desktop-nav { display: flex; justify-content: center; }
+.mobile-nav { display: none; justify-content: center; }
 
 .experiments-tabs {
     display: flex;
@@ -2381,6 +2379,9 @@ body.lab-typeform-active .tab-content:not(#tab-lab) {
 
 /* ===== Mobile Responsive ===== */
 @media (max-width: 768px) {
+    /* On mobile, show the mobile nav and hide the desktop one to avoid two rows */
+    .desktop-nav { display: none; }
+    .mobile-nav { display: flex; }
     .experiments-tabs {
         justify-content: center;
         padding-bottom: 0.5rem;
@@ -5113,15 +5114,25 @@ body.modal-open {
 }
 
 .debug-code {
-    background: #1f2937;
-    color: #e5e7eb;
-    padding: 0.75rem 1rem;
+    background: #0f172a; /* higher contrast slate */
+    color: #e2e8f0;      /* near-white text */
+    padding: 0.875rem 1rem;
     border-radius: 0.375rem;
     font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-    font-size: 0.8125rem;
-    line-height: 1.5;
+    font-size: 0.9rem;   /* improve readability */
+    line-height: 1.6;
     overflow-x: auto;
-    border: 1px solid #374151;
+    border: 1px solid #334155;
+}
+
+/* Ensure nested pre/code inherit readable colors */
+.debug-code pre,
+.debug-code code {
+    color: inherit !important;
+    background: transparent !important;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .debug-prompt {

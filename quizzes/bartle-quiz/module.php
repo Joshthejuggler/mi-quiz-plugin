@@ -52,6 +52,9 @@ class Bartle_Quiz_Plugin {
         }
 
         wp_enqueue_style('bartle-quiz-css', plugins_url('quiz.css', __FILE__), [], self::VERSION);
+        // Enqueue shared About card styles
+        $base_url = plugin_dir_url(MC_QUIZ_PLATFORM_PATH . 'mi-quiz-platform.php');
+        wp_enqueue_style('mc-about-cards', $base_url . 'assets/about-cards.css', [], '1.0.0');
         wp_register_script('bartle-quiz-js', plugins_url('quiz.js', __FILE__), ['jquery'], self::VERSION, true);
 
         // Load this quiz's questions.
@@ -80,6 +83,15 @@ class Bartle_Quiz_Plugin {
         }
 
         $dashboard_url = $this->_find_page_by_shortcode('quiz_dashboard');
+        // Determine completion state of other assessments and Johari URL
+        $mi_complete = false; $cdt_complete = false; $johari_complete = false;
+        $johari_url = $this->_find_page_by_shortcode('johari_mi_quiz') ?: $this->_find_page_by_shortcode('johari-mi-quiz');
+        if (is_user_logged_in()) {
+            $uid = get_current_user_id();
+            $mi_complete = !empty(get_user_meta($uid, 'miq_quiz_results', true));
+            $cdt_complete = !empty(get_user_meta($uid, 'cdt_quiz_results', true));
+            $johari_complete = !empty(get_user_meta($uid, 'johari_mi_profile', true));
+        }
 
         // Pass data to our JavaScript file.
         wp_localize_script('bartle-quiz-js', 'bartle_quiz_data', [
@@ -87,9 +99,16 @@ class Bartle_Quiz_Plugin {
             'ajaxUrl'     => admin_url('admin-ajax.php'),
             'ajaxNonce'   => wp_create_nonce('bartle_nonce'),
             'loginUrl'    => wp_login_url(get_permalink()),
+            'logoUrl'     => MC_Helpers::logo_url(),
             'dashboardUrl' => $dashboard_url,
             'userAgeGroup' => $user_age_group,
             'needsAgeGroup' => $needs_age_group,
+            'progress'    => [
+                'miComplete' => $mi_complete,
+                'cdtComplete' => $cdt_complete,
+                'johariComplete' => $johari_complete,
+                'johariUrl' => $johari_url,
+            ],
             'data'        => [
                 'cats'      => $bartle_categories ?? [],
                 'questions' => $bartle_questions ?? [],
@@ -108,28 +127,43 @@ class Bartle_Quiz_Plugin {
             $needs_age_group = !MC_User_Profile::has_age_group($user_id);
         }
         
+        $has_results = false;
+        if ($user_id) {
+            $has_results = !empty(get_user_meta($user_id, self::META_KEY, true));
+        }
+
         ob_start();
         ?>
         <div class="quiz-wrapper">
             <?php if ($dashboard_url): ?>
-                <div class="back-bar">
+                <div class="back-bar" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
                     <a href="<?php echo esc_url($dashboard_url); ?>" class="back-link">&larr; Return to Dashboard</a>
+                    <button type="button" id="bartle-about-top" class="bartle-quiz-button bartle-quiz-button-secondary">About</button>
                 </div>
             <?php endif; ?>
             
-            <!-- Show funnel for context -->
-            <?php if (class_exists('Micro_Coach_Core')): ?>
-                <div class="quiz-funnel-intro">
-                    <h2>Your Progress in the Skill of Self-Discovery Journey</h2>
-                    <?php 
-                    // Use the shortcode instead of direct method call to ensure proper context
-                    echo do_shortcode('[quiz_funnel show_description="false" style="compact"]');
-                    ?>
+            <!-- Staging screen: Why it matters + funnel + Start button -->
+            <div id="bartle-stage" class="bartle-quiz-card">
+                <h2>Discover What Truly Drives You</h2>
+                <div class="bartle-intro-content">
+                    <p>Your Player Type reveals the motivations that keep you engaged — curiosity, progress, connection, or challenge. Knowing this helps you choose learning paths and experiments you’ll actually finish.</p>
+                    <h3>How It Works</h3>
+                    <ul class="player-types-list">
+                        <li>Answer 40 quick statements (about 4–6 minutes).</li>
+                        <li>See your primary and secondary Player Types with clear, plain‑language insights.</li>
+                        <li>Get practical guidance for studying, building skills, and collaborating based on what drives you.</li>
+                    </ul>
                 </div>
-            <?php endif; ?>
+                <div style="text-align:center; margin: 1em 0 0.5em;">
+                    <button type="button" id="bartle-start-btn" class="bartle-quiz-button bartle-quiz-button-primary">Start Bartle Quiz</button>
+                </div>
+            </div>
+            
+            <!-- Deprecated toolbar (kept for safety, hidden) -->
+            <div id="bartle-toolbar" style="display:none; text-align:right; padding: 0 2em 0.75em;"></div>
             
             <!-- Bartle Quiz Introduction -->
-            <div class="bartle-quiz-intro">
+            <div id="bartle-about-modal" class="bartle-quiz-intro quiz-about-card" style="display:none;">
                 <h2>Bartle Player Type Quiz</h2>
                 <div class="bartle-intro-content">
                     <p>The Bartle Player Type Quiz is designed to uncover what truly motivates you when you engage with games, challenges, or even everyday learning. Originally created by game researcher Richard Bartle, the model has been widely used to understand different kinds of players — but the same framework also applies to work, school, and personal growth.</p>
@@ -150,14 +184,22 @@ class Bartle_Quiz_Plugin {
                 <strong>Dev tools:</strong>
                 <button type="button" id="bartle-autofill-run" class="bartle-quiz-button bartle-quiz-button-small">Auto-Fill</button>
             </div>
-            <div id="bartle-quiz-container"><div class="bartle-quiz-card"><p>Loading Quiz...</p></div></div>
+            <div id="bartle-quiz-container" style="display:none;"><div class="bartle-quiz-card"><p>Loading Quiz...</p></div></div>
             
             <?php if ($needs_age_group && class_exists('MC_User_Profile')): ?>
                 <?php echo MC_User_Profile::render_age_group_form('bartle-quiz'); ?>
             <?php endif; ?>
         </div>
         
+        <div class="quiz-wrapper quiz-funnel-card" style="margin: 2em auto;">
+            <div class="bartle-quiz-card">
+                <h2 class="bartle-section-title">Your Progress So Far</h2>
+                <?php echo do_shortcode('[quiz_funnel show_description="false" style="dashboard"]'); ?>
+            </div>
+        </div>
         <style>
+        #bartle-about-modal { position: relative; }
+        #bartle-about-modal .bartle-quiz-intro { text-align: left; }
         .quiz-funnel-intro {
             background: #f8fafc;
             border: 1px solid #e2e8f0;
@@ -207,6 +249,56 @@ class Bartle_Quiz_Plugin {
             margin-bottom: 1rem;
             color: #4a5568;
         }
+        </style>
+        <script>
+        (function(){
+            var startBtn = document.getElementById('bartle-start-btn');
+            var stage = document.getElementById('bartle-stage');
+            var container = document.getElementById('bartle-quiz-container');
+            var toolbar = document.getElementById('bartle-toolbar');
+            var aboutBtn = document.getElementById('bartle-about-btn');
+            var aboutBtnTop = document.getElementById('bartle-about-top');
+            var aboutModal = document.getElementById('bartle-about-modal');
+            if (startBtn && stage && container) {
+                startBtn.addEventListener('click', function(){
+                    stage.style.display = 'none';
+                    container.style.display = 'block';
+                    if (toolbar) toolbar.style.display = 'block';
+                });
+            }
+            function toggleAbout(e){
+                if (e && e.preventDefault) e.preventDefault();
+                if (!aboutModal) return false;
+                var cont = document.getElementById('bartle-quiz-container');
+                var stg  = document.getElementById('bartle-stage');
+                var tlb  = document.getElementById('bartle-toolbar');
+                var show = (aboutModal.style.display === 'none' || !aboutModal.style.display);
+                if (show) {
+                    if (cont) { aboutModal.dataset.prevCont = cont.style.display || ''; cont.style.display = 'none'; }
+                    if (stg)  { aboutModal.dataset.prevStage = stg.style.display || ''; stg.style.display = 'none'; }
+                    if (tlb)  { aboutModal.dataset.prevTool = tlb.style.display || ''; tlb.style.display = 'none'; }
+                    aboutModal.style.display = 'block';
+                    try { aboutModal.scrollIntoView({ behavior:'smooth', block:'start' }); } catch(err){}
+                } else {
+                    aboutModal.style.display = 'none';
+                    if (cont && ('prevCont' in aboutModal.dataset)) cont.style.display = aboutModal.dataset.prevCont;
+                    if (stg && ('prevStage' in aboutModal.dataset)) stg.style.display = aboutModal.dataset.prevStage;
+                    if (tlb && ('prevTool' in aboutModal.dataset)) tlb.style.display = aboutModal.dataset.prevTool;
+                }
+                return false;
+            }
+            if (aboutBtn && !aboutBtn.getAttribute('data-about-bound')) { aboutBtn.addEventListener('click', toggleAbout); aboutBtn.setAttribute('data-about-bound','1'); }
+            if (aboutBtnTop && !aboutBtnTop.getAttribute('data-about-bound')) { aboutBtnTop.addEventListener('click', toggleAbout); aboutBtnTop.setAttribute('data-about-bound','1'); }
+        })();
+        </script>
+        <style>
+        /* Unified About card styling (shared across quizzes) */
+        .quiz-about-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:2rem; text-align:left; }
+        .quiz-about-card h2 { margin:0 0 1rem 0; color:#1a202c; font-size:1.75rem; }
+        .quiz-about-card h3 { margin:1.5rem 0 0.75rem 0; color:#2d3748; font-size:1.25rem; }
+        .quiz-about-card p { line-height:1.6; margin-bottom:1rem; color:#4a5568; }
+        .quiz-about-card ul { margin:0.75rem 0 1.5rem 1.5rem; }
+        .quiz-about-card li { margin-bottom:0.5rem; line-height:1.5; }
         </style>
         <?php
         return ob_get_clean();

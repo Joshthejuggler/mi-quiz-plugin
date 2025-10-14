@@ -13,8 +13,13 @@
     
     console.log('Raw jmi_quiz_data:', jmi_quiz_data);
     
-    const { currentUser, ajaxUrl, ajaxNonce, data } = jmi_quiz_data;
+    const { currentUser, ajaxUrl, ajaxNonce, data, dashboardUrl } = jmi_quiz_data;
     const { adjective_map, domain_colors, quadrant_colors, all_adjectives } = data;
+    
+    // DEBUG: Log adjective data
+    console.log('DEBUG: adjective_map:', adjective_map);
+    console.log('DEBUG: all_adjectives:', all_adjectives);
+    console.log('DEBUG: Total adjective count:', all_adjectives?.length);
     
     // Initial login state check - will be updated by AJAX polling
     let isLoggedIn = !!currentUser;
@@ -31,6 +36,62 @@
     const selfContainer = $id('jmi-self');
     const shareContainer = $id('jmi-share');
     const resultsContainer = $id('jmi-results');
+
+    // Ensure the main app container is visible (hide stage/intro)
+    function showMainContainer() {
+        try {
+            const stage = document.getElementById('jmi-stage');
+            const cont = document.getElementById('jmi-container');
+            if (stage) stage.style.display = 'none';
+            if (cont) cont.style.display = 'block';
+        } catch (e) {}
+    }
+
+    // Update header/intro text based on context
+    function setHeaderContext(context) {
+        const card = document.querySelector('.mi-quiz-card');
+        if (!card) return;
+        const titleEl = card.querySelector('.mi-section-title');
+        const descEl = card.querySelector('p');
+
+        switch (context) {
+            case 'results':
+                if (titleEl) titleEl.textContent = 'Johari × MI Results';
+                if (descEl) descEl.textContent = 'Review your Johari × MI window based on your selections and peer feedback.';
+                break;
+            case 'share':
+                if (titleEl) titleEl.textContent = 'Invite Peers';
+                if (descEl) descEl.textContent = 'Share your unique link with 2–5 people who know you. Results unlock after enough responses.';
+                break;
+            case 'peer':
+                if (titleEl) titleEl.textContent = 'Provide Peer Feedback';
+                if (descEl) descEl.textContent = 'Select 6–10 adjectives that best describe your friend. Your feedback is anonymous.';
+                break;
+            case 'self':
+            default:
+                if (titleEl) titleEl.textContent = 'Johari × MI';
+                if (descEl) descEl.textContent = 'Select adjectives that describe you. Then invite peers to do the same. We’ll map results to the Johari Window and MI domains.';
+        }
+    }
+
+    // Hide any static page content that appears after the shortcode output
+    // (e.g., About/How It Works sections added to the page body)
+    function hideContentAfterQuizWrapper() {
+        const wrapper = document.querySelector('.quiz-wrapper');
+        if (!wrapper || !wrapper.parentElement) return;
+        const shouldHide = (el) => {
+            if (!el || !el.classList) return true;
+            if (el.classList.contains('quiz-funnel-card')) return false;
+            if (el.id === 'jmi-about-modal') return false; // keep About visible
+            return true;
+        };
+        // Hide following siblings, but keep funnel card
+        let el = wrapper.nextElementSibling;
+        while (el) { if (shouldHide(el)) el.style.display = 'none'; el = el.nextElementSibling; }
+        // Hide preceding siblings (content placed before shortcode)
+        el = wrapper.previousElementSibling;
+        while (el) { if (shouldHide(el)) el.style.display = 'none'; el = el.previousElementSibling; }
+    }
     
     // Debug: Check if containers exist
     console.log('DEBUG: Container check:', {
@@ -200,6 +261,8 @@
     // Initialize app
     function init() {
         console.log('DEBUG: init() function called!');
+        // Hide any page content before/after our wrapper (About blocks, etc.)
+        hideContentAfterQuizWrapper();
         
         // Check if we're in peer assessment mode
         const urlParams = new URLSearchParams(window.location.search);
@@ -216,6 +279,16 @@
             urlParams: Object.fromEntries(urlParams.entries())
         });
         
+        // Detailed user state debugging
+        if (currentUser) {
+            console.log('User state details:', {
+                hasJohari: !!currentUser.johari,
+                existingState: currentUser.existingState,
+                selfUuid: currentUser.selfUuid,
+                peerLinkUuid: currentUser.peerLinkUuid
+            });
+        }
+        
         // Check if we just came back from registration/login
         const justRegistered = urlParams.get('registered') || urlParams.get('login');
         if (justRegistered && peerUuid && !isLoggedIn) {
@@ -231,25 +304,34 @@
             appState = 'peer-assessment';
             console.log('DEBUG: About to call renderPeerAssessment()');
             renderPeerAssessment();
+        } else if (currentUser && currentUser.johari) {
+            // User already has stored results in profile meta; show them immediately
+            console.log('DEBUG: Path 1 - User has johari results in profile, rendering results');
+            appState = 'results';
+            renderResults(currentUser.johari);
         } else if (currentUser && currentUser.existingState) {
             // User has an existing assessment
+            console.log('DEBUG: Path 2 - User has existing state:', currentUser.existingState);
             shareUuid = currentUser.selfUuid;
             
             if (currentUser.existingState === 'results-ready') {
                 // Always fetch fresh results via AJAX to ensure MI integration data is included
+                console.log('DEBUG: Path 2a - Results ready, fetching fresh data via AJAX for MI integration...');
                 appState = 'results';
-                console.log('Results ready, fetching fresh data via AJAX for MI integration...');
                 checkProgress(true); // Fetch fresh results with MI profile data
             } else if (currentUser.existingState === 'awaiting-peers' && currentUser.peerLinkUuid) {
+                console.log('DEBUG: Path 2b - Awaiting peers with peer link UUID, rendering share interface');
                 appState = 'awaiting-peers';
                 // Generate the share URL using the peer link UUID
                 const shareUrl = window.location.origin + window.location.pathname + '?jmi=' + currentUser.peerLinkUuid;
                 renderShareInterface(shareUrl);
             } else {
+                console.log('DEBUG: Path 2c - Existing state but no peer link, starting self-assessment');
                 appState = 'initial';
                 renderSelfAssessment();
             }
         } else {
+            console.log('DEBUG: Path 3 - Default path, no current user or existing state, starting self-assessment');
             appState = 'initial';
             renderSelfAssessment();
         }
@@ -257,6 +339,8 @@
 
     // Render self-assessment interface
     function renderSelfAssessment() {
+        showMainContainer();
+        setHeaderContext('self');
         selfContainer.innerHTML = `
             <div class="jmi-section">
                 <h3>Step 1: Select Your Adjectives</h3>
@@ -289,6 +373,7 @@
 
         function updateSelectedAdjectives() {
             selectedAdjectives = $$('.jmi-adjective-checkbox:checked').map(cb => cb.value);
+            console.log('DEBUG: updateSelectedAdjectives called, selectedAdjectives:', selectedAdjectives);
         }
 
         function updateCounter() {
@@ -306,6 +391,9 @@
     function renderPeerAssessment() {
         console.log('Rendering peer assessment, login state:', { isLoggedIn, currentUser });
         
+        // Update header and check if user is logged in for peer feedback
+        showMainContainer();
+        setHeaderContext('peer');
         // Check if user is logged in for peer feedback
         if (!isLoggedIn) {
             const currentUrl = window.location.href;
@@ -706,10 +794,6 @@
 
     // Render mixed adjective grid without domain grouping
     function renderMixedAdjectiveGrid(containerId) {
-        console.log('renderMixedAdjectiveGrid called with containerId:', containerId);
-        console.log('adjective_map:', adjective_map);
-        console.log('domain_colors:', domain_colors);
-        
         const container = $id(containerId);
         if (!container) {
             console.error('Container not found:', containerId);
@@ -804,12 +888,39 @@
         .then(r => r.json())
         .then(response => {
             if (response.success) {
+                // Check if this is a test peer with admin return capability
+                const adminReturnSection = (currentUser && currentUser.isTestPeer && currentUser.adminReturnAvailable) ? `
+                    <div style="margin-top: 2em; padding: 1.5em; background: #e7f3ff; border: 2px solid #2196f3; border-radius: 8px;">
+                        <h4 style="color: #1976d2; margin: 0 0 1em; display: flex; align-items: center; gap: 0.5em;">
+                            🔄 Test Complete - Return to Admin
+                        </h4>
+                        <p style="color: #1976d2; margin: 0 0 1em; font-size: 0.9em;">
+                            You've successfully completed the peer assessment as a test user. 
+                            Click below to automatically log back into your admin account.
+                        </p>
+                        <div style="display: flex; gap: 1em; align-items: center;">
+                            <button id="jmi-return-to-admin" class="mi-quiz-button mi-quiz-button-primary"
+                                    style="background: #2196f3; border-color: #2196f3;">
+                                🔙 Return to Admin Account
+                            </button>
+                            <small style="color: #1976d2;">You'll be logged back in as admin automatically</small>
+                        </div>
+                    </div>
+                ` : '';
+                
                 selfContainer.innerHTML = `
                     <div class="jmi-success">
                         <h3>✓ Thank You!</h3>
                         <p>Your feedback has been submitted successfully. Your friend will be notified when enough peers have responded.</p>
+                        ${adminReturnSection}
                     </div>
                 `;
+                
+                // Add event listener for return to admin button
+                const returnBtn = document.getElementById('jmi-return-to-admin');
+                if (returnBtn) {
+                    returnBtn.addEventListener('click', returnToAdmin);
+                }
             } else {
                 alert('Error: ' + (response.data || 'Could not submit feedback'));
                 submitBtn.disabled = false;
@@ -826,8 +937,53 @@
 
     // Render share interface
     function renderShareInterface(shareUrl) {
+        console.log('DEBUG: renderShareInterface called with shareUrl:', shareUrl);
+        setHeaderContext('share');
         selfContainer.style.display = 'none';
         shareContainer.style.display = 'block';
+        
+        // Check if current user is admin
+        const isAdmin = currentUser && currentUser.isAdmin;
+        
+        const adminTestingSection = isAdmin ? `
+            <div class="jmi-admin-testing" style="background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 1.5em; margin: 1.5em 0;">
+                <h4 style="color: #856404; margin: 0 0 1em; display: flex; align-items: center; gap: 0.5em;">
+                    🔧 Admin Testing Tools
+                </h4>
+                <p style="color: #856404; margin: 0 0 1em; font-size: 0.9em;">
+                    Create multiple test peers (up to 5) to see how the Johari Window evolves. Each peer auto-logs in and submits feedback.
+                    Use "🔄 Reset for Testing" above to start fresh if needed.
+                </p>
+                <div style="display: flex; gap: 1em; align-items: center; flex-wrap: wrap; margin-bottom: 1em;">
+                    <input type="text" id="jmi-peer-name" placeholder="Test Peer Name" value="Test Peer" 
+                           style="padding: 0.5em; border: 1px solid #ccc; border-radius: 4px; flex: 1; min-width: 150px;">
+                    <button id="jmi-create-test-peer" class="mi-quiz-button mi-quiz-button-secondary" 
+                            style="background: #ffc107; border-color: #ffc107; color: #212529;">
+                        ➕ Create Test Peer
+                    </button>
+                </div>
+                <div style="display: flex; gap: 0.5em; margin-bottom: 1em;">
+                    <button id="jmi-cleanup-test-users" class="mi-quiz-button mi-quiz-button-secondary" 
+                            style="background: #dc3545; border-color: #dc3545; color: #fff; font-size: 0.8em; padding: 0.4em 0.8em;">
+                        🗑️ Clean Up Test Users
+                    </button>
+                    <small style="color: #856404; align-self: center;">Removes all test peer users created by you</small>
+                </div>
+                <div id="jmi-test-peers-list" style="margin-top: 1em;"></div>
+                <div style="background: #f8f9fa; border-left: 4px solid #17a2b8; padding: 1em; margin-top: 1em; font-size: 0.85em;">
+                    <div style="font-weight: 600; color: #17a2b8; margin-bottom: 0.5em;">📈 Testing with Multiple Peers:</div>
+                    <ul style="margin: 0 0 0.8em; padding-left: 1.5em; color: #495057; line-height: 1.4;">
+                        <li><strong>2 peers:</strong> Minimum for results - shows basic Johari quadrants</li>
+                        <li><strong>3-4 peers:</strong> More reliable patterns emerge in blind spots</li>
+                        <li><strong>5 peers:</strong> Most comprehensive view - best for real-world usage</li>
+                    </ul>
+                    <div style="background: #e7f3ff; padding: 0.8em; border-radius: 6px; border-left: 3px solid #2196f3;">
+                        <div style="font-size: 0.8em; color: #1976d2; font-weight: 500; margin-bottom: 0.3em;">💡 Testing Workflow:</div>
+                        <div style="font-size: 0.8em; color: #1976d2; line-height: 1.3;">Create peers → Submit feedback → Click "📈 View Current Results" → Use "🔧 Back to Testing Tools" → Repeat</div>
+                    </div>
+                </div>
+            </div>
+        ` : '';
         
         shareContainer.innerHTML = `
             <div class="jmi-section">
@@ -841,7 +997,10 @@
                 
                 <div class="jmi-share-actions">
                     <button id="jmi-email-share" class="mi-quiz-button mi-quiz-button-secondary">📧 Email Link</button>
+                    ${isAdmin ? `<button id="jmi-admin-reset" class="mi-quiz-button mi-quiz-button-secondary" style="background: #ffc107; border-color: #ffc107; color: #212529;">🔄 Reset for Testing</button>` : ''}
                 </div>
+                
+                ${adminTestingSection}
                 
                 <div class="jmi-progress-display" id="jmi-progress-display">
                     <h4>📊 Response Progress</h4>
@@ -849,7 +1008,7 @@
                         <div class="jmi-progress-fill" id="jmi-progress-fill">0/2</div>
                     </div>
                     <p class="jmi-progress-text" id="jmi-progress-text">Waiting for peer responses...</p>
-                    <p class="jmi-progress-note">Results will be available once 2+ peers complete the assessment</p>
+                    <p class="jmi-progress-note">${isAdmin ? 'Results available after 2+ peers, but you can test with up to 5 to see how data evolves' : 'Results will be available once 2+ peers complete the assessment'}</p>
                 </div>
             </div>
         `;
@@ -872,6 +1031,28 @@
             const body = encodeURIComponent(`Hi!\n\nI'm doing a Johari Window assessment and would value your perspective. Please click this link and select adjectives that describe me:\n\n${shareUrl}\n\nIt only takes 2-3 minutes. Thanks!`);
             window.open(`mailto:?subject=${subject}&body=${body}`);
         });
+        
+        // Admin test peer creation
+        const createTestPeerBtn = $id('jmi-create-test-peer');
+        if (createTestPeerBtn) {
+            createTestPeerBtn.addEventListener('click', createTestPeer);
+        }
+        
+        // Admin test user cleanup
+        const cleanupBtn = $id('jmi-cleanup-test-users');
+        if (cleanupBtn) {
+            cleanupBtn.addEventListener('click', cleanupTestUsers);
+        }
+        
+        // Admin reset for testing
+        const adminResetBtn = $id('jmi-admin-reset');
+        if (adminResetBtn) {
+            adminResetBtn.addEventListener('click', () => {
+                if (confirm('Reset your assessment for testing? This will delete all peer responses and let you start fresh.')) {
+                    resetAssessment();
+                }
+            });
+        }
 
         // Check progress immediately and update display
         updateProgressDisplay();
@@ -905,8 +1086,8 @@
                 const { peer_count, ready_for_results } = response.data;
                 updateProgressUI(peer_count, ready_for_results);
                 
-                // If ready, automatically load results
-                if (ready_for_results) {
+                // If ready, automatically load results (except for admins who might want to test more)
+                if (ready_for_results && !(currentUser && currentUser.isAdmin)) {
                     setTimeout(() => {
                         checkProgress(true); // Load the actual results
                     }, 1000);
@@ -925,17 +1106,54 @@
         const progressFill = document.getElementById('jmi-progress-fill');
         const progressText = document.getElementById('jmi-progress-text');
         const progressBar = document.querySelector('.jmi-progress-bar');
+        const progressNote = document.querySelector('.jmi-progress-note');
         
         if (!progressFill || !progressText || !progressBar) return;
         
-        // Update progress bar
-        const percentage = Math.min((peerCount / 2) * 100, 100);
+        const isAdmin = currentUser && currentUser.isAdmin;
+        const maxPeers = 5; // Standard max for Johari assessments
+        
+        // Update progress bar (use 5 as max for admins, 2 for regular users)
+        const denominator = isAdmin ? maxPeers : 2;
+        const percentage = Math.min((peerCount / denominator) * 100, 100);
         progressBar.style.background = `linear-gradient(to right, #22c55e ${percentage}%, #e5e7eb ${percentage}%)`;
         
         // Update text content
-        progressFill.textContent = `${peerCount}/2`;
+        if (isAdmin) {
+            progressFill.textContent = `${peerCount}/${maxPeers}`;
+        } else {
+            progressFill.textContent = `${peerCount}/2`;
+        }
         
-        if (isReady) {
+        // Handle different states
+        if (isReady && isAdmin) {
+            // Admin with results ready - show option to view or continue testing
+            progressText.innerHTML = `
+                🎉 Results available with ${peerCount} peer${peerCount === 1 ? '' : 's'}! 
+                <button id="jmi-view-results" class="mi-quiz-button mi-quiz-button-primary" 
+                        style="font-size: 0.8em; padding: 0.4em 0.8em; margin-left: 0.5em;">
+                    📈 View Current Results
+                </button>
+            `;
+            progressText.style.color = '#22c55e';
+            progressText.style.fontWeight = 'bold';
+            
+            // Add event listener for view results button
+            setTimeout(() => {
+                const viewBtn = document.getElementById('jmi-view-results');
+                if (viewBtn) {
+                    viewBtn.addEventListener('click', () => {
+                        checkProgress(true); // Load the actual results
+                    });
+                }
+            }, 100);
+            
+            if (progressNote) {
+                progressNote.textContent = `Keep testing! Create more peers to see how results change with ${peerCount + 1}-${maxPeers} responses.`;
+                progressNote.style.color = '#22c55e';
+            }
+        } else if (isReady && !isAdmin) {
+            // Regular user with results ready - auto-load
             progressText.textContent = '🎉 Results are ready! Loading...';
             progressText.style.color = '#22c55e';
             progressText.style.fontWeight = 'bold';
@@ -946,8 +1164,14 @@
             progressText.textContent = 'Waiting for peer responses...';
             progressText.style.color = '#6b7280';
         } else {
-            progressText.textContent = `${peerCount} peers have responded. Waiting for ${Math.max(0, 2 - peerCount)} more...`;
-            progressText.style.color = '#f59e0b';
+            const remaining = Math.max(0, 2 - peerCount);
+            if (isAdmin && peerCount >= 2) {
+                progressText.textContent = `${peerCount} peers responded. Add more to test how results evolve!`;
+                progressText.style.color = '#22c55e';
+            } else {
+                progressText.textContent = `${peerCount} peers have responded. Waiting for ${remaining} more...`;
+                progressText.style.color = '#f59e0b';
+            }
         }
     }
 
@@ -1013,55 +1237,97 @@
 
     // Render Johari Window results
     function renderResults(data) {
+        // Hide static page content around the shortcode and ensure main container is shown
+        showMainContainer();
+        // Hide static page content around the shortcode
+        hideContentAfterQuizWrapper();
+        setHeaderContext('results');
         shareContainer.style.display = 'none';
         resultsContainer.style.display = 'block';
         
         const { open, blind, hidden, unknown, domain_summary } = data;
 
+        // For admins, add peer count context
+        const adminContext = (currentUser && currentUser.isAdmin) ? `
+            <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 1em; margin-bottom: 1.5em;">
+                <h4 style="color: #856404; margin: 0 0 0.5em; display: flex; align-items: center; gap: 0.5em;">
+                    🔧 Admin Testing View
+                </h4>
+                <p style="color: #856404; margin: 0; font-size: 0.9em;">
+                    These results are based on <strong>${(data.debug_info?.peer_responses?.length || 0) + 1} total responses</strong> (your self-assessment + ${data.debug_info?.peer_responses?.length || 0} peer${(data.debug_info?.peer_responses?.length || 0) === 1 ? '' : 's'}).
+                    Use "Back to Testing Tools" to create more test peers and see how results evolve with additional data.
+                </p>
+            </div>
+        ` : '';
+        
         resultsContainer.innerHTML = `
             <div class="jmi-results-section">
                 <h3>Your Johari × MI Window</h3>
-                <p class="jmi-results-intro">Here's how you and your peers see your MI-based strengths:</p>
                 
-                <div class="jmi-johari-grid jmi-three-quadrant">
+                ${adminContext}
+                
+                <div class="jmi-johari-grid">
                     <div class="jmi-quadrant jmi-open" style="background-color: ${quadrant_colors.open}20; border-color: ${quadrant_colors.open};">
-                        <h4>🌟 Open (Known to You & Others)</h4>
+                        <h4>🌟 Open Area</h4>
+                        <p class="jmi-quadrant-description">Traits recognized by both you and others</p>
                         <div class="jmi-adjective-list">${renderAdjectiveList(open || [], 'open')}</div>
                     </div>
                     
                     <div class="jmi-quadrant jmi-blind" style="background-color: ${quadrant_colors.blind}20; border-color: ${quadrant_colors.blind};">
-                        <h4>👁️ Blind (Known to Others, Not You)</h4>
+                        <h4>👁️ Blind Spot</h4>
+                        <p class="jmi-quadrant-description">Traits others see in you that you don't recognize</p>
                         <div class="jmi-adjective-list">${renderAdjectiveList(blind || [], 'blind')}</div>
                     </div>
                     
                     <div class="jmi-quadrant jmi-hidden" style="background-color: ${quadrant_colors.hidden}20; border-color: ${quadrant_colors.hidden};">
-                        <h4>🔐 Hidden (Known to You, Not Others)</h4>
+                        <h4>🔐 Hidden Area</h4>
+                        <p class="jmi-quadrant-description">Traits you see in yourself that others don't recognize</p>
                         <div class="jmi-adjective-list">${renderAdjectiveList(hidden || [], 'hidden')}</div>
                     </div>
+                    
+                    <div class="jmi-quadrant jmi-unknown" style="background-color: ${quadrant_colors.unknown}20; border-color: ${quadrant_colors.unknown};">
+                        <h4>❓ Unknown Area</h4>
+                        <p class="jmi-quadrant-description">Traits neither you nor others have identified</p>
+                        <div class="jmi-adjective-list">${renderAdjectiveList(unknown || [], 'unknown')}</div>
+                    </div>
                 </div>
-                
-                <div style="margin-top: 1.5em; padding: 1em; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; text-align: center;">
-                    <p style="margin: 0; color: #64748b; font-size: 0.9em;">💡 <strong>The "Unknown" quadrant</strong> represents ${unknown ? unknown.length : 0} adjectives that neither you nor your peers selected. These remain areas of potential future discovery.</p>
-                </div>
-                
+
                 ${renderMIProfileComparison(data)}
                 
                 ${renderDebugSection(data)}
                 
+                <div class="jmi-lab-intro" style="margin: 2em 0 1em; text-align: center; color: #4b5563;">
+                    <p style="margin: 0; font-size: 0.95em;">
+                        Turn these insights into action with <strong>Lab Mode</strong> — a guided, AI‑assisted workflow that designs short, focused experiments based on your strengths, curiosities, and growth areas.
+                    </p>
+                </div>
                 <div class="jmi-actions">
-                    <button id="jmi-download-pdf" class="mi-quiz-button mi-quiz-button-primary">📄 Download PDF</button>
-                    <button id="jmi-invite-more" class="mi-quiz-button mi-quiz-button-secondary">👥 Invite More Peers</button>
+                    ${dashboardUrl ? `<a href="${dashboardUrl}?tab=lab" id="jmi-start-lab" class="mi-quiz-button mi-quiz-button-primary">🧪 Start Lab Mode</a>` : ''}
+                    <button id="jmi-invite-more" class="mi-quiz-button mi-quiz-button-secondary">${currentUser && currentUser.isAdmin ? '🔧 Back to Testing Tools' : '👥 Invite More Peers'}</button>
                     <button id="jmi-retake" class="mi-quiz-button mi-quiz-button-secondary">🔄 Retake</button>
+                    ${currentUser ? `<button id=\"jmi-delete\" class=\"mi-quiz-button mi-quiz-button-danger\">🗑️ Delete Results</button>` : ''}
                 </div>
             </div>
         `;
 
         // Action button handlers
-        $id('jmi-download-pdf').addEventListener('click', downloadPDF);
         $id('jmi-invite-more').addEventListener('click', () => {
             appState = 'awaiting-peers';
             resultsContainer.style.display = 'none';
             shareContainer.style.display = 'block';
+            
+            // For admins, we need to re-render the share interface with admin tools
+            if (currentUser && currentUser.isAdmin) {
+                // Ensure we have the shareUuid for admin flow
+                if (!shareUuid && currentUser.selfUuid) {
+                    shareUuid = currentUser.selfUuid;
+                }
+                
+                const shareUrl = currentUser.peerLinkUuid ? 
+                    window.location.origin + window.location.pathname + '?jmi=' + currentUser.peerLinkUuid :
+                    window.location.href; // fallback
+                renderShareInterface(shareUrl);
+            }
         });
         $id('jmi-retake').addEventListener('click', () => {
             if (confirm('Are you sure? This will reset your assessment and you\'ll need to invite peers again.')) {
@@ -1073,6 +1339,41 @@
                 renderSelfAssessment();
             }
         });
+
+        // Delete results handler
+        const delBtn = $id('jmi-delete');
+        if (delBtn) {
+            delBtn.addEventListener('click', () => {
+                if (!confirm('Delete your Johari × MI results and peer data? This cannot be undone.')) return;
+                delBtn.disabled = true;
+                delBtn.textContent = 'Deleting...';
+                fetch(ajaxUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ action: 'miq_jmi_delete_results', _ajax_nonce: ajaxNonce })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        appState = 'initial';
+                        selectedAdjectives = [];
+                        shareUuid = null;
+                        resultsContainer.style.display = 'none';
+                        selfContainer.style.display = 'block';
+                        renderSelfAssessment();
+                    } else {
+                        alert('Error: ' + (data.data || 'Could not delete results.'));
+                        delBtn.disabled = false;
+                        delBtn.textContent = '🗑️ Delete Results';
+                    }
+                })
+                .catch(() => {
+                    alert('Network error. Please try again.');
+                    delBtn.disabled = false;
+                    delBtn.textContent = '🗑️ Delete Results';
+                });
+            });
+        }
     }
 
     // Render list of adjectives with domain colors
@@ -1796,17 +2097,420 @@
         });
     }
     
+    // Create test peer user (admin only)
+    function createTestPeer() {
+        const nameInput = $id('jmi-peer-name');
+        const createBtn = $id('jmi-create-test-peer');
+        const shareUrl = $id('jmi-share-url').value;
+        
+        if (!nameInput || !createBtn || !shareUrl) {
+            alert('Missing required elements for test peer creation');
+            return;
+        }
+        
+        const peerName = nameInput.value.trim() || 'Test Peer';
+        
+        // Disable button and show loading
+        createBtn.disabled = true;
+        createBtn.textContent = 'Creating...';
+        
+        const body = new URLSearchParams({
+            action: 'miq_jmi_create_test_peer',
+            _ajax_nonce: ajaxNonce,
+            share_url: shareUrl,
+            peer_name: peerName
+        });
+        
+        fetch(ajaxUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+        })
+        .then(r => r.json())
+        .then(response => {
+            if (response.success) {
+                const data = response.data;
+                addTestPeerToList(data);
+                
+                // Generate next peer name with incremental number
+                const currentPeerCount = document.querySelectorAll('#jmi-test-peers-list > div').length;
+                nameInput.value = `Test Peer ${currentPeerCount + 1}`;
+                
+                // Show success with peer count context
+                alert(`Test peer "${data.display_name}" created! This is peer #${currentPeerCount} for testing.\n\nClick the login link to submit feedback as this user.`);
+            } else {
+                alert('Error creating test peer: ' + (response.data || 'Unknown error'));
+            }
+        })
+        .catch(err => {
+            console.error('Test peer creation error:', err);
+            alert('Network error creating test peer. Please try again.');
+        })
+        .finally(() => {
+            createBtn.disabled = false;
+            createBtn.textContent = '➕ Create Test Peer';
+        });
+    }
+    
+    // Add test peer to the display list
+    function addTestPeerToList(peerData) {
+        const listContainer = $id('jmi-test-peers-list');
+        if (!listContainer) return;
+        
+        const peerItem = document.createElement('div');
+        peerItem.style.cssText = `
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 1em;
+            margin: 0.5em 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1em;
+        `;
+        
+        peerItem.innerHTML = `
+            <div>
+                <strong style="color: #495057;">${peerData.display_name}</strong>
+                <small style="display: block; color: #6c757d; margin-top: 0.25em;">
+                    ${peerData.email} • User ID: ${peerData.user_id}
+                </small>
+                <small style="display: block; color: #2196f3; margin-top: 0.25em; font-style: italic;">
+                    🔄 Auto-return to admin after completion
+                </small>
+            </div>
+            <div style="display: flex; gap: 0.5em;">
+                <a href="${peerData.login_url}" target="_blank" class="mi-quiz-button mi-quiz-button-secondary" 
+                   style="font-size: 0.8em; padding: 0.4em 0.8em; text-decoration: none;">
+                    🔗 Login & Test
+                </a>
+                <button onclick="copyToClipboard('${peerData.login_url}')" class="mi-quiz-button mi-quiz-button-secondary" 
+                        style="font-size: 0.8em; padding: 0.4em 0.8em;">
+                    📋 Copy Link
+                </button>
+            </div>
+        `;
+        
+        listContainer.appendChild(peerItem);
+    }
+    
+    // Helper function for copying
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(() => {
+            // Show brief success feedback
+            const btn = event.target;
+            const original = btn.textContent;
+            btn.textContent = '✓ Copied';
+            setTimeout(() => btn.textContent = original, 1500);
+        }).catch(() => {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            alert('Link copied to clipboard!');
+        });
+    }
+    
+    // Clean up test peer users (admin only)
+    function cleanupTestUsers() {
+        if (!confirm('Are you sure you want to delete all test peer users you created? This action cannot be undone.')) {
+            return;
+        }
+        
+        const cleanupBtn = $id('jmi-cleanup-test-users');
+        if (cleanupBtn) {
+            cleanupBtn.disabled = true;
+            cleanupBtn.textContent = 'Cleaning up...';
+        }
+        
+        const body = new URLSearchParams({
+            action: 'miq_jmi_cleanup_test_users',
+            _ajax_nonce: ajaxNonce
+        });
+        
+        fetch(ajaxUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+        })
+        .then(r => r.json())
+        .then(response => {
+            if (response.success) {
+                alert(`Successfully cleaned up ${response.data.deleted_count} test users.`);
+                // Clear the test peers list
+                const listContainer = $id('jmi-test-peers-list');
+                if (listContainer) {
+                    listContainer.innerHTML = '';
+                }
+            } else {
+                alert('Error cleaning up test users: ' + (response.data || 'Unknown error'));
+            }
+        })
+        .catch(err => {
+            console.error('Test user cleanup error:', err);
+            alert('Network error during cleanup. Please try again.');
+        })
+        .finally(() => {
+            if (cleanupBtn) {
+                cleanupBtn.disabled = false;
+                cleanupBtn.textContent = '🗑️ Clean Up Test Users';
+            }
+        });
+    }
+    
+    // Return to admin account (test peer only)
+    function returnToAdmin() {
+        const returnBtn = document.getElementById('jmi-return-to-admin');
+        if (returnBtn) {
+            returnBtn.disabled = true;
+            returnBtn.textContent = 'Returning to admin...';
+        }
+        
+        const body = new URLSearchParams({
+            action: 'miq_jmi_return_to_admin',
+            _ajax_nonce: ajaxNonce
+        });
+        
+        fetch(ajaxUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+        })
+        .then(r => r.json())
+        .then(response => {
+            if (response.success) {
+                // Show success message briefly before redirect
+                if (returnBtn) {
+                    returnBtn.textContent = `✓ Returning to ${response.data.admin_name}...`;
+                    returnBtn.style.background = '#28a745';
+                }
+                
+                // Brief delay to show success, then redirect
+                setTimeout(() => {
+                    window.location.href = response.data.return_url;
+                }, 1000);
+            } else {
+                alert('Error returning to admin: ' + (response.data || 'Unknown error'));
+                if (returnBtn) {
+                    returnBtn.disabled = false;
+                    returnBtn.textContent = '🔙 Return to Admin Account';
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Return to admin error:', err);
+            alert('Network error. Please try again.');
+            if (returnBtn) {
+                returnBtn.disabled = false;
+                returnBtn.textContent = '🔙 Return to Admin Account';
+            }
+        });
+    }
+    
+    // Render admin continue or reset interface
+    function renderAdminContinueOrReset() {
+        showMainContainer();
+        setHeaderContext('self');
+        
+        const shareUrl = window.location.origin + window.location.pathname + '?jmi=' + currentUser.peerLinkUuid;
+        
+        selfContainer.innerHTML = `
+            <div class="jmi-section">
+                <h3>🔧 Admin: Existing Assessment Found</h3>
+                <p>You have an existing Johari × MI assessment that's awaiting peer responses.</p>
+                
+                <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 1.5em; margin: 1.5em 0;">
+                    <h4 style="color: #495057; margin: 0 0 1em;">What would you like to do?</h4>
+                    
+                    <div style="display: grid; gap: 1em; margin-bottom: 1.5em;">
+                        <div style="display: flex; align-items: flex-start; gap: 1em; padding: 1em; background: #e7f3ff; border: 1px solid #2196f3; border-radius: 6px;">
+                            <div style="background: #2196f3; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold; flex-shrink: 0;">1</div>
+                            <div>
+                                <div style="font-weight: 600; color: #1976d2; margin-bottom: 0.5em;">Continue Testing Existing Assessment</div>
+                                <div style="font-size: 0.9em; color: #1976d2; margin-bottom: 1em;">Use your current share link and test the peer feedback workflow with your existing self-selected adjectives.</div>
+                                <button id="jmi-continue-existing" class="mi-quiz-button mi-quiz-button-primary" style="background: #2196f3; border-color: #2196f3;">Continue to Peer Testing</button>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; align-items: flex-start; gap: 1em; padding: 1em; background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px;">
+                            <div style="background: #ffc107; color: #212529; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 0.8em; font-weight: bold; flex-shrink: 0;">2</div>
+                            <div>
+                                <div style="font-weight: 600; color: #856404; margin-bottom: 0.5em;">Start Fresh Assessment</div>
+                                <div style="font-size: 0.9em; color: #856404; margin-bottom: 1em;">Delete your current assessment and start over. You'll select new adjectives and get a new share link.</div>
+                                <button id="jmi-reset-assessment" class="mi-quiz-button mi-quiz-button-secondary" style="background: #ffc107; border-color: #ffc107; color: #212529;">Reset & Start Over</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; margin-top: 1em;">
+                        <small style="color: #6c757d;">💡 Both options include admin testing tools for simulating 2-5 peer responses</small>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add event listeners
+        const continueBtn = document.getElementById('jmi-continue-existing');
+        const resetBtn = document.getElementById('jmi-reset-assessment');
+        
+        if (continueBtn) {
+            continueBtn.addEventListener('click', () => {
+                // Continue with existing assessment
+                renderShareInterface(shareUrl);
+            });
+        }
+        
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to delete your current assessment and start over? This will remove all existing peer responses.')) {
+                    resetAssessment();
+                }
+            });
+        }
+    }
+    
+    // Reset admin assessment
+    function resetAssessment() {
+        const resetBtn = document.getElementById('jmi-reset-assessment');
+        if (resetBtn) {
+            resetBtn.disabled = true;
+            resetBtn.textContent = 'Resetting...';
+        }
+        
+        const body = new URLSearchParams({
+            action: 'miq_jmi_reset_assessment',
+            _ajax_nonce: ajaxNonce
+        });
+        
+        fetch(ajaxUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+        })
+        .then(r => r.json())
+        .then(response => {
+            if (response.success) {
+                // Clear local state and start fresh
+                shareUuid = null;
+                selectedAdjectives = [];
+                appState = 'initial';
+                
+                // Update current user state to remove existing assessment
+                if (currentUser) {
+                    currentUser.existingState = null;
+                    currentUser.selfUuid = null;
+                    currentUser.peerLinkUuid = null;
+                }
+                
+                // Show success message briefly, then refresh page for clean state
+                if (resetBtn) {
+                    resetBtn.textContent = '✓ Reset Complete!';
+                    resetBtn.style.background = '#28a745';
+                }
+                
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                alert('Error resetting assessment: ' + (response.data || 'Unknown error'));
+                if (resetBtn) {
+                    resetBtn.disabled = false;
+                    resetBtn.textContent = 'Reset & Start Over';
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Reset assessment error:', err);
+            alert('Network error resetting assessment. Please try again.');
+            if (resetBtn) {
+                resetBtn.disabled = false;
+                resetBtn.textContent = 'Reset & Start Over';
+            }
+        });
+    }
+    
     // Make functions global for onclick handlers
     window.showPeerRegistrationModal = showPeerRegistrationModal;
     window.hidePeerRegistrationModal = hidePeerRegistrationModal;
+    window.copyToClipboard = copyToClipboard;
+    window.jmiInit = init; // Expose init function for staging screen
+    
+    // Show admin return success message if present
+    function showAdminReturnMessage() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('jmi_admin_returned') === '1') {
+            const testPeerName = urlParams.get('test_peer_name') || 'Test Peer';
+            
+            // Create and show success message
+            const successDiv = document.createElement('div');
+            successDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: #28a745;
+                color: white;
+                padding: 1em 1.5em;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 10000;
+                font-size: 0.9em;
+                max-width: 300px;
+                animation: slideInRight 0.3s ease-out;
+            `;
+            
+            successDiv.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.5em;">
+                    <span style="font-size: 1.2em;">✓</span>
+                    <strong>Test Complete!</strong>
+                </div>
+                <div style="font-size: 0.85em; opacity: 0.9;">
+                    Returned from testing as "${decodeURIComponent(testPeerName)}"
+                </div>
+            `;
+            
+            // Add animation styles
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideInRight {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            document.body.appendChild(successDiv);
+            
+            // Remove the message after 5 seconds
+            setTimeout(() => {
+                successDiv.style.animation = 'slideInRight 0.3s ease-out reverse';
+                setTimeout(() => {
+                    if (successDiv.parentNode) {
+                        successDiv.parentNode.removeChild(successDiv);
+                    }
+                    if (style.parentNode) {
+                        style.parentNode.removeChild(style);
+                    }
+                }, 300);
+            }, 5000);
+            
+            // Clean up URL parameters
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+        }
+    }
     
     // Initialize when DOM is ready
-    console.log('DEBUG: Document ready state:', document.readyState);
     if (document.readyState === 'loading') {
-        console.log('DEBUG: Adding DOMContentLoaded listener');
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', () => {
+            init();
+            showAdminReturnMessage();
+        });
     } else {
-        console.log('DEBUG: Document already ready, calling init immediately');
         init();
+        showAdminReturnMessage();
     }
 })();

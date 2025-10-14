@@ -4,7 +4,7 @@
     if (typeof cdt_quiz_data === 'undefined') { return; }
 
     // --- Setup ---
-    const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, nextStepUrl, nextStepTitle, predictionData } = cdt_quiz_data;
+    const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, nextStepUrl, nextStepTitle, predictionData, ageGroup, ageNonce } = cdt_quiz_data;
     const { cats: CATS, questions: QUESTIONS, likert: LIKERT, dimensionDetails: DIMENSION_DETAILS } = data || {};
     const isLoggedIn = !!currentUser;
     const isAdmin = !!(currentUser && currentUser.isAdmin);
@@ -186,9 +186,14 @@
         container.querySelectorAll('.cdt-quiz-button[data-age-group]').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 quizState.ageGroup = e.currentTarget.dataset.ageGroup;
+                try { localStorage.setItem('mc_age_group', quizState.ageGroup); } catch(e) {}
                 renderQuiz();
             });
         });
+    }
+
+    function getUrlAge(){
+        try { const p=new URLSearchParams(window.location.search); return p.get('age'); } catch(e){ return null; }
     }
 
     function renderQuiz() {
@@ -520,9 +525,16 @@
             calculateAndShowResults();
         });
 
-        steps.forEach((s) => s.querySelectorAll('input[type=radio]').forEach(inp => inp.addEventListener('change', () => {
+        steps.forEach((s, stepIndex) => s.querySelectorAll('input[type=radio]').forEach(inp => inp.addEventListener('change', () => {
             computeAdminAwardForStep(s);
             updateNavState();
+            
+            // Auto-advance to next question after a short delay (like MI quiz)
+            setTimeout(() => {
+                if (currentStep < totalSteps - 1) {
+                    showStep(currentStep + 1);
+                }
+            }, 200);
         })));
 
         showStep(0);
@@ -640,6 +652,15 @@
     }
 
     function renderResults() {
+        // Ensure any staging UI is hidden when showing results
+        try {
+            const stageEl = document.getElementById('cdt-stage');
+            if (stageEl) stageEl.style.display = 'none';
+            const toolbar = document.getElementById('cdt-toolbar');
+            if (toolbar) toolbar.style.display = 'none';
+            const containerEl = document.getElementById('cdt-quiz-container');
+            if (containerEl) containerEl.style.display = 'block';
+        } catch(e) {}
         if (devTools) devTools.style.display = 'none'; // Hide dev tools
         const { sortedScores, ageGroup } = quizState;
         const userFirstName = currentUser ? currentUser.firstName : 'Valued User';
@@ -782,7 +803,7 @@
         const headerHtml = `
             <div class="results-main-header">
                 <div class="site-branding">
-                    <img src="http://mi-test-site.local/wp-content/uploads/2025/09/SOSD-Logo.jpeg" alt="Skill of Self-Discovery Logo" class="site-logo">
+                    <img src="${cdt_quiz_data.logoUrl || ''}" alt="Skill of Self-Discovery Logo" class="site-logo">
                     <span class="site-title">Skill of Self-Discovery</span>
                 </div>
             </div>
@@ -1230,7 +1251,65 @@
                 quizState = currentUser.savedResults;
                 renderResults();
             } else {
-                renderAgeGate();
+                // Wire up staging Start button if present
+                var stageBtn = document.getElementById('cdt-start-btn');
+                var stage = document.getElementById('cdt-stage');
+                var toolbar = document.getElementById('cdt-toolbar');
+                var aboutBtn = document.getElementById('cdt-about-btn');
+                var aboutBtnTop = document.getElementById('cdt-about-top');
+                var aboutModal = document.getElementById('cdt-about-modal');
+                function toggleAbout(){
+                    if (!aboutModal) return false;
+                    var cont = document.getElementById('cdt-quiz-container');
+                    var tool = document.getElementById('cdt-toolbar');
+                    var stageEl = document.getElementById('cdt-stage');
+                    var show = (aboutModal.style.display === 'none' || !aboutModal.style.display);
+                    if (window.console) console.log('CDT About Toggle', { show, modalDisplay: aboutModal.style.display, contDisplay: cont ? cont.style.display : null, toolDisplay: tool ? tool.style.display : null });
+                    if (show) {
+                        if (cont) { aboutModal.dataset.prevCont = cont.style.display || ''; cont.style.display = 'none'; }
+                        if (tool) { aboutModal.dataset.prevTool = tool.style.display || ''; tool.style.display = 'none'; }
+                        if (stageEl) { aboutModal.dataset.prevStage = stageEl.style.display || ''; stageEl.style.display = 'none'; }
+                        aboutModal.style.display = 'block';
+                        try { aboutModal.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(e){}
+                    } else {
+                        aboutModal.style.display = 'none';
+                        if (cont && ('prevCont' in aboutModal.dataset)) cont.style.display = aboutModal.dataset.prevCont;
+                        if (tool && ('prevTool' in aboutModal.dataset)) tool.style.display = aboutModal.dataset.prevTool;
+                        if (stageEl && ('prevStage' in aboutModal.dataset)) stageEl.style.display = aboutModal.dataset.prevStage || 'block';
+                    }
+                    return false;
+                }
+                if (aboutBtn && !aboutBtn.getAttribute('data-cdt-about-bound')) { 
+                    aboutBtn.addEventListener('click', function(e){ e.preventDefault(); if (window.console) console.log('CDT About top-bar button click'); toggleAbout(); });
+                    aboutBtn.setAttribute('data-cdt-about-bound','1');
+                }
+                if (aboutBtnTop) {
+                    aboutBtnTop.removeAttribute('onclick');
+                    if (!aboutBtnTop.getAttribute('data-cdt-about-bound')) {
+                        aboutBtnTop.addEventListener('click', function(e){ e.preventDefault(); if (window.console) console.log('CDT About inline button click'); toggleAbout(); });
+                        aboutBtnTop.setAttribute('data-cdt-about-bound','1');
+                    }
+                }
+                window._cdtAboutToggle = function(e){ if (e && e.preventDefault) e.preventDefault(); return toggleAbout(); };
+                // Start CTA inside About
+                document.addEventListener('click', function(ev){
+                    var t = ev.target;
+                    if (t && t.id === 'cdt-about-start-btn') {
+                        ev.preventDefault();
+                        if (aboutModal) aboutModal.style.display = 'none';
+                        var start = document.getElementById('cdt-start-btn');
+                        if (start) start.click();
+                    }
+                });
+                if (stageBtn && stage) {
+                    stageBtn.addEventListener('click', function(){
+                        if (toolbar) toolbar.style.display = 'block';
+                        if (stage) stage.style.display = 'none';
+                        startWithDetectedAge();
+                    });
+                } else {
+                    startWithDetectedAge();
+                }
             }
         } catch (e) {
             console.error("An error occurred during CDT quiz initialization:", e);
@@ -1238,6 +1317,38 @@
                 container.innerHTML = `<div class="cdt-quiz-card"><p style="color:red;"><strong>Error:</strong> The quiz could not be loaded. Please check the browser console for details.</p></div>`;
             }
         }
+    }
+
+    function startWithDetectedAge(){
+        try {
+                // Try to auto-detect age group from URL/localStorage/profile
+                try {
+                    const urlAge = getUrlAge();
+                    const localAge = localStorage.getItem('mc_age_group');
+                    const profileAge = ageGroup || null;
+                    const chosen = urlAge || localAge || profileAge;
+                    if (chosen) {
+                        quizState.ageGroup = ['teen','graduate','adult'].includes(chosen) ? chosen : 'adult';
+                        // Persist locally
+                        try { localStorage.setItem('mc_age_group', quizState.ageGroup); } catch(e) {}
+                        // If logged in and we have a chosen age not equal to profile, save to profile
+                        if (isLoggedIn && chosen && ageNonce) {
+                            fetch(ajaxUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                body: new URLSearchParams({ action: 'mc_save_age_group', _ajax_nonce: ageNonce, age_group: quizState.ageGroup })
+                            }).catch(()=>{});
+                        }
+                        document.getElementById('cdt-quiz-container').style.display = 'block';
+                        renderQuiz();
+                    } else {
+                        renderAgeGate();
+                    }
+                } catch(err) {
+                    console.warn('CDT: Age detection failed, showing gate', err);
+                    renderAgeGate();
+                }
+        } catch(e) {}
     }
 
     init();
