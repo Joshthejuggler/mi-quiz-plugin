@@ -1,6 +1,7 @@
 /**
  * AI Coach Lab Mode Frontend
  * Handles the progressive workflow: Import → Qualify → Generate → Execute → Reflect → Recalibrate
+ * Version: 2.1.0 - Fixed career explanation quote handling
  */
 
 (function($) {
@@ -12,6 +13,8 @@
         profileData: null,
         qualifiers: null,
         experiments: [],
+        compactMode: false,
+        careerExplanationCache: {},
         
         // Initialize the application
         init: function() {
@@ -26,6 +29,21 @@
         
         // Bind UI events
         bindEvents: function() {
+            // Unbind first to prevent duplicate event handlers
+            $(document).off('click', '.lab-start-btn');
+            $(document).off('click', '.lab-view-history-btn');
+            $(document).off('click', '.lab-generate-experiments-btn');
+            $(document).off('click', '.lab-start-experiment-btn');
+            $(document).off('click', '.lab-reflect-btn');
+            $(document).off('click', '.lab-iterate-btn');
+            $(document).off('click', '.lab-regenerate-ai-btn');
+            $(document).off('submit', '.lab-qualifiers-form');
+            $(document).off('submit', '.lab-reflection-form');
+            $(document).off('click', '.quick-select-btn');
+            $(document).off('click', '.career-action-btn');
+            $(document).off('click', '.career-action-link');
+            
+            // Bind events
             $(document).on('click', '.lab-start-btn', this.startProfileInputs.bind(this));
             $(document).on('click', '.lab-view-history-btn', this.showHistory.bind(this));
             $(document).on('click', '.lab-generate-experiments-btn', this.generateExperiments.bind(this));
@@ -36,6 +54,8 @@
             $(document).on('submit', '.lab-qualifiers-form', this.saveQualifiers.bind(this));
             $(document).on('submit', '.lab-reflection-form', this.submitReflection.bind(this));
             $(document).on('click', '.quick-select-btn', this.handleQuickSelect.bind(this));
+            $(document).on('click', '.career-action-btn', this.handleCareerFeedback.bind(this));
+            $(document).on('click', '.career-action-link', this.handleCareerFeedback.bind(this));
         },
         
         // Show loading spinner
@@ -2576,6 +2596,1586 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             }
             
             return connection;
+        },
+        
+        // Switch between career mini tabs (explore vs saved)
+        switchCareerMiniTab: function(tabName) {
+            // Update tab buttons
+            $('.career-mini-tab').removeClass('active');
+            $(`.career-mini-tab[data-mini-tab="${tabName}"]`).addClass('active');
+            
+            // Show/hide panels
+            $('.career-mini-panel').hide();
+            $(`#career-panel-${tabName}`).show();
+            
+            // If switching to saved, load the saved careers
+            if (tabName === 'saved') {
+                setTimeout(() => {
+                    this.loadSavedCareers();
+                }, 100);
+            }
+        },
+        
+        // Render Saved Careers tab
+        renderSavedCareersTab: function() {
+            const html = `
+                <div class="saved-careers-container">
+                    <div class="saved-careers-header">
+                        <h2>💾 Saved Ideas</h2>
+                        <p class="saved-careers-subtitle">Your saved career explorations</p>
+                    </div>
+                    
+                    <div class="saved-careers-loading" style="text-align: center; padding: 3rem;">
+                        <div class="loading-spinner"></div>
+                        <p>Loading your saved careers...</p>
+                    </div>
+                    
+                    <div class="saved-careers-list" style="display: none;">
+                        <!-- Will be populated by AJAX -->
+                    </div>
+                </div>
+            `;
+            
+            // Load saved careers after rendering
+            setTimeout(() => {
+                this.loadSavedCareers();
+            }, 100);
+            
+            return html;
+        },
+        
+        // Load saved careers from server
+        loadSavedCareers: function() {
+            $.ajax({
+                url: labMode.ajaxUrl,
+                method: 'POST',
+                data: {
+                    action: 'mc_lab_get_saved_careers',
+                    nonce: labMode.nonce
+                },
+                success: (response) => {
+                    if (response.success && response.data.careers) {
+                        this.displaySavedCareers(response.data.careers);
+                    } else {
+                        $('.saved-careers-loading').html('<p>Error loading saved careers</p>');
+                    }
+                },
+                error: () => {
+                    $('.saved-careers-loading').html('<p>Network error while loading saved careers</p>');
+                }
+            });
+        },
+        
+        // Delete a saved career
+        deleteSavedCareer: function(index, careerTitle) {
+            if (!confirm(`Delete "${careerTitle}" from your saved careers?`)) {
+                return;
+            }
+            
+            $.ajax({
+                url: labMode.ajaxUrl,
+                method: 'POST',
+                data: {
+                    action: 'mc_lab_delete_saved_career',
+                    nonce: labMode.nonce,
+                    index: index
+                },
+                success: (response) => {
+                    if (response.success) {
+                        // Reload the saved careers list
+                        this.loadSavedCareers();
+                    } else {
+                        alert('Error: ' + (response.data || 'Failed to delete career'));
+                    }
+                },
+                error: () => {
+                    alert('Network error while deleting career');
+                }
+            });
+        },
+        
+        // Display saved careers
+        displaySavedCareers: function(careers) {
+            $('.saved-careers-loading').hide();
+            
+            if (careers.length === 0) {
+                $('.saved-careers-list').html(`
+                    <div class="empty-saved-careers">
+                        <p style="text-align: center; color: #6b7280; padding: 3rem;">
+                            🔍 No saved careers yet. Explore careers and click the "Save ♥" button to save ideas here.
+                        </p>
+                    </div>
+                `).show();
+                return;
+            }
+            
+            const html = careers.map((career, index) => {
+                const savedDate = new Date(career.saved_at);
+                const formattedDate = savedDate.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    year: 'numeric' 
+                });
+                
+                return `
+                    <div class="saved-career-card" data-index="${index}" data-career-title="${career.title}">
+                        <div class="saved-career-header">
+                            <h4>${career.title}</h4>
+                            <div class="saved-career-header-right">
+                                <span class="saved-career-date">${formattedDate}</span>
+                                <button class="saved-career-delete" data-index="${index}" title="Delete this saved career">
+                                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="saved-career-body">
+                            <p>${career.why_it_fits}</p>
+                            <div class="saved-career-meta">
+                                <span class="saved-career-type">${career.distance_group || 'Career'}</span>
+                                ${career.central_career ? `<span class="saved-career-from">from ${career.central_career}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            $('.saved-careers-list').html(html).show();
+            
+            // Bind delete handlers
+            $('.saved-career-delete').on('click', (e) => {
+                e.preventDefault();
+                const index = $(e.currentTarget).data('index');
+                const careerTitle = careers[index].title;
+                this.deleteSavedCareer(index, careerTitle);
+            });
+        },
+        
+        // Render Career Explorer tab with filters and dice
+        renderCareerExplorerTab: function() {
+            // Initialize filters if not exist
+            if (!this.careerFilters) {
+                this.careerFilters = this.getDefaultFilters();
+                this.loadFiltersFromStorage();
+            }
+            
+            const html = `
+                <div class="career-explorer-container">
+                    <div class="career-explorer-header">
+                        <h2>⚡ Career Explorer</h2>
+                        <p class="career-explorer-subtitle">Discover roles aligned with your profile, with smart filters and labor-market insights.</p>
+                    </div>
+                    
+                    <!-- Mini tabs for Explorer / Saved Ideas -->
+                    <div class="career-mini-tabs">
+                        <button class="career-mini-tab active" data-mini-tab="explore" onclick="LabModeApp.switchCareerMiniTab('explore')">
+                            🔍 Explore Careers
+                        </button>
+                        <button class="career-mini-tab" data-mini-tab="saved" onclick="LabModeApp.switchCareerMiniTab('saved')">
+                            💾 Saved Ideas
+                        </button>
+                    </div>
+                    
+                    <!-- Explore Careers Panel -->
+                    <div class="career-mini-panel" id="career-panel-explore">
+                        <div class="career-explorer-input-panel">
+                            <div class="career-input-row">
+                                <input 
+                                    type="text" 
+                                    id="career-interest-input" 
+                                    class="career-input" 
+                                    placeholder="e.g., UX Designer, Electrician, Nurse, Data Analyst"
+                                    maxlength="100"
+                                />
+                                <button 
+                                    class="lab-btn lab-btn-primary" 
+                                    id="generate-career-ideas-btn"
+                                    onclick="LabModeApp.generateCareerIdeas()"
+                                >
+                                    Generate Career Ideas
+                                </button>
+                                <button 
+                                    class="lab-btn lab-btn-dice" 
+                                    id="career-dice-btn"
+                                    onclick="LabModeApp.rollCareerDice()"
+                                    title="Surprise me with wildcard suggestions!"
+                                >
+                                    🎲 Surprise me
+                                </button>
+                            </div>
+                            
+                            <!-- Filters Bar -->
+                            ${this.renderFiltersBar()}
+                        </div>
+                        
+                        <div class="career-explorer-results" id="career-explorer-results" style="display: none;">
+                            <!-- Results will be dynamically inserted here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Saved Ideas Panel -->
+                    <div class="career-mini-panel" id="career-panel-saved" style="display: none;">
+                        ${this.renderSavedCareersTab()}
+                    </div>
+                </div>
+            `;
+            
+            return html;
+        },
+        
+        // Get default filter values
+        getDefaultFilters: function() {
+            return {
+                demand_horizon: null,
+                education_levels: [],
+                work_env: [],
+                role_orientation: [],
+                comp_band: null,
+                social_impact: [],
+                remote_only: false,
+                stretch_opposites: false
+            };
+        },
+        
+        // Load filters from localStorage
+        loadFiltersFromStorage: function() {
+            try {
+                const stored = localStorage.getItem('career_explorer_filters');
+                if (stored) {
+                    const filters = JSON.parse(stored);
+                    this.careerFilters = { ...this.getDefaultFilters(), ...filters };
+                }
+            } catch (e) {
+                console.warn('Failed to load filters from storage:', e);
+            }
+        },
+        
+        // Save filters to localStorage
+        saveFiltersToStorage: function() {
+            try {
+                localStorage.setItem('career_explorer_filters', JSON.stringify(this.careerFilters));
+            } catch (e) {
+                console.warn('Failed to save filters to storage:', e);
+            }
+        },
+        
+        // Render filters bar
+        renderFiltersBar: function() {
+            return `
+                <div class="career-filters-bar">
+                    <div class="filter-chips">
+                        <button class="filter-chip" data-filter="demand_horizon" onclick="LabModeApp.toggleFilterDrawer('demand_horizon')">
+                            <span class="filter-chip-label">Demand Horizon</span>
+                            <span class="filter-chip-count">${this.careerFilters.demand_horizon ? '1' : '0'}</span>
+                        </button>
+                        
+                        <button class="filter-chip" data-filter="education_levels" onclick="LabModeApp.toggleFilterDrawer('education_levels')">
+                            <span class="filter-chip-label">Education</span>
+                            <span class="filter-chip-count">${this.careerFilters.education_levels.length}</span>
+                        </button>
+                        
+                        <button class="filter-chip" data-filter="work_env" onclick="LabModeApp.toggleFilterDrawer('work_env')">
+                            <span class="filter-chip-label">Work Environment</span>
+                            <span class="filter-chip-count">${this.careerFilters.work_env.length}</span>
+                        </button>
+                        
+                        <button class="filter-chip" data-filter="role_orientation" onclick="LabModeApp.toggleFilterDrawer('role_orientation')">
+                            <span class="filter-chip-label">Role Type</span>
+                            <span class="filter-chip-count">${this.careerFilters.role_orientation.length}</span>
+                        </button>
+                        
+                        <button class="filter-chip" data-filter="comp_band" onclick="LabModeApp.toggleFilterDrawer('comp_band')">
+                            <span class="filter-chip-label">Compensation</span>
+                            <span class="filter-chip-count">${this.careerFilters.comp_band ? '1' : '0'}</span>
+                        </button>
+                        
+                        <button class="filter-chip" data-filter="social_impact" onclick="LabModeApp.toggleFilterDrawer('social_impact')">
+                            <span class="filter-chip-label">Social Impact</span>
+                            <span class="filter-chip-count">${this.careerFilters.social_impact.length}</span>
+                        </button>
+                        
+                        <label class="filter-toggle">
+                            <input type="checkbox" ${this.careerFilters.remote_only ? 'checked' : ''} onchange="LabModeApp.toggleRemoteOnly(this.checked)">
+                            <span>Remote-only</span>
+                        </label>
+                        
+                        <label class="filter-toggle">
+                            <input type="checkbox" ${this.careerFilters.stretch_opposites ? 'checked' : ''} onchange="LabModeApp.toggleStretchOpposites(this.checked)">
+                            <span>Stretch/Opposites</span>
+                        </label>
+                        
+                        <button class="filter-reset-btn" onclick="LabModeApp.resetFilters()">Reset filters</button>
+                    </div>
+                    
+                    <!-- Filter Drawers (hidden by default) -->
+                    <div id="filter-drawers"></div>
+                </div>
+            `;
+        },
+        
+        // Toggle filter drawer
+        toggleFilterDrawer: function(filterType) {
+            const drawersContainer = document.getElementById('filter-drawers');
+            const existing = drawersContainer.querySelector(`[data-drawer="${filterType}"]`);
+            
+            if (existing) {
+                existing.remove();
+                return;
+            }
+            
+            // Close other drawers
+            drawersContainer.innerHTML = '';
+            
+            // Render drawer based on type
+            const drawer = this.renderFilterDrawer(filterType);
+            drawersContainer.innerHTML = drawer;
+        },
+        
+        // Render filter drawer content
+        renderFilterDrawer: function(filterType) {
+            const options = {
+                demand_horizon: [
+                    { value: 'trending_now', label: 'Trending now' },
+                    { value: 'high_growth_5y', label: 'High growth (next 5 years)' },
+                    { value: 'future_proof_10y', label: 'Future-proof (10+ years)' },
+                    { value: 'stable_low_vol', label: 'Stable / low volatility' },
+                    { value: 'automation_resistant', label: 'Automation-resistant' }
+                ],
+                education_levels: [
+                    { value: 'no_degree', label: 'No degree' },
+                    { value: 'certificate_bootcamp', label: 'Certificate/Bootcamp' },
+                    { value: 'bachelor', label: 'Bachelor' },
+                    { value: 'advanced', label: 'Advanced' }
+                ],
+                work_env: [
+                    { value: 'remote_friendly', label: 'Remote-friendly' },
+                    { value: 'hybrid', label: 'Hybrid' },
+                    { value: 'outdoor', label: 'Outdoor/Field' },
+                    { value: 'hands_on', label: 'Hands-on' },
+                    { value: 'solo', label: 'Solo' },
+                    { value: 'collaborative', label: 'Highly collaborative' },
+                    { value: 'client_facing', label: 'Client-facing' },
+                    { value: 'structured', label: 'Highly structured' },
+                    { value: 'flexible', label: 'Highly flexible' }
+                ],
+                role_orientation: [
+                    { value: 'analytical', label: 'Analytical' },
+                    { value: 'creative', label: 'Creative' },
+                    { value: 'leadership', label: 'Leadership' },
+                    { value: 'technical', label: 'Technical' },
+                    { value: 'people_centered', label: 'People-centered' },
+                    { value: 'helping', label: 'Helping professions' },
+                    { value: 'problem_solving', label: 'Problem-solving' },
+                    { value: 'adventure_fieldwork', label: 'Adventure/Fieldwork' }
+                ],
+                comp_band: [
+                    { value: 'lower', label: 'Lower' },
+                    { value: 'middle', label: 'Middle' },
+                    { value: 'upper', label: 'Upper' },
+                    { value: 'high_responsibility', label: 'High-responsibility' }
+                ],
+                social_impact: [
+                    { value: 'high_social', label: 'High social impact' },
+                    { value: 'environmental', label: 'Environmental' },
+                    { value: 'community', label: 'Community-oriented' },
+                    { value: 'mission_driven', label: 'Mission-driven' }
+                ]
+            };
+            
+            const filterOptions = options[filterType] || [];
+            const isMulti = ['education_levels', 'work_env', 'role_orientation', 'social_impact'].includes(filterType);
+            const currentValue = this.careerFilters[filterType];
+            
+            let optionsHtml = '';
+            if (isMulti) {
+                optionsHtml = filterOptions.map(opt => {
+                    const checked = currentValue.includes(opt.value) ? 'checked' : '';
+                    return `
+                        <label class="filter-option">
+                            <input type="checkbox" value="${opt.value}" ${checked} onchange="LabModeApp.updateFilter('${filterType}', '${opt.value}', this.checked, true)">
+                            <span>${opt.label}</span>
+                        </label>
+                    `;
+                }).join('');
+            } else {
+                optionsHtml = filterOptions.map(opt => {
+                    const checked = currentValue === opt.value ? 'checked' : '';
+                    return `
+                        <label class="filter-option">
+                            <input type="radio" name="${filterType}" value="${opt.value}" ${checked} onchange="LabModeApp.updateFilter('${filterType}', '${opt.value}', true, false)">
+                            <span>${opt.label}</span>
+                        </label>
+                    `;
+                }).join('');
+                
+                // Add "Any" option for single-select
+                optionsHtml = `
+                    <label class="filter-option">
+                        <input type="radio" name="${filterType}" value="" ${!currentValue ? 'checked' : ''} onchange="LabModeApp.updateFilter('${filterType}', null, false, false)">
+                        <span>Any</span>
+                    </label>
+                ` + optionsHtml;
+            }
+            
+            return `
+                <div class="filter-drawer" data-drawer="${filterType}">
+                    <div class="filter-drawer-header">
+                        <h4>${this.getFilterLabel(filterType)}</h4>
+                        <button class="filter-drawer-close" onclick="LabModeApp.toggleFilterDrawer('${filterType}')">✕</button>
+                    </div>
+                    <div class="filter-drawer-options">
+                        ${optionsHtml}
+                    </div>
+                </div>
+            `;
+        },
+        
+        // Get filter label
+        getFilterLabel: function(filterType) {
+            const labels = {
+                demand_horizon: 'Demand Horizon',
+                education_levels: 'Education/Training',
+                work_env: 'Work Environment',
+                role_orientation: 'Role Orientation',
+                comp_band: 'Compensation Band',
+                social_impact: 'Social Impact'
+            };
+            return labels[filterType] || filterType;
+        },
+        
+        // Update filter value
+        updateFilter: function(filterType, value, checked, isMulti) {
+            if (isMulti) {
+                if (checked) {
+                    if (!this.careerFilters[filterType].includes(value)) {
+                        this.careerFilters[filterType].push(value);
+                    }
+                } else {
+                    this.careerFilters[filterType] = this.careerFilters[filterType].filter(v => v !== value);
+                }
+            } else {
+                this.careerFilters[filterType] = checked ? value : null;
+            }
+            
+            this.saveFiltersToStorage();
+            this.updateFilterChipCounts();
+        },
+        
+        // Update filter chip counts
+        updateFilterChipCounts: function() {
+            document.querySelectorAll('.filter-chip').forEach(chip => {
+                const filterType = chip.dataset.filter;
+                const countSpan = chip.querySelector('.filter-chip-count');
+                if (countSpan) {
+                    const value = this.careerFilters[filterType];
+                    if (Array.isArray(value)) {
+                        countSpan.textContent = value.length;
+                    } else {
+                        countSpan.textContent = value ? '1' : '0';
+                    }
+                }
+            });
+        },
+        
+        // Toggle remote only
+        toggleRemoteOnly: function(checked) {
+            this.careerFilters.remote_only = checked;
+            this.saveFiltersToStorage();
+        },
+        
+        // Toggle stretch opposites
+        toggleStretchOpposites: function(checked) {
+            this.careerFilters.stretch_opposites = checked;
+            this.saveFiltersToStorage();
+        },
+        
+        // Reset all filters
+        resetFilters: function() {
+            this.careerFilters = this.getDefaultFilters();
+            this.saveFiltersToStorage();
+            
+            // Re-render the career explorer panel
+            const explorePanel = document.getElementById('career-panel-explore');
+            if (explorePanel) {
+                const inputValue = document.getElementById('career-interest-input')?.value || '';
+                explorePanel.innerHTML = `
+                    <div class="career-explorer-input-panel">
+                        <div class="career-input-row">
+                            <input 
+                                type="text" 
+                                id="career-interest-input" 
+                                class="career-input" 
+                                placeholder="e.g., UX Designer, Electrician, Nurse, Data Analyst"
+                                maxlength="100"
+                                value="${inputValue}"
+                            />
+                            <button 
+                                class="lab-btn lab-btn-primary" 
+                                id="generate-career-ideas-btn"
+                                onclick="LabModeApp.generateCareerIdeas()"
+                            >
+                                Generate Career Ideas
+                            </button>
+                            <button 
+                                class="lab-btn lab-btn-dice" 
+                                id="career-dice-btn"
+                                onclick="LabModeApp.rollCareerDice()"
+                                title="Surprise me with wildcard suggestions!"
+                            >
+                                🎲 Surprise me
+                            </button>
+                        </div>
+                        
+                        <!-- Filters Bar -->
+                        ${this.renderFiltersBar()}
+                    </div>
+                    
+                    <div class="career-explorer-results" id="career-explorer-results" style="display: none;">
+                        <!-- Results will be dynamically inserted here -->
+                    </div>
+                `;
+            }
+        },
+        
+        // Generate Career Ideas (new endpoint with filters)
+        generateCareerIdeas: function() {
+            const careerInput = document.getElementById('career-interest-input');
+            const seedCareer = careerInput ? careerInput.value.trim() : '';
+            
+            // Analytics
+            console.log('career_generate_clicked', {
+                seed_career: seedCareer,
+                filters: this.careerFilters,
+                novelty_bias: 0.25
+            });
+            
+            this.callCareerSuggestAPI(seedCareer, 0.25, false);
+        },
+        
+        // Roll Career Dice (high novelty)
+        rollCareerDice: function() {
+            const careerInput = document.getElementById('career-interest-input');
+            const seedCareer = careerInput ? careerInput.value.trim() : '';
+            
+            // Generate random novelty between 0.8 and 1.0
+            const novelty = 0.8 + (Math.random() * 0.2);
+            
+            // Analytics
+            console.log('career_dice_clicked', {
+                seed_career: seedCareer,
+                novelty_bias: novelty
+            });
+            
+            this.callCareerSuggestAPI(seedCareer, novelty, true);
+        },
+        
+        // Call the career suggest API
+        callCareerSuggestAPI: function(seedCareer, noveltyBias, isDice) {
+            // Show loading overlay
+            if (window.AILoadingOverlay) {
+                const messages = isDice ? [
+                    'Rolling the dice for wildcard suggestions…',
+                    'Exploring unexpected career paths…',
+                    'Finding profile-true surprises…',
+                    'Matching novelty with your unique strengths…'
+                ] : [
+                    seedCareer ? `Analyzing careers related to ${seedCareer}…` : 'Analyzing your profile…',
+                    'Matching with your MI strengths and CDT profile…',
+                    'Finding adjacent career paths with easy transitions…',
+                    'Discovering parallel careers in different industries…',
+                    'Identifying wildcard options based on your unique profile…'
+                ];
+                
+                window.AILoadingOverlay.show({
+                    subtitle: isDice ? 'AI is rolling the dice for you…' : 'AI is exploring career pathways for you…',
+                    messages: messages
+                });
+            }
+            
+            // Prepare request data
+            const requestData = {
+                action: 'mc_lab_career_suggest',
+                nonce: labMode.nonce,
+                seed_career: seedCareer,
+                filters: JSON.stringify(this.careerFilters),
+                novelty_bias: noveltyBias,
+                limit_per_bucket: 6
+            };
+            
+            // Call AJAX endpoint
+            $.ajax({
+                url: labMode.ajaxUrl,
+                method: 'POST',
+                data: requestData,
+                success: (response) => {
+                    // Hide loading overlay
+                    if (window.AILoadingOverlay) {
+                        window.AILoadingOverlay.hide();
+                    }
+                    
+                    if (response.success) {
+                        this.displayCareerSuggestions(response.data, seedCareer, isDice);
+                    } else {
+                        alert('Error: ' + (response.data || 'Failed to generate career suggestions'));
+                    }
+                },
+                error: (xhr, status, error) => {
+                    // Hide loading overlay
+                    if (window.AILoadingOverlay) {
+                        window.AILoadingOverlay.hide();
+                    }
+                    
+                    console.error('Career suggestions failed:', { xhr, status, error });
+                    alert('Network error. Please check your connection and try again.');
+                }
+            });
+        },
+        
+        // Display career suggestions (new format)
+        displayCareerSuggestions: function(data, seedCareer, isDice) {
+            // Store for feedback actions and re-rendering
+            this.currentCareerInterest = seedCareer;
+            this.isDiceRoll = isDice;
+            this.currentCareerData = data;
+            
+            const resultsContainer = document.getElementById('career-explorer-results');
+            
+            const html = `
+                <div class="career-map-results ${isDice ? 'dice-roll' : ''}">
+                    <div class="career-map-header">
+                        <div class="career-header-row">
+                            <div>
+                                <h3>${isDice ? '🎲 Dice Roll Results' : (seedCareer ? 'Career Ideas for: ' + seedCareer : 'Career Ideas Based on Your Profile')}</h3>
+                                <p>Careers aligned with your MI, CDT, Bartle Type, and Johari profile</p>
+                            </div>
+                            <label class="compact-mode-toggle">
+                                <input 
+                                    type="checkbox" 
+                                    ${this.compactMode ? 'checked' : ''} 
+                                    onchange="LabModeApp.toggleCompactMode(this.checked)"
+                                >
+                                <span>Compact mode</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="career-clusters">
+                        ${this.renderCareerClusterEnhanced('Adjacent Careers', 'Very similar; easy transitions', data.adjacent, 'adjacent')}
+                        ${this.renderCareerClusterEnhanced('Parallel Careers', 'Similar strengths, different industries', data.parallel, 'parallel')}
+                        ${this.renderCareerClusterEnhanced('Wildcard Careers', 'Unexpected options based on your unique profile', data.wildcard, 'wildcard')}
+                    </div>
+                    
+                    <div class="career-map-actions">
+                        <button class="lab-btn lab-btn-secondary" onclick="document.getElementById('career-interest-input').value=''; document.getElementById('career-interest-input').focus(); document.getElementById('career-explorer-results').style.display='none';">
+                            Explore Another Career
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            resultsContainer.innerHTML = html;
+            resultsContainer.style.display = 'block';
+            
+            // Scroll to results
+            resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+        
+        // Render a career cluster with enhanced meta fields
+        renderCareerClusterEnhanced: function(title, description, careers, clusterType) {
+            if (!careers || careers.length === 0) {
+                return `
+                    <div class="career-cluster career-cluster-${clusterType}">
+                        <div class="career-cluster-header">
+                            <h4>${title}</h4>
+                            <p class="career-cluster-desc">${description}</p>
+                        </div>
+                        <div class="career-cluster-empty">
+                            <p>No ${clusterType} careers generated.</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="career-cluster career-cluster-${clusterType}">
+                    <div class="career-cluster-header">
+                        <h4>${title}</h4>
+                        <p class="career-cluster-desc">${description}</p>
+                    </div>
+                    <div class="career-cards">
+                        ${careers.map((career, index) => this.renderCareerCardEnhanced(career, index, clusterType)).join('')}
+                    </div>
+                </div>
+            `;
+        },
+        
+        // Render a single career card with enhanced meta fields (V2 Design System)
+        renderCareerCardEnhanced: function(career, index, clusterType) {
+            const cardId = `career-card-${clusterType}-${index}`;
+            const titleId = `${cardId}-title`;
+            const isCompact = this.compactMode || false;
+            
+            // Build data attributes for analytics
+            const miMatch = career.profile_match?.mi?.join(',') || '';
+            const bartle = career.profile_match?.bartle || '';
+            const growthHorizon = career.meta?.demand_horizon || '';
+            const education = career.meta?.education || '';
+            const isRemote = career.meta?.work_env?.includes('remote_friendly') ? 'true' : 'false';
+            
+            return `
+                <article 
+                    class="career-card career-card-v2 career-card-${clusterType} ${isCompact ? 'career-card-compact' : ''}" 
+                    id="${cardId}" 
+                    data-career-title="${this.escapeHtml(career.title)}" 
+                    data-cluster-type="${clusterType}"
+                    data-card-id="${cardId}"
+                    data-mi-match="${miMatch}"
+                    data-bartle="${bartle}"
+                    data-growth-horizon="${growthHorizon}"
+                    data-education="${education}"
+                    data-remote="${isRemote}"
+                    role="group"
+                    aria-labelledby="${titleId}"
+                >
+                    <!-- Title -->
+                    <h3 class="career-card-title" id="${titleId}">${this.escapeHtml(career.title)}</h3>
+                    
+                    <!-- Summary (hidden in compact mode) -->
+                    ${!isCompact ? `<p class="career-card-summary">${this.escapeHtml(career.why_it_fits)}</p>` : ''}
+                    
+                    <!-- Divider -->
+                    <div class="career-card-divider"></div>
+                    
+                    <!-- Profile Match Section -->
+                    ${this.renderProfileMatchSection(career.profile_match, isCompact)}
+                    
+                    <!-- Requirements Section -->
+                    ${this.renderRequirementsSection(career.meta, isCompact)}
+                    
+                    <!-- Work Style Tags Section -->
+                    ${this.renderWorkStyleSection(career.meta, isCompact)}
+                    
+                    <!-- Actions -->
+                    <div class="career-card-actions">
+                        <div class="career-actions-row">
+                            <button 
+                                class="career-action-btn career-action-dismiss" 
+                                data-action="not_interested"
+                                aria-label="Dismiss ${this.escapeHtml(career.title)}"
+                                title="Not interested"
+                            >
+                                ${isCompact ? '✕' : 'Not interested'}
+                            </button>
+                            <button 
+                                class="career-action-btn career-action-save" 
+                                data-action="save"
+                                aria-label="Save ${this.escapeHtml(career.title)}"
+                                title="Save this career"
+                            >
+                                ${isCompact ? '♥' : 'Save ♥'}
+                            </button>
+                        </div>
+                        <a 
+                            href="#" 
+                            class="career-action-link" 
+                            data-action="explain_fit"
+                            aria-label="Learn why ${this.escapeHtml(career.title)} fits your profile"
+                        >
+                            Why this fits me
+                        </a>
+                    </div>
+                </article>
+            `;
+        },
+        
+        // Helper method for HTML escaping
+        escapeHtml: function(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+        
+        // Profile Match Section
+        renderProfileMatchSection: function(profileMatch, isCompact) {
+            if (!profileMatch) return '';
+            
+            const badgeSize = isCompact ? 'badge-sm' : '';
+            let html = '<div class="career-section career-profile-section">';
+            html += '<h4 class="career-section-title">Profile Match</h4>';
+            html += '<div class="career-badges">';
+            
+            // MI badges
+            if (profileMatch.mi && profileMatch.mi.length > 0) {
+                html += profileMatch.mi.map(mi => 
+                    `<span class="career-badge badge-mi ${badgeSize}">${this.escapeHtml(mi)}</span>`
+                ).join('');
+            }
+            
+            // Bartle badge
+            if (profileMatch.bartle) {
+                html += `<span class="career-badge badge-bartle ${badgeSize}">${this.escapeHtml(profileMatch.bartle)}</span>`;
+            }
+            
+            // CDT top (if available)
+            if (profileMatch.cdt_top) {
+                html += `<span class="career-badge badge-cdt ${badgeSize}">${this.escapeHtml(profileMatch.cdt_top.replace(/_/g, ' '))}</span>`;
+            }
+            
+            html += '</div></div>';
+            return html;
+        },
+        
+        // Requirements Section
+        renderRequirementsSection: function(meta, isCompact) {
+            if (!meta || !meta.education) return '';
+            
+            const badgeSize = isCompact ? 'badge-sm' : '';
+            let html = '<div class="career-section career-requirements-section">';
+            html += '<h4 class="career-section-title">Requirements</h4>';
+            html += '<div class="career-badges">';
+            
+            // Education with icon
+            html += `<span class="career-badge badge-education ${badgeSize}">
+                <svg class="badge-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M22 10v6M2 10l10-5 10 5-10 5z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                ${this.formatMetaLabel('education', meta.education)}
+            </span>`;
+            
+            html += '</div></div>';
+            return html;
+        },
+        
+        // Work Style Tags Section
+        renderWorkStyleSection: function(meta, isCompact) {
+            if (!meta) return '';
+            
+            const badgeSize = isCompact ? 'badge-sm' : '';
+            let html = '<div class="career-section career-workstyle-section">';
+            html += '<h4 class="career-section-title">Work Style</h4>';
+            html += '<div class="career-badges">';
+            
+            // Demand horizon with icon
+            if (meta.demand_horizon) {
+                html += `<span class="career-badge badge-demand ${badgeSize}">
+                    <svg class="badge-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    ${this.formatMetaLabel('demand_horizon', meta.demand_horizon)}
+                </span>`;
+            }
+            
+            // Pay band with icon
+            if (meta.comp_band) {
+                html += `<span class="career-badge badge-pay ${badgeSize}">
+                    <svg class="badge-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    ${this.formatMetaLabel('comp_band', meta.comp_band)}
+                </span>`;
+            }
+            
+            // Work environment (show first, + more)
+            if (meta.work_env && meta.work_env.length > 0) {
+                const envIcon = meta.work_env.includes('remote_friendly') ? 
+                    '<svg class="badge-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' :
+                    '';
+                
+                html += `<span class="career-badge badge-remote ${badgeSize}">
+                    ${envIcon}
+                    ${this.formatMetaLabel('work_env', meta.work_env[0])}
+                </span>`;
+                
+                if (meta.work_env.length > 1) {
+                    html += `<span class="career-badge badge-more ${badgeSize}">+${meta.work_env.length - 1}</span>`;
+                }
+            }
+            
+            // Social impact
+            if (meta.social_impact && meta.social_impact.length > 0) {
+                html += `<span class="career-badge badge-impact ${badgeSize}">${this.formatMetaLabel('social_impact', meta.social_impact[0])}</span>`;
+                if (meta.social_impact.length > 1) {
+                    html += `<span class="career-badge badge-more ${badgeSize}">+${meta.social_impact.length - 1}</span>`;
+                }
+            }
+            
+            html += '</div></div>';
+            return html;
+        },
+        
+        // Toggle compact mode
+        toggleCompactMode: function(enabled) {
+            this.compactMode = enabled;
+            localStorage.setItem('career_compact_mode', enabled);
+            // Re-render current results
+            const resultsContainer = document.getElementById('career-explorer-results');
+            if (resultsContainer && resultsContainer.style.display !== 'none') {
+                // Store current data and re-render
+                if (this.currentCareerData) {
+                    this.displayCareerSuggestions(
+                        this.currentCareerData, 
+                        this.currentCareerInterest, 
+                        this.isDiceRoll
+                    );
+                }
+            }
+        },
+        
+        // Render skeleton loader
+        renderSkeletonCards: function(count = 6) {
+            return Array(count).fill(0).map((_, i) => `
+                <div class="career-card career-card-v2 career-card-skeleton" aria-hidden="true">
+                    <div class="skeleton-title"></div>
+                    <div class="skeleton-summary"></div>
+                    <div class="skeleton-summary" style="width: 85%;"></div>
+                    <div class="skeleton-divider"></div>
+                    <div class="skeleton-badges">
+                        <div class="skeleton-badge"></div>
+                        <div class="skeleton-badge"></div>
+                        <div class="skeleton-badge"></div>
+                    </div>
+                    <div class="skeleton-badges">
+                        <div class="skeleton-badge"></div>
+                    </div>
+                    <div class="skeleton-badges">
+                        <div class="skeleton-badge"></div>
+                        <div class="skeleton-badge"></div>
+                    </div>
+                    <div class="skeleton-actions">
+                        <div class="skeleton-button"></div>
+                        <div class="skeleton-button"></div>
+                    </div>
+                </div>
+            `).join('');
+        },
+        
+        // Render career meta chips (new)
+        renderCareerMeta: function(meta) {
+            if (!meta) return '';
+            
+            let html = '<div class="career-meta-chips">';
+            
+            if (meta.demand_horizon) {
+                html += `<span class="meta-chip meta-chip-demand">${this.formatMetaLabel('demand_horizon', meta.demand_horizon)}</span>`;
+            }
+            
+            if (meta.education) {
+                html += `<span class="meta-chip meta-chip-education">${this.formatMetaLabel('education', meta.education)}</span>`;
+            }
+            
+            if (meta.comp_band) {
+                html += `<span class="meta-chip meta-chip-comp">${this.formatMetaLabel('comp_band', meta.comp_band)}</span>`;
+            }
+            
+            if (meta.work_env && meta.work_env.length > 0) {
+                const envLabels = meta.work_env.slice(0, 2).map(env => this.formatMetaLabel('work_env', env));
+                html += envLabels.map(label => `<span class="meta-chip meta-chip-env">${label}</span>`).join('');
+                if (meta.work_env.length > 2) {
+                    html += `<span class="meta-chip meta-chip-more">+${meta.work_env.length - 2}</span>`;
+                }
+            }
+            
+            if (meta.social_impact && meta.social_impact.length > 0) {
+                html += `<span class="meta-chip meta-chip-impact">${this.formatMetaLabel('social_impact', meta.social_impact[0])}</span>`;
+                if (meta.social_impact.length > 1) {
+                    html += `<span class="meta-chip meta-chip-more">+${meta.social_impact.length - 1}</span>`;
+                }
+            }
+            
+            html += '</div>';
+            return html;
+        },
+        
+        // Format meta label for display
+        formatMetaLabel: function(category, value) {
+            const labels = {
+                demand_horizon: {
+                    'trending_now': 'Trending now',
+                    'high_growth_5y': 'High growth 5y',
+                    'future_proof_10y': 'Future-proof',
+                    'stable_low_vol': 'Stable',
+                    'automation_resistant': 'Automation-resistant'
+                },
+                education: {
+                    'no_degree': 'No degree',
+                    'certificate_bootcamp': 'Certificate',
+                    'bachelor': 'Bachelor',
+                    'advanced': 'Advanced'
+                },
+                comp_band: {
+                    'lower': 'Lower pay',
+                    'middle': 'Middle pay',
+                    'upper': 'Upper pay',
+                    'high_responsibility': 'High responsibility'
+                },
+                work_env: {
+                    'remote_friendly': 'Remote',
+                    'hybrid': 'Hybrid',
+                    'outdoor': 'Outdoor',
+                    'hands_on': 'Hands-on',
+                    'solo': 'Solo',
+                    'collaborative': 'Collaborative',
+                    'client_facing': 'Client-facing',
+                    'structured': 'Structured',
+                    'flexible': 'Flexible'
+                },
+                social_impact: {
+                    'high_social': 'High social impact',
+                    'environmental': 'Environmental',
+                    'community': 'Community',
+                    'mission_driven': 'Mission-driven'
+                }
+            };
+            
+            return (labels[category] && labels[category][value]) || value.replace(/_/g, ' ');
+        },
+        
+        // Generate Career Map (legacy endpoint - kept for backward compatibility)
+        generateCareerMap: function() {
+            const careerInput = document.getElementById('career-interest-input');
+            const careerInterest = careerInput.value.trim();
+            
+            if (!careerInterest) {
+                alert('Please enter a career or field to explore');
+                careerInput.focus();
+                return;
+            }
+            
+            // Show loading overlay
+            if (window.AILoadingOverlay) {
+                window.AILoadingOverlay.show({
+                    subtitle: 'AI is exploring career pathways for you…',
+                    messages: [
+                        `Analyzing careers related to ${careerInterest}…`,
+                        'Matching with your MI strengths and CDT profile…',
+                        'Finding adjacent career paths with easy transitions…',
+                        'Discovering parallel careers in different industries…',
+                        'Identifying wildcard options based on your unique profile…'
+                    ]
+                });
+            }
+            
+            // Call AJAX endpoint
+            $.ajax({
+                url: labMode.ajaxUrl,
+                method: 'POST',
+                data: {
+                    action: 'mc_lab_generate_career_map',
+                    nonce: labMode.nonce,
+                    career_interest: careerInterest
+                },
+                success: (response) => {
+                    // Hide loading overlay
+                    if (window.AILoadingOverlay) {
+                        window.AILoadingOverlay.hide();
+                    }
+                    
+                    if (response.success && response.data.career_map) {
+                        this.displayCareerMap(response.data.career_map, careerInterest);
+                    } else {
+                        alert('Error: ' + (response.data || 'Failed to generate career map'));
+                    }
+                },
+                error: (xhr, status, error) => {
+                    // Hide loading overlay
+                    if (window.AILoadingOverlay) {
+                        window.AILoadingOverlay.hide();
+                    }
+                    
+                    console.error('Career map generation failed:', { xhr, status, error });
+                    alert('Network error. Please check your connection and try again.');
+                }
+            });
+        },
+        
+        // Show Career Explorer directly (for quick testing)
+        showCareerExplorerDirectly: function() {
+            console.log('showCareerExplorerDirectly called');
+            
+            // Create mock experiments array to satisfy tab rendering
+            this.experiments = [];
+            
+            // Render experiments view which will show Career Explorer tab
+            const html = `
+                <div class="lab-experiments">
+                    <h2>Career Explorer (Test Mode)</h2>
+                    <p class="lab-subtitle">Quick access for testing</p>
+                    
+                    <div class="experiments-tab-content">
+                        ${this.renderCareerExplorerTab()}
+                    </div>
+                    
+                    <div class="lab-footer-actions" style="margin-top: 2rem;">
+                        <button class="lab-btn lab-btn-secondary" onclick="LabModeApp.loadLandingView()">← Back to Start</button>
+                    </div>
+                </div>
+            `;
+            
+            $('#lab-mode-app').html(html);
+            this.currentStep = 'career-explorer';
+            console.log('Career Explorer rendered in test mode');
+        },
+        
+        // Display Career Map results
+        displayCareerMap: function(careerMap, careerInterest) {
+            // Store for feedback actions
+            this.currentCareerInterest = careerInterest;
+            
+            const resultsContainer = document.getElementById('career-explorer-results');
+            
+            const html = `
+                <div class="career-map-results">
+                    <div class="career-map-header">
+                        <h3>Career Mind Map for: ${careerMap.central_career || careerInterest}</h3>
+                        <p>Careers aligned with your MI, CDT, Bartle Type, and Johari profile</p>
+                    </div>
+                    
+                    <div class="career-clusters">
+                        ${this.renderCareerCluster('Adjacent Careers', 'Very similar to your chosen career; easy transitions', careerMap.adjacent, 'adjacent')}
+                        ${this.renderCareerCluster('Parallel Careers', 'Similar strengths, different industries', careerMap.parallel, 'parallel')}
+                        ${this.renderCareerCluster('Wildcard Careers', 'Unexpected options based on your unique profile', careerMap.wildcard, 'wildcard')}
+                    </div>
+                    
+                    <div class="career-map-actions">
+                        <button class="lab-btn lab-btn-secondary" onclick="document.getElementById('career-interest-input').value=''; document.getElementById('career-interest-input').focus(); document.getElementById('career-explorer-results').style.display='none';">
+                            Explore Another Career
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            resultsContainer.innerHTML = html;
+            resultsContainer.style.display = 'block';
+            
+            // Scroll to results
+            resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+        
+        // Render a career cluster (Adjacent, Parallel, or Wildcard)
+        renderCareerCluster: function(title, description, careers, clusterType) {
+            if (!careers || careers.length === 0) {
+                return `
+                    <div class="career-cluster career-cluster-${clusterType}">
+                        <div class="career-cluster-header">
+                            <h4>${title}</h4>
+                            <p class="career-cluster-desc">${description}</p>
+                        </div>
+                        <div class="career-cluster-empty">
+                            <p>No ${clusterType} careers generated.</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="career-cluster career-cluster-${clusterType}">
+                    <div class="career-cluster-header">
+                        <h4>${title}</h4>
+                        <p class="career-cluster-desc">${description}</p>
+                    </div>
+                    <div class="career-cards">
+                        ${careers.map((career, index) => this.renderCareerCard(career, index, clusterType)).join('')}
+                    </div>
+                </div>
+            `;
+        },
+        
+        // Render a single career card
+        renderCareerCard: function(career, index, clusterType) {
+            const cardId = `career-card-${clusterType}-${index}`;
+            return `
+                <div class="career-card career-card-${clusterType}" id="${cardId}" data-career-title="${career.title}" data-cluster-type="${clusterType}">
+                    <div class="career-card-header">
+                        <h5 class="career-title">${career.title}</h5>
+                    </div>
+                    <div class="career-card-body">
+                        <p class="career-why-fits">${career.why_it_fits}</p>
+                        ${career.profile_match ? this.renderProfileMatch(career.profile_match) : ''}
+                    </div>
+                    <div class="career-action-bar">
+                        <button class="career-action-btn" data-action="too_similar" title="Show me something less similar">
+                            Too similar
+                        </button>
+                        <button class="career-action-btn" data-action="too_different" title="Show me something closer">
+                            Too different
+                        </button>
+                        <button class="career-action-btn" data-action="not_interested" title="Show me something else">
+                            Not interested
+                        </button>
+                        <button class="career-action-btn career-action-save" data-action="save" title="Save this career">
+                            Save ♥
+                        </button>
+                        <button class="career-action-btn career-action-explain" data-action="explain_fit" title="Why does this fit me?">
+                            Why this fits me
+                        </button>
+                    </div>
+                </div>
+            `;
+        },
+        
+        // Render profile match chips
+        renderProfileMatch: function(profileMatch) {
+            let html = '<div class="career-profile-match">';
+            
+            if (profileMatch.mi && profileMatch.mi.length > 0) {
+                html += `<div class="profile-match-section">
+                    <span class="profile-match-label">MI:</span>
+                    ${profileMatch.mi.map(mi => `<span class="profile-chip profile-chip-mi">${mi}</span>`).join('')}
+                </div>`;
+            }
+            
+            if (profileMatch.cdt) {
+                html += `<div class="profile-match-section">
+                    <span class="profile-match-label">CDT:</span>
+                    <span class="profile-chip profile-chip-cdt">${profileMatch.cdt}</span>
+                </div>`;
+            }
+            
+            if (profileMatch.bartle) {
+                html += `<div class="profile-match-section">
+                    <span class="profile-match-label">Bartle:</span>
+                    <span class="profile-chip profile-chip-bartle">${profileMatch.bartle}</span>
+                </div>`;
+            }
+            
+            if (profileMatch.johari && profileMatch.johari.length > 0) {
+                html += `<div class="profile-match-section">
+                    <span class="profile-match-label">Johari:</span>
+                    ${profileMatch.johari.map(adj => `<span class="profile-chip profile-chip-johari">${adj}</span>`).join('')}
+                </div>`;
+            }
+            
+            html += '</div>';
+            return html;
+        },
+        
+        // Handle career feedback button clicks
+        handleCareerFeedback: function(e) {
+            e.preventDefault();
+            const button = $(e.currentTarget);
+            const action = button.data('action');
+            const card = button.closest('.career-card');
+            const careerTitle = card.data('career-title');
+            const clusterType = card.data('cluster-type');
+            const cardId = card.data('card-id');
+            const miMatch = card.data('mi-match');
+            const bartle = card.data('bartle');
+            const growthHorizon = card.data('growth-horizon');
+            
+            // Get central career from input or stored value
+            const centralCareer = this.currentCareerInterest || document.getElementById('career-interest-input')?.value?.trim() || '';
+            
+            console.log('Career feedback:', { action, careerTitle, clusterType, centralCareer });
+            
+            // Handle different actions
+            if (action === 'explain_fit') {
+                // Analytics: career_explain_open
+                console.log('career_explain_open', { card_id: cardId, career_title: careerTitle });
+                this.showCareerExplanation(card, careerTitle);
+            } else if (action === 'save') {
+                // Analytics: career_save
+                console.log('career_save', { card_id: cardId, mi_match: miMatch, bartle: bartle, growth_horizon: growthHorizon });
+                this.saveCareer(card, careerTitle, clusterType);
+            } else if (action === 'not_interested') {
+                // Analytics: career_dismiss
+                console.log('career_dismiss', { card_id: cardId, cluster_type: clusterType });
+                this.requestCareerReplacement(card, action, careerTitle, clusterType, centralCareer);
+            } else {
+                // too_similar, too_different - get replacement
+                this.requestCareerReplacement(card, action, careerTitle, clusterType, centralCareer);
+            }
+        },
+        
+        // Request a career replacement from AI
+        requestCareerReplacement: function(card, action, careerRejected, clusterType, centralCareer) {
+            // Disable all buttons in this card during request
+            card.find('.career-action-btn').prop('disabled', true);
+            
+            // Get current career data from card
+            const careerData = {
+                title: careerRejected,
+                why_it_fits: card.find('.career-why-fits').text(),
+                profile_match: {} // Would need to parse from card if needed
+            };
+            
+            $.ajax({
+                url: labMode.ajaxUrl,
+                method: 'POST',
+                data: {
+                    action: 'mc_lab_career_feedback',
+                    nonce: labMode.nonce,
+                    feedback_action: action,
+                    career_rejected: careerRejected,
+                    central_career: centralCareer,
+                    distance_group: clusterType,
+                    rejected_career_data: JSON.stringify(careerData)
+                },
+                success: (response) => {
+                    if (response.success && response.data.replacement) {
+                        this.replaceCareerCard(card, response.data.replacement, clusterType);
+                    } else {
+                        alert('Error: ' + (response.data || 'Failed to get replacement'));
+                        card.find('.career-action-btn').prop('disabled', false);
+                    }
+                },
+                error: (xhr, status, error) => {
+                    console.error('Career feedback failed:', { xhr, status, error });
+                    alert('Network error. Please try again.');
+                    card.find('.career-action-btn').prop('disabled', false);
+                }
+            });
+        },
+        
+        // Replace a career card with animation
+        replaceCareerCard: function(oldCard, newCareer, clusterType) {
+            // Fade out old card
+            oldCard.css('opacity', '1').animate({ opacity: 0 }, 300, function() {
+                // Get the index from the card ID
+                const cardId = oldCard.attr('id');
+                const index = cardId ? cardId.split('-').pop() : '0';
+                
+                // Create new card HTML
+                const newCardHtml = LabModeApp.renderCareerCard(newCareer, index, clusterType);
+                
+                // Replace content
+                oldCard.replaceWith(newCardHtml);
+                
+                // Fade in new card
+                const newCard = $(`#career-card-${clusterType}-${index}`);
+                newCard.css('opacity', '0').animate({ opacity: 1 }, 300);
+            });
+        },
+        
+        // Show explanation popover
+        showCareerExplanation: function(card, careerTitle) {
+            console.log('showCareerExplanation called for career');
+            
+            // Check if explanation already exists and toggle it
+            const existingExplanation = card.find('.career-explanation');
+            if (existingExplanation.length > 0) {
+                console.log('Found existing explanation, toggling visibility');
+                existingExplanation.slideToggle(200);
+                const explainBtn = card.find('[data-action="explain_fit"]');
+                if (existingExplanation.is(':visible')) {
+                    explainBtn.text('Hide explanation');
+                } else {
+                    explainBtn.text('Why this fits me');
+                }
+                return;
+            }
+            
+            // Check if we're already loading this explanation
+            if (card.data('loading-explanation')) {
+                console.log('Already loading explanation for career');
+                return;
+            }
+            card.data('loading-explanation', true);
+            
+            // Initialize cache if not exists
+            if (!this.careerExplanationCache) {
+                this.careerExplanationCache = {};
+            }
+            
+            // Check if we already have a cached explanation for this career
+            if (this.careerExplanationCache[careerTitle]) {
+                console.log('Using cached explanation for career');
+                const sections = this.careerExplanationCache[careerTitle];
+                
+                // Validate that we have the new format (object with profile_fit and typical_day)
+                if (typeof sections === 'object' && sections.profile_fit && sections.typical_day) {
+                    // Create explanation elements using jQuery to avoid quote issues
+                    const $explanation = $('<div>').addClass('career-explanation');
+                    
+                    // Profile fit section
+                    const $profileSection = $('<div>').addClass('career-explanation-section');
+                    $profileSection.append(
+                        $('<div>').addClass('career-explanation-header').text('Why this fits your profile')
+                    );
+                    $profileSection.append(
+                        $('<div>').addClass('career-explanation-content').text(sections.profile_fit)
+                    );
+                    $explanation.append($profileSection);
+                    
+                    // Typical day section
+                    const $daySection = $('<div>').addClass('career-explanation-section');
+                    $daySection.append(
+                        $('<div>').addClass('career-explanation-header').text('A typical day')
+                    );
+                    $daySection.append(
+                        $('<div>').addClass('career-explanation-content').text(sections.typical_day)
+                    );
+                    $explanation.append($daySection);
+                    
+                    // V2 cards use article structure, append before actions
+                    const cardActions = card.find('.career-card-actions');
+                    if (cardActions.length > 0) {
+                        cardActions.before($explanation);
+                    } else {
+                        // Fallback for legacy cards
+                        card.find('.career-card-body').append($explanation);
+                    }
+                    $explanation.hide().slideDown(200);
+                    
+                    const explainBtn = card.find('[data-action="explain_fit"]');
+                    explainBtn.text('Hide explanation');
+                    card.data('loading-explanation', false);
+                    return;
+                } else {
+                    // Old format cached - clear it and fetch fresh
+                    console.log('Old format detected, clearing cache for career');
+                    delete this.careerExplanationCache[careerTitle];
+                }
+            }
+            
+            // Disable button during request
+            const explainBtn = card.find('[data-action="explain_fit"]');
+            explainBtn.prop('disabled', true).text('Loading...');
+            
+            const centralCareer = this.currentCareerInterest || document.getElementById('career-interest-input')?.value?.trim() || '';
+            const clusterType = card.data('cluster-type');
+            
+            console.log('Making AJAX request for career explanation:', careerTitle || 'unknown');
+            
+            $.ajax({
+                url: labMode.ajaxUrl,
+                method: 'POST',
+                data: {
+                    action: 'mc_lab_career_feedback',
+                    nonce: labMode.nonce,
+                    feedback_action: 'explain_fit',
+                    career_rejected: careerTitle,
+                    central_career: centralCareer,
+                    distance_group: clusterType
+                },
+                success: (response) => {
+                    console.log('Career explanation response received');
+                    
+                    // Clear loading flag
+                    card.data('loading-explanation', false);
+                    
+                    if (response.success && response.data.explanation) {
+                        console.log('Explanation data validated');
+                        
+                        const sections = response.data.explanation;
+                        
+                        // Validate we have the correct format
+                        if (typeof sections !== 'object' || !sections.profile_fit || !sections.typical_day) {
+                            console.error('Invalid explanation format received:', sections);
+                            alert('Error: Received invalid explanation format');
+                            explainBtn.text('Why this fits me');
+                            return;
+                        }
+                        
+                        // Cache the explanation (now it's an object with profile_fit and typical_day)
+                        if (!LabModeApp.careerExplanationCache) {
+                            LabModeApp.careerExplanationCache = {};
+                        }
+                        LabModeApp.careerExplanationCache[careerTitle] = response.data.explanation;
+                        console.log('Cached explanation for career');
+                        
+                        // Create explanation elements using jQuery to avoid quote issues
+                        const $explanation = $('<div>').addClass('career-explanation');
+                        
+                        // Profile fit section
+                        const $profileSection = $('<div>').addClass('career-explanation-section');
+                        $profileSection.append(
+                            $('<div>').addClass('career-explanation-header').text('Why this fits your profile')
+                        );
+                        $profileSection.append(
+                            $('<div>').addClass('career-explanation-content').text(sections.profile_fit)
+                        );
+                        $explanation.append($profileSection);
+                        
+                        // Typical day section
+                        const $daySection = $('<div>').addClass('career-explanation-section');
+                        $daySection.append(
+                            $('<div>').addClass('career-explanation-header').text('A typical day')
+                        );
+                        $daySection.append(
+                            $('<div>').addClass('career-explanation-content').text(sections.typical_day)
+                        );
+                        $explanation.append($daySection);
+                        
+                        console.log('Appending explanation to card');
+                        // V2 cards use article structure, append before actions
+                        const cardActions = card.find('.career-card-actions');
+                        if (cardActions.length > 0) {
+                            console.log('Found V2 card structure, appending before actions');
+                            cardActions.before($explanation);
+                        } else {
+                            // Fallback for legacy cards
+                            console.log('Using legacy card structure');
+                            const cardBody = card.find('.career-card-body');
+                            console.log('Card body found:', cardBody.length);
+                            cardBody.append($explanation);
+                        }
+                        
+                        console.log('Explanation element found after append:', card.find('.career-explanation').length);
+                        $explanation.hide().slideDown(200);
+                        console.log('Explanation should now be visible');
+                        
+                        // Update button text
+                        explainBtn.prop('disabled', false).text('Hide explanation');
+                    } else {
+                        alert('Error: ' + (response.data || 'Failed to get explanation'));
+                        explainBtn.text('Why this fits me');
+                    }
+                },
+                error: (xhr, status, error) => {
+                    // Clear loading flag on error
+                    card.data('loading-explanation', false);
+                    explainBtn.prop('disabled', false).text('Why this fits me');
+                    console.error('Career explanation failed:', { xhr, status, error });
+                    alert('Network error. Please try again.');
+                }
+            });
+        },
+        
+        // Save a career to favorites
+        saveCareer: function(card, careerTitle, clusterType) {
+            const saveBtn = card.find('[data-action="save"]');
+            const centralCareer = this.currentCareerInterest || document.getElementById('career-interest-input')?.value?.trim() || '';
+            
+            // Get career data
+            const careerData = {
+                title: careerTitle,
+                why_it_fits: card.find('.career-why-fits').text(),
+                distance_group: clusterType,
+                central_career: centralCareer
+            };
+            
+            saveBtn.prop('disabled', true).text('Saving...');
+            
+            $.ajax({
+                url: labMode.ajaxUrl,
+                method: 'POST',
+                data: {
+                    action: 'mc_lab_career_feedback',
+                    nonce: labMode.nonce,
+                    feedback_action: 'save',
+                    career_rejected: careerTitle,
+                    central_career: centralCareer,
+                    distance_group: clusterType,
+                    career_data: JSON.stringify(careerData)
+                },
+                success: (response) => {
+                    if (response.success && response.data.saved) {
+                        saveBtn.removeClass('career-action-save').addClass('career-action-saved')
+                               .text('Saved ✓').prop('disabled', true);
+                        card.addClass('career-card-saved');
+                    } else {
+                        alert('Error: ' + (response.data || 'Failed to save'));
+                        saveBtn.prop('disabled', false).text('Save ♥');
+                    }
+                },
+                error: (xhr, status, error) => {
+                    console.error('Career save failed:', { xhr, status, error });
+                    alert('Network error. Please try again.');
+                    saveBtn.prop('disabled', false).text('Save ♥');
+                }
+            });
         },
         
         // Helper function to format connection strings
