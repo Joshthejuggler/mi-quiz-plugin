@@ -3401,9 +3401,9 @@ You must:
         $prompt = $base . $lane_descriptions[$lane] . "\n\n";
         $prompt .= 'Output Requirements:\n';
         $prompt .= '1) Return valid JSON: {"careers": [{"title", "fit", "similarity", "mi", "cdt_top", "bartle", "why_it_fits"}]}';
-        $prompt .= '\n2) Keep why_it_fits under 100 chars. Omit demand_horizon, education, work_env, comp_band.';
-        $prompt .= '\n3) Realistic, safe careers only.';
-        $prompt .= '\n4) No prose or markdown. JSON only.';
+        $prompt .= '\n2) REQUIRED fields: title (string), fit (0.0-1.0 float), similarity (0.0-1.0 float), mi (array of 1-2 strings), cdt_top (string), bartle (string), why_it_fits (under 100 chars)';
+        $prompt .= '\n3) fit = how well this career matches the user\'s profile. similarity = how close to the source career.';
+        $prompt .= '\n4) Realistic, safe careers only. JSON only, no prose.';
         
         return $prompt;
     }
