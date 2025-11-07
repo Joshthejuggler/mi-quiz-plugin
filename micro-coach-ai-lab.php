@@ -3248,6 +3248,7 @@ You must:
         $lane = sanitize_text_field($_POST['lane'] ?? 'parallel');
         $limit = intval($_POST['limit'] ?? 8);
         $novelty = floatval($_POST['novelty'] ?? 0);
+        $filters = json_decode(stripslashes($_POST['filters'] ?? '{}'), true) ?: [];
         
         // Validate lane parameter
         if (!in_array($lane, ['adjacent', 'parallel', 'wildcard'])) {
@@ -3259,7 +3260,8 @@ You must:
         }
         
         // Check cache first (transient with 1 hour expiration)
-        $cache_key = 'mc_related_' . md5($career_title . $lane . $user_id);
+        // Include filters in cache key so different filters get different results
+        $cache_key = 'mc_related_' . md5($career_title . $lane . $user_id . serialize($filters));
         $cached = get_transient($cache_key);
         
         if ($cached !== false) {
@@ -3280,7 +3282,8 @@ You must:
                 $lane,
                 $profile_data,
                 $limit,
-                $novelty
+                $novelty,
+                $filters
             );
             
             // Cache for 1 hour
@@ -3297,7 +3300,7 @@ You must:
     /**
      * Generate related careers using AI based on lane type
      */
-    private function generate_related_careers($career_title, $lane, $profile, $limit, $novelty) {
+    private function generate_related_careers($career_title, $lane, $profile, $limit, $novelty, $filters = []) {
         if (!class_exists('Micro_Coach_AI')) {
             throw new Exception('Micro_Coach_AI class not available');
         }
@@ -3310,8 +3313,8 @@ You must:
         // Build lane-specific system prompt
         $system_prompt = $this->build_related_careers_system_prompt($lane);
         
-        // Build user prompt with profile and career title
-        $user_prompt = $this->build_related_careers_user_prompt($career_title, $profile, $limit, $novelty);
+        // Build user prompt with profile, career title, and filters
+        $user_prompt = $this->build_related_careers_user_prompt($career_title, $profile, $limit, $novelty, $filters);
         
         $model = Micro_Coach_AI::get_selected_model();
         
@@ -3408,7 +3411,7 @@ You must:
     /**
      * Build user prompt for related careers
      */
-    private function build_related_careers_user_prompt($career_title, $profile, $limit, $novelty) {
+    private function build_related_careers_user_prompt($career_title, $profile, $limit, $novelty, $filters = []) {
         $prompt = "source_career: " . $career_title . "\n\n";
         
         // Profile data
@@ -3431,6 +3434,23 @@ You must:
             $prompt .= ' / ' . $profile['bartle']['secondary'];
         }
         $prompt .= "\n\n";
+        
+        // Add filters if provided
+        if (!empty($filters)) {
+            $prompt .= "filters:\n";
+            foreach ($filters as $key => $value) {
+                if ($value && ($value !== [] && $value !== null)) {
+                    if (is_array($value)) {
+                        $prompt .= "  $key: " . implode(', ', $value) . "\n";
+                    } elseif (is_bool($value)) {
+                        $prompt .= "  $key: " . ($value ? 'yes' : 'no') . "\n";
+                    } else {
+                        $prompt .= "  $key: $value\n";
+                    }
+                }
+            }
+            $prompt .= "\n";
+        }
         
         $prompt .= "limit: " . $limit . "\n";
         $prompt .= "novelty: " . number_format($novelty, 2) . "\n";
