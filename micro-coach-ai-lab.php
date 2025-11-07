@@ -3325,12 +3325,12 @@ You must:
                 ['role' => 'user', 'content' => $user_prompt]
             ],
             'temperature' => 0.7 + ($novelty * 0.3),
-            'max_tokens' => 800,  // Reduced from 1500 for faster generation
+            'max_tokens' => 500,  // Reduced for faster generation
             'response_format' => ['type' => 'json_object']
         ];
         
         $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
-            'timeout' => 30,  // Reduced from 60 seconds
+            'timeout' => 20,  // Faster timeout
             'headers' => [
                 'Authorization' => 'Bearer ' . $api_key,
                 'Content-Type' => 'application/json'
@@ -3418,72 +3418,37 @@ You must:
      * Build system prompt for related careers based on lane
      */
     private function build_related_careers_system_prompt($lane) {
-        $base = 'You are a career discovery assistant helping users explore related career paths. ';
+        $lane_desc = [
+            'adjacent' => 'similar careers, easy transitions',
+            'parallel' => 'similar skills, different industries',
+            'wildcard' => 'unexpected but fitting careers'
+        ][$lane];
         
-        $lane_descriptions = [
-            'adjacent' => 'Generate adjacent careers: very similar careers with easy transitions, requiring minimal skill retraining. Think lateral moves within the same industry or function.',
-            'parallel' => 'Generate parallel careers: careers using similar skills in different industries or contexts. Same core competencies, different application domains.',
-            'wildcard' => 'Generate wildcard careers: unexpected but genuinely profile-consistent careers that might surprise the user. These should be creative yet realistic matches.'
-        ];
-        
-        $prompt = $base . $lane_descriptions[$lane] . "\n\n";
-        $prompt .= 'Output Requirements:\n';
-        $prompt .= '1) Return valid JSON: {"careers": [{"title", "fit", "similarity", "mi", "cdt_top", "bartle", "why_it_fits"}]}';
-        $prompt .= '\n2) REQUIRED fields: title (string), fit (0.0-1.0 float), similarity (0.0-1.0 float), mi (array of 1-2 strings), cdt_top (string), bartle (string), why_it_fits (under 100 chars)';
-        $prompt .= '\n3) fit = how well this career matches the user\'s profile. similarity = how close to the source career.';
-        $prompt .= '\n4) Realistic, safe careers only. JSON only, no prose.';
-        
-        return $prompt;
+        return "Career discovery assistant. Generate {$lane_desc}.\n\nJSON format: {\"careers\":[{\"title\":\"\",\"fit\":0.0-1.0,\"similarity\":0.0-1.0,\"mi\":[\"str\"],\"cdt_top\":\"\",\"bartle\":\"\"}]}\nfit=profile match, similarity=source match. Concise only.";
     }
     
     /**
      * Build user prompt for related careers
      */
     private function build_related_careers_user_prompt($career_title, $profile, $limit, $novelty, $filters = []) {
-        $prompt = "source_career: " . $career_title . "\n\n";
+        // Build MI string
+        $mi_str = implode(',', array_column($profile['mi_top3'], 'slug'));
         
-        // Profile data
-        $prompt .= "profile:\n";
-        
-        // MI top 3
-        $mi_strings = [];
-        foreach ($profile['mi_top3'] as $mi) {
-            $mi_strings[] = $mi['slug'] . ' (' . $mi['score'] . ')';
-        }
-        $prompt .= "  mi_top3: " . implode(', ', $mi_strings) . "\n";
-        
-        // CDT
-        $prompt .= "  cdt_top: " . $profile['cdt_top'] . "\n";
-        $prompt .= "  cdt_edge: " . $profile['cdt_edge'] . "\n";
-        
-        // Bartle
-        $prompt .= "  bartle: " . $profile['bartle']['primary'];
-        if ($profile['bartle']['secondary']) {
-            $prompt .= ' / ' . $profile['bartle']['secondary'];
-        }
-        $prompt .= "\n\n";
-        
-        // Add filters if provided
-        if (!empty($filters)) {
-            $prompt .= "filters:\n";
-            foreach ($filters as $key => $value) {
-                if ($value && ($value !== [] && $value !== null)) {
-                    if (is_array($value)) {
-                        $prompt .= "  $key: " . implode(', ', $value) . "\n";
-                    } elseif (is_bool($value)) {
-                        $prompt .= "  $key: " . ($value ? 'yes' : 'no') . "\n";
-                    } else {
-                        $prompt .= "  $key: $value\n";
-                    }
+        // Build filter string (only if filters exist)
+        $filter_str = '';
+        if (!empty($filters) && is_array($filters)) {
+            $filter_parts = [];
+            foreach ($filters as $k => $v) {
+                if ($v && $v !== []) {
+                    $filter_parts[] = is_array($v) ? "$k:" . implode(',', $v) : "$k:$v";
                 }
             }
-            $prompt .= "\n";
+            if (!empty($filter_parts)) {
+                $filter_str = "\nfilters: " . implode('; ', $filter_parts);
+            }
         }
         
-        $prompt .= "limit: " . $limit . "\n";
-        $prompt .= "novelty: " . number_format($novelty, 2) . "\n";
-        
-        return $prompt;
+        return "source: {$career_title}\nprofile: mi={$mi_str}, cdt={$profile['cdt_top']}, bartle={$profile['bartle']['primary']}{$filter_str}\nlimit: {$limit}";
     }
 }
 

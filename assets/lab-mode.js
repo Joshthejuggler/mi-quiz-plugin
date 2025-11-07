@@ -3356,14 +3356,39 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
         
         // Render mind-map view (D3 visualization)
         renderMindMapView: function(data, seedCareer, isDice) {
+            // Get saved lane preference or default to 'adjacent'
+            const savedLane = localStorage.getItem('mindmap_expansion_lane') || 'adjacent';
+            
             return `
                 <div class="career-mindmap-container">
                     <div class="mindmap-header">
                         <div class="mindmap-header-top">
                             <h3>${isDice ? '🎲 Dice Roll' : 'Mind-Map'}: ${seedCareer || 'Your Profile'}</h3>
-                            <span class="mindmap-hint">👆 Click to choose expansion type • Hover for quick actions</span>
+                            <span class="mindmap-hint">👆 Click nodes to expand • Hover for quick actions</span>
                         </div>
-                        <div class="mindmap-breadcrumbs"></div>
+                        
+                        <div class="mindmap-controls">
+                            <div class="mindmap-lane-selector">
+                                <span class="lane-selector-label">Expansion type:</span>
+                                <button class="lane-selector-btn ${savedLane === 'adjacent' ? 'active' : ''}" data-lane="adjacent" onclick="LabModeApp.setExpansionLane('adjacent')">
+                                    <span class="lane-dot lane-adjacent"></span>
+                                    Adjacent
+                                </button>
+                                <button class="lane-selector-btn ${savedLane === 'parallel' ? 'active' : ''}" data-lane="parallel" onclick="LabModeApp.setExpansionLane('parallel')">
+                                    <span class="lane-dot lane-parallel"></span>
+                                    Parallel
+                                </button>
+                                <button class="lane-selector-btn ${savedLane === 'wildcard' ? 'active' : ''}" data-lane="wildcard" onclick="LabModeApp.setExpansionLane('wildcard')">
+                                    <span class="lane-dot lane-wildcard"></span>
+                                    Wildcard
+                                </button>
+                                <button class="lane-selector-btn ${savedLane === 'mixed' ? 'active' : ''}" data-lane="mixed" onclick="LabModeApp.setExpansionLane('mixed')">
+                                    <span class="lane-icon">✨</span>
+                                    Mixed
+                                </button>
+                            </div>
+                            <div class="mindmap-breadcrumbs"></div>
+                        </div>
                         
                         <div class="mindmap-legend">
                             <span class="legend-item"><span class="legend-dot lane-adjacent"></span> Adjacent</span>
@@ -3419,7 +3444,8 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     total_tokens: 0,
                     total_cost_usd: 0,
                     api_calls: 0
-                }
+                },
+                hasShownLaneAlert: false
             };
             
             // Populate initial state from data
@@ -3733,93 +3759,20 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 .on('end', dragended);
         },
         
-        // Show lane selection menu
-        showLaneSelectionMenu: function(event, nodeData) {
-            // Check if already expanded
-            if (this.mindMapState.expandedNodes.has(nodeData.id)) {
-                this.showNodeFeedback(nodeData.id, 'Already expanded', 'info');
-                return;
-            }
+        // Set expansion lane preference
+        setExpansionLane: function(lane) {
+            localStorage.setItem('mindmap_expansion_lane', lane);
             
-            // Remove any existing menu
-            $('.lane-selection-menu').remove();
+            // Update button states
+            $('.lane-selector-btn').removeClass('active');
+            $(`.lane-selector-btn[data-lane="${lane}"]`).addClass('active');
             
-            // Create menu
-            const menu = $(`
-                <div class="lane-selection-menu">
-                    <div class="lane-menu-header">Expand: ${this.escapeHtml(nodeData.title)}</div>
-                    <button class="lane-menu-option lane-adjacent" data-lane="adjacent" data-node-id="${nodeData.id}">
-                        <span class="lane-dot lane-adjacent"></span>
-                        <span class="lane-label">
-                            <strong>Adjacent</strong>
-                            <small>Similar roles, easy transitions</small>
-                        </span>
-                    </button>
-                    <button class="lane-menu-option lane-parallel" data-lane="parallel" data-node-id="${nodeData.id}">
-                        <span class="lane-dot lane-parallel"></span>
-                        <span class="lane-label">
-                            <strong>Parallel</strong>
-                            <small>Similar skills, different industries</small>
-                        </span>
-                    </button>
-                    <button class="lane-menu-option lane-wildcard" data-lane="wildcard" data-node-id="${nodeData.id}">
-                        <span class="lane-dot lane-wildcard"></span>
-                        <span class="lane-label">
-                            <strong>Wildcard</strong>
-                            <small>Unexpected but fitting options</small>
-                        </span>
-                    </button>
-                    <button class="lane-menu-option lane-mixed" data-lane="mixed" data-node-id="${nodeData.id}">
-                        <span class="lane-icon">✨</span>
-                        <span class="lane-label">
-                            <strong>Mixed Variety</strong>
-                            <small>All three types (3× cost)</small>
-                        </span>
-                    </button>
-                </div>
-            `);
-            
-            // Position menu near the node
-            const menuWidth = 280;
-            const menuHeight = 240;
-            let left = event.pageX + 10;
-            let top = event.pageY - menuHeight / 2;
-            
-            // Keep menu on screen
-            if (left + menuWidth > $(window).width()) {
-                left = event.pageX - menuWidth - 10;
-            }
-            if (top < 10) top = 10;
-            if (top + menuHeight > $(window).height()) {
-                top = $(window).height() - menuHeight - 10;
-            }
-            
-            menu.css({ left: left + 'px', top: top + 'px' });
-            $('body').append(menu);
-            
-            // Animate in
-            setTimeout(() => menu.addClass('visible'), 10);
-            
-            // Handle option clicks
-            const self = this;
-            menu.find('.lane-menu-option').on('click', function(e) {
-                e.stopPropagation();
-                const lane = $(this).data('lane');
-                const nodeId = $(this).data('node-id');
-                menu.removeClass('visible');
-                setTimeout(() => menu.remove(), 200);
-                self.expandNodeWithLane(nodeId, lane);
-            });
-            
-            // Close menu when clicking outside
-            const closeMenu = function(e) {
-                if (!$(e.target).closest('.lane-selection-menu').length) {
-                    menu.removeClass('visible');
-                    setTimeout(() => menu.remove(), 200);
-                    $(document).off('click', closeMenu);
-                }
-            };
-            setTimeout(() => $(document).on('click', closeMenu), 100);
+            console.log('Expansion lane set to:', lane);
+        },
+        
+        // Get current expansion lane
+        getExpansionLane: function() {
+            return localStorage.getItem('mindmap_expansion_lane') || 'adjacent';
         },
         
         // Expand node with selected lane(s)
@@ -4103,11 +4056,25 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 }
             });
             
-            // Single-click: show lane selection menu
+            // Single-click: expand with selected lane
             node.on('click', (event, d) => {
                 event.stopPropagation();
                 if (d.type === 'career') {
-                    this.showLaneSelectionMenu(event, d);
+                    // Show first-time alert
+                    if (!this.mindMapState.hasShownLaneAlert) {
+                        this.mindMapState.hasShownLaneAlert = true;
+                        const currentLane = this.getExpansionLane();
+                        const laneNames = {
+                            adjacent: 'Adjacent (similar, easy transitions)',
+                            parallel: 'Parallel (similar skills, different industries)',
+                            wildcard: 'Wildcard (unexpected but fitting)',
+                            mixed: 'Mixed (all three types - 3× cost)'
+                        };
+                        alert(`You're expanding with: ${laneNames[currentLane]}\n\nChange expansion type using the buttons above.`);
+                    }
+                    
+                    const lane = this.getExpansionLane();
+                    this.expandNodeWithLane(d.id, lane);
                 }
             });
             

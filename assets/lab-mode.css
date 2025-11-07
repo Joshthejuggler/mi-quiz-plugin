@@ -6805,6 +6805,84 @@ body.modal-open {
     user-select: none;
 }
 
+/* Lane Selector Controls */
+.mindmap-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.mindmap-lane-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f8fafc;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.lane-selector-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+.lane-selector-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: white;
+    font-size: 13px;
+    font-weight: 500;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.lane-selector-btn:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+    color: #1e293b;
+}
+
+.lane-selector-btn.active {
+    border-color: #3B82F6;
+    background: #EFF6FF;
+    color: #2563EB;
+    font-weight: 600;
+}
+
+.lane-selector-btn .lane-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.lane-selector-btn .lane-dot.lane-adjacent {
+    background: #10B981;
+}
+
+.lane-selector-btn .lane-dot.lane-parallel {
+    background: #3B82F6;
+}
+
+.lane-selector-btn .lane-dot.lane-wildcard {
+    background: #F59E0B;
+}
+
+.lane-selector-btn .lane-icon {
+    font-size: 14px;
+}
+
 /* Mind-Map Tooltip */
 .mindmap-tooltip {
     position: absolute;
