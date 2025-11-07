@@ -574,11 +574,20 @@ class Micro_Coach_AI_Lab {
             false  // Load in header instead of footer
         );
         
+        // Enqueue D3.js for Mind-Map visualization
+        wp_enqueue_script(
+            'd3js',
+            'https://d3js.org/d3.v7.min.js',
+            [],
+            '7.8.5',
+            false
+        );
+        
         // Enqueue AI Loading Overlay assets
         wp_enqueue_script(
             'ai-loading-overlay-js',
             plugins_url('assets/ai-loading-overlay.js', __FILE__),
-            ['jquery'],
+            ['jquery', 'd3js'],
             time(),
             false
         );
