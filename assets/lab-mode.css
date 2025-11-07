@@ -6993,6 +6993,48 @@ body.modal-open {
     color: #1e293b;
 }
 
+/* Admin Usage Display */
+.mindmap-usage-display {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    font-size: 12px;
+    min-width: 280px;
+    backdrop-filter: blur(10px);
+}
+
+.mindmap-usage-display .usage-label {
+    font-weight: 700;
+    margin-bottom: 6px;
+    font-size: 11px;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mindmap-usage-display .usage-stats {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.mindmap-usage-display .usage-stat {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.mindmap-usage-display .usage-stat strong {
+    font-weight: 700;
+    font-size: 15px;
+}
+
 /* Nodes */
 .mindmap-node {
     cursor: pointer;

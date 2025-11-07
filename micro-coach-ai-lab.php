@@ -3363,10 +3363,38 @@ You must:
             throw new Exception('Failed to decode related careers JSON');
         }
         
+        // Capture token usage for admin visibility
+        $usage = $data['usage'] ?? null;
+        $usage_info = null;
+        
+        if ($usage) {
+            // Calculate estimated cost (GPT-4o-mini pricing as of 2024)
+            // Input: $0.150 per 1M tokens, Output: $0.600 per 1M tokens
+            $input_tokens = $usage['prompt_tokens'] ?? 0;
+            $output_tokens = $usage['completion_tokens'] ?? 0;
+            $total_tokens = $usage['total_tokens'] ?? 0;
+            
+            $input_cost = ($input_tokens / 1000000) * 0.150;
+            $output_cost = ($output_tokens / 1000000) * 0.600;
+            $total_cost = $input_cost + $output_cost;
+            
+            $usage_info = [
+                'model' => $model,
+                'input_tokens' => $input_tokens,
+                'output_tokens' => $output_tokens,
+                'total_tokens' => $total_tokens,
+                'estimated_cost_usd' => round($total_cost, 6)
+            ];
+        }
+        
         // Add IDs and ensure consistency
-        $result = [];
+        $result = [
+            'careers' => [],
+            'usage' => $usage_info  // Include usage data for admin display
+        ];
+        
         foreach ($careers['careers'] as $index => $career) {
-            $result[] = [
+            $result['careers'][] = [
                 'id' => 'career-' . md5($career['title'] . $lane . $index),
                 'title' => $career['title'],
                 'lane' => $lane,

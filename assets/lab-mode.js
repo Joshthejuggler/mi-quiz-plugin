@@ -3414,7 +3414,12 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 edges: [],
                 openRequests: new Set(),
                 history: [],
-                expandedNodes: new Set()
+                expandedNodes: new Set(),
+                totalUsage: {
+                    total_tokens: 0,
+                    total_cost_usd: 0,
+                    api_calls: 0
+                }
             };
             
             // Populate initial state from data
@@ -3800,22 +3805,28 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     })
                 ]);
                 
-                // Collect all successful results
+                // Collect all successful results and track usage
                 let totalAdded = 0;
                 
                 if (adjacentResp.success && adjacentResp.data) {
-                    this.addChildrenToMap(nodeId, 'adjacent', adjacentResp.data);
-                    totalAdded += adjacentResp.data.length;
+                    const careers = adjacentResp.data.careers || adjacentResp.data;
+                    this.addChildrenToMap(nodeId, 'adjacent', careers);
+                    totalAdded += careers.length;
+                    if (adjacentResp.data.usage) this.trackUsage(adjacentResp.data.usage);
                 }
                 
                 if (parallelResp.success && parallelResp.data) {
-                    this.addChildrenToMap(nodeId, 'parallel', parallelResp.data);
-                    totalAdded += parallelResp.data.length;
+                    const careers = parallelResp.data.careers || parallelResp.data;
+                    this.addChildrenToMap(nodeId, 'parallel', careers);
+                    totalAdded += careers.length;
+                    if (parallelResp.data.usage) this.trackUsage(parallelResp.data.usage);
                 }
                 
                 if (wildcardResp.success && wildcardResp.data) {
-                    this.addChildrenToMap(nodeId, 'wildcard', wildcardResp.data);
-                    totalAdded += wildcardResp.data.length;
+                    const careers = wildcardResp.data.careers || wildcardResp.data;
+                    this.addChildrenToMap(nodeId, 'wildcard', careers);
+                    totalAdded += careers.length;
+                    if (wildcardResp.data.usage) this.trackUsage(wildcardResp.data.usage);
                 }
                 
                 if (totalAdded > 0) {
@@ -3824,6 +3835,9 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     
                     // Show success feedback
                     this.showNodeFeedback(nodeId, `Added ${totalAdded} careers (mixed types)`, 'success');
+                    
+                    // Update usage display for admins
+                    this.updateUsageDisplay();
                     
                     // Analytics
                     console.log('career_map_expand', { nodeId, totalAdded });
@@ -4383,6 +4397,51 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     feedback.fadeOut(300, function() { $(this).remove(); });
                 }, 3000);
             }
+        },
+        
+        // Track OpenAI usage (admin only)
+        trackUsage: function(usage) {
+            if (!usage || !this.mindMapState) return;
+            
+            this.mindMapState.totalUsage.total_tokens += usage.total_tokens || 0;
+            this.mindMapState.totalUsage.total_cost_usd += usage.estimated_cost_usd || 0;
+            this.mindMapState.totalUsage.api_calls += 1;
+            
+            console.log('OpenAI Usage:', usage);
+        },
+        
+        // Update usage display for admins
+        updateUsageDisplay: function() {
+            // Only show for admins
+            if (!labMode.isAdmin) return;
+            
+            const usage = this.mindMapState.totalUsage;
+            if (!usage || usage.api_calls === 0) return;
+            
+            // Check if display already exists
+            let display = $('#mindmap-usage-display');
+            
+            if (!display.length) {
+                // Create display element
+                display = $(`
+                    <div id="mindmap-usage-display" class="mindmap-usage-display">
+                        <div class="usage-label">🔧 Admin: OpenAI Usage</div>
+                        <div class="usage-stats"></div>
+                    </div>
+                `);
+                $('.career-mindmap-container').append(display);
+            }
+            
+            // Update stats
+            const costFormatted = usage.total_cost_usd < 0.01 
+                ? `$${(usage.total_cost_usd * 100).toFixed(3)}¢` 
+                : `$${usage.total_cost_usd.toFixed(4)}`;
+            
+            display.find('.usage-stats').html(`
+                <span class="usage-stat">${usage.api_calls} API calls</span>
+                <span class="usage-stat">${usage.total_tokens.toLocaleString()} tokens</span>
+                <span class="usage-stat"><strong>${costFormatted}</strong></span>
+            `);
         },
         
         // Render a career cluster with enhanced meta fields
