@@ -3369,7 +3369,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                             <span class="legend-item"><span class="legend-dot lane-adjacent"></span> Adjacent</span>
                             <span class="legend-item"><span class="legend-dot lane-parallel"></span> Parallel</span>
                             <span class="legend-item"><span class="legend-dot lane-wildcard"></span> Wildcard</span>
-                            <span class="legend-item legend-highlight"><span class="legend-dot legend-dot-highlight"></span> Matches filters</span>
+                            <span class="legend-item legend-highlight"><span class="legend-dot legend-dot-highlight"></span> Good fit (70%+)</span>
                         </div>
                     </div>
                     
@@ -3963,12 +3963,12 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 .attr('class', d => `mindmap-node ${d.type}`)
                 .call(this.mindMapDrag(simulation));
             
-            // Node circles with filter matching
+            // Node circles with good-fit highlighting (70%+ fit)
             node.append('circle')
                 .attr('r', d => d.type === 'seed' ? 30 : 20)
                 .attr('class', d => {
                     let classes = d.lane ? `node-${d.lane}` : 'node-seed';
-                    if (d.type === 'career' && this.nodeMatchesFilters(d)) {
+                    if (d.type === 'career' && (d.fit || 0) >= 0.7) {
                         classes += ' node-matches-filter';
                     }
                     return classes;
