@@ -17,7 +17,6 @@ class CDT_Quiz_Plugin {
                 'order'            => 30,
                 'description'      => 'Measure your ability to handle conflicting beliefs and discover how it impacts your decision-making and personal growth.',
                 'description_completed' => 'This assessment measures your capacity to navigate conflicting values and ideas, a key skill for personal and professional growth.',
-                'depends_on'       => 'mi-quiz',
             ]);
         }
 
@@ -52,6 +51,8 @@ class CDT_Quiz_Plugin {
         // Enqueue shared About card styles
         $base_url = plugin_dir_url(MC_QUIZ_PLATFORM_PATH . 'mi-quiz-platform.php');
         wp_enqueue_style('mc-about-cards', $base_url . 'assets/about-cards.css', [], '1.0.0');
+        // Enqueue MI quiz CSS for form styling
+        wp_enqueue_style('mi-quiz-css', $base_url . 'quizzes/mi-quiz/css/mi-quiz.css', [], '1.0.0');
         wp_register_script('cdt-quiz-js', plugins_url('quiz.js', __FILE__), [], self::VERSION, true);
 
         // Load this quiz's questions.
@@ -119,6 +120,7 @@ class CDT_Quiz_Plugin {
             'currentUser' => $user_data,
             'ajaxUrl'     => admin_url('admin-ajax.php'),
             'ajaxNonce'   => wp_create_nonce('cdt_nonce'),
+            'miqNonce'    => wp_create_nonce('miq_nonce'), // For registration endpoint
             'ageGroup'    => $user_age_group,
             'ageNonce'    => wp_create_nonce('mc_age_group'),
             'loginUrl'    => wp_login_url(get_permalink()),

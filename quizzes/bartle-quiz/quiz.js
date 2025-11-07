@@ -1,6 +1,6 @@
 (function() {
     // --- Setup ---
-    const { currentUser, ajaxUrl, ajaxNonce, loginUrl, data, dashboardUrl, progress } = bartle_quiz_data;
+    const { currentUser, ajaxUrl, ajaxNonce, miqNonce, loginUrl, data, dashboardUrl, progress } = bartle_quiz_data;
     const { cats: CATS, questions: QUESTIONS, likert: LIKERT } = data;
     const isLoggedIn = !!currentUser;
     const container = document.getElementById('bartle-quiz-container');
@@ -19,6 +19,78 @@
     // --- Utility Functions ---
     function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]]; } return a; }
     const $id = (id) => document.getElementById(id);
+
+    /**
+     * Show login/registration prompt for non-logged-in users
+     */
+    function showLoginRegister() {
+        container.innerHTML = `
+            <div class="bartle-quiz-card bartle-results-section bg-secondary">
+                <h2 class="bartle-section-title">Get Your Full Results & Action Plan</h2>
+                <p>Enter your name and email to create your free account. We'll instantly email you a copy of your results and show them on the next screen.</p>
+                <form id="bartle-register-form">
+                    <div class="mi-form-field">
+                        <label for="bartle_reg_first_name">First Name</label>
+                        <input type="text" id="bartle_reg_first_name" required>
+                    </div>
+                    <div class="mi-form-field">
+                        <label for="bartle_reg_email">Email Address</label>
+                        <input type="email" id="bartle_reg_email" required>
+                    </div>
+                    <div class="form-submit-wrapper">
+                        <button type="button" id="bartle_register_btn" class="bartle-quiz-button bartle-quiz-button-primary">Email My Results & Create Account</button>
+                    </div>
+                    <p id="bartle_reg_status" class="form-status"></p>
+                </form>
+                <p class="form-secondary-action">Already have an account? <a href="${loginUrl}">Log in here</a>.</p>
+            </div>`;
+
+        const regBtn = $id('bartle_register_btn');
+        const statusEl = $id('bartle_reg_status');
+        $id('bartle-register-form').addEventListener('submit', e => e.preventDefault());
+        regBtn.addEventListener('click', () => {
+            const email = $id('bartle_reg_email').value.trim();
+            const firstName = $id('bartle_reg_first_name').value.trim();
+
+            if (!firstName) { statusEl.innerHTML = 'Please enter your first name.'; statusEl.style.color = 'red'; return; }
+            if (!email || !/\S+@\S+\.\S+/.test(email)) { statusEl.innerHTML = 'Please enter a valid email address.'; statusEl.style.color = 'red'; return; }
+
+            statusEl.innerHTML = 'Creating your account...';
+            statusEl.style.color = 'inherit';
+            regBtn.disabled = true;
+
+            const body = new URLSearchParams({ 
+                action: 'miq_magic_register',
+                _ajax_nonce: miqNonce, 
+                email: email, 
+                first_name: firstName, 
+                results_html: '',
+                results_data: JSON.stringify(quizState)
+            });
+
+            fetch(ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
+            .then(r => r.json())
+            .then(j => {
+                if (j.success) {
+                    statusEl.innerHTML = j.data;
+                    statusEl.style.color = 'green';
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    let errorMsg = 'An unknown error occurred. Please try again.';
+                    if (j.data) {
+                        errorMsg = typeof j.data === 'string' ? j.data : (j.data.message || JSON.stringify(j.data));
+                    }
+                    statusEl.innerHTML = 'Error: ' + errorMsg;
+                    statusEl.style.color = 'red';
+                    regBtn.disabled = false;
+                }
+            }).catch(() => {
+                statusEl.innerHTML = 'An unexpected error occurred. Please try again.';
+                statusEl.style.color = 'red';
+                regBtn.disabled = false;
+            });
+        });
+    }
 
     /**
      * Instantly fills out the quiz with random answers and shows the results.
@@ -186,6 +258,12 @@
         quizState.scores = scores;
         quizState.sortedScores = Object.entries(scores).sort((a, b) => b[1] - a[1]);
 
+        // Check if user needs to register before showing results
+        if (!isLoggedIn) {
+            showLoginRegister();
+            return;
+        }
+
         renderResults();
     }
 
@@ -244,15 +322,15 @@
         const miDone = progress && !!progress.miComplete;
         const cdtDone = progress && !!progress.cdtComplete;
         const johariDone = progress && !!progress.johariComplete;
-        if (progress && !johariDone && (miDone && cdtDone)) {
+        if (progress && !johariDone) {
             // Prompt the Johari × MI step
             const jUrl = progress.johariUrl || '#';
             nextStepsHtml = `
                 <div class="bartle-results-section bartle-next-steps-section">
                     <h3 class="bartle-section-title">Unlock Peer‑Powered Insights</h3>
-                    <p>Invite 2–5 trusted peers to quickly choose adjectives that describe you. In minutes, you’ll reveal your Johari Window and see how it connects to your MI strengths — and <strong>unlock Lab Mode</strong>, your AI coach that turns insights into ready‑to‑run experiments.</p>
+                    <p>Invite 2–5 trusted peers to quickly choose adjectives that describe you. In minutes, you'll reveal your Johari Window and see how it connects to your MI strengths — and <strong>unlock Lab Mode</strong>, your AI coach that turns insights into ready‑to‑run experiments.</p>
                     <div class="bartle-results-actions">
-                        <a href="${jUrl}" class="bartle-quiz-button bartle-quiz-button-primary">Start Johari × MI Now</a>
+                        <a href="${jUrl}" class="bartle-quiz-button bartle-quiz-button-primary">Finish Johari × MI</a>
                     </div>
                 </div>`;
         } else if (dashboardUrl) {

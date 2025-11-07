@@ -13,7 +13,7 @@
     
     console.log('Raw jmi_quiz_data:', jmi_quiz_data);
     
-    const { currentUser, ajaxUrl, ajaxNonce, data, dashboardUrl } = jmi_quiz_data;
+    const { currentUser, ajaxUrl, ajaxNonce, miqNonce, data, dashboardUrl } = jmi_quiz_data;
     const { adjective_map, domain_colors, quadrant_colors, all_adjectives } = data;
     
     // DEBUG: Log adjective data
@@ -261,6 +261,57 @@
     // Initialize app
     function init() {
         console.log('DEBUG: init() function called!');
+        
+        // Check if there are pending adjectives from a just-completed registration
+        if (isLoggedIn && currentUser) {
+            try {
+                const pendingAdjectivesJson = sessionStorage.getItem('jmi_pending_adjectives');
+                if (pendingAdjectivesJson) {
+                    const pendingAdjectives = JSON.parse(pendingAdjectivesJson);
+                    console.log('Found pending adjectives, auto-submitting:', pendingAdjectives);
+                    
+                    // Clear from storage
+                    sessionStorage.removeItem('jmi_pending_adjectives');
+                    
+                    // Auto-submit the assessment
+                    const body = new URLSearchParams({
+                        action: 'miq_jmi_save_self',
+                        _ajax_nonce: ajaxNonce,
+                        adjectives: JSON.stringify(pendingAdjectives)
+                    });
+                    
+                    fetch(ajaxUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body
+                    })
+                    .then(r => r.json())
+                    .then(response => {
+                        if (response.success) {
+                            console.log('Auto-submit successful, showing share interface');
+                            shareUuid = response.data.uuid;
+                            appState = 'awaiting-peers';
+                            showMainContainer();
+                            renderShareInterface(response.data.share_url);
+                        } else {
+                            console.error('Auto-submit failed:', response);
+                            alert('Could not save your assessment. Please try again.');
+                            renderSelfAssessment();
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Auto-submit error:', err);
+                        alert('An error occurred. Please try again.');
+                        renderSelfAssessment();
+                    });
+                    
+                    return; // Exit early, don't continue with normal init flow
+                }
+            } catch (e) {
+                console.error('Error checking pending adjectives:', e);
+            }
+        }
+        
         // Hide any page content before/after our wrapper (About blocks, etc.)
         hideContentAfterQuizWrapper();
         
@@ -337,10 +388,93 @@
         }
     }
 
+    // Render registration screen for non-logged-in users
+    function renderSelfRegistrationScreen() {
+        const currentUrl = window.location.href;
+        const loginUrl = `${window.location.origin}/wp-login.php?redirect_to=${encodeURIComponent(currentUrl)}`;
+        
+        selfContainer.innerHTML = `
+            <div class="jmi-quiz-card jmi-results-section bg-secondary">
+                <h2 class="jmi-section-title">Create Account to Continue</h2>
+                <p>Create a free account to save your self-assessment and invite peers for feedback. Your Johari Window results will unlock after 2+ peers respond.</p>
+                <form id="jmi-register-form">
+                    <div class="mi-form-field">
+                        <label for="jmi_reg_first_name">First Name</label>
+                        <input type="text" id="jmi_reg_first_name" required>
+                    </div>
+                    <div class="mi-form-field">
+                        <label for="jmi_reg_email">Email Address</label>
+                        <input type="email" id="jmi_reg_email" required>
+                    </div>
+                    <div class="form-submit-wrapper">
+                        <button type="button" id="jmi_register_btn" class="mi-quiz-button mi-quiz-button-primary">Create Account & Start Assessment</button>
+                    </div>
+                    <p id="jmi_reg_status" class="form-status"></p>
+                </form>
+                <p class="form-secondary-action">Already have an account? <a href="${loginUrl}">Log in here</a>.</p>
+            </div>`;
+
+        const regBtn = $id('jmi_register_btn');
+        const statusEl = $id('jmi_reg_status');
+        $id('jmi-register-form').addEventListener('submit', e => e.preventDefault());
+        regBtn.addEventListener('click', () => {
+            const email = $id('jmi_reg_email').value.trim();
+            const firstName = $id('jmi_reg_first_name').value.trim();
+
+            if (!firstName) { statusEl.innerHTML = 'Please enter your first name.'; statusEl.style.color = 'red'; return; }
+            if (!email || !/\S+@\S+\.\S+/.test(email)) { statusEl.innerHTML = 'Please enter a valid email address.'; statusEl.style.color = 'red'; return; }
+
+            statusEl.innerHTML = 'Creating your account...';
+            statusEl.style.color = 'inherit';
+            regBtn.disabled = true;
+
+            const body = new URLSearchParams({ 
+                action: 'miq_magic_register',
+                _ajax_nonce: miqNonce, 
+                email: email, 
+                first_name: firstName, 
+                results_html: '',
+                results_data: JSON.stringify({})
+            });
+
+            fetch(ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
+            .then(r => r.json())
+            .then(j => {
+                if (j.success) {
+                    statusEl.innerHTML = 'Account created! Saving your selection...';
+                    statusEl.style.color = 'green';
+                    
+                    // Store selected adjectives in sessionStorage before reload
+                    try {
+                        sessionStorage.setItem('jmi_pending_adjectives', JSON.stringify(selectedAdjectives));
+                    } catch (e) {
+                        console.error('Could not save adjectives to sessionStorage:', e);
+                    }
+                    
+                    // Reload page to get fresh nonces and logged-in state
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    let errorMsg = 'An unknown error occurred. Please try again.';
+                    if (j.data) {
+                        errorMsg = typeof j.data === 'string' ? j.data : (j.data.message || JSON.stringify(j.data));
+                    }
+                    statusEl.innerHTML = 'Error: ' + errorMsg;
+                    statusEl.style.color = 'red';
+                    regBtn.disabled = false;
+                }
+            }).catch(() => {
+                statusEl.innerHTML = 'An unexpected error occurred. Please try again.';
+                statusEl.style.color = 'red';
+                regBtn.disabled = false;
+            });
+        });
+    }
+
     // Render self-assessment interface
     function renderSelfAssessment() {
         showMainContainer();
         setHeaderContext('self');
+        
         selfContainer.innerHTML = `
             <div class="jmi-section">
                 <h3>Step 1: Select Your Adjectives</h3>
@@ -832,6 +966,12 @@
 
     // Save self-assessment via AJAX
     function saveSelfAssessment() {
+        // Check if user is logged in - require registration after adjective selection
+        if (!isLoggedIn) {
+            renderSelfRegistrationScreen();
+            return;
+        }
+        
         const submitBtn = $id('jmi-submit-self');
         submitBtn.disabled = true;
         submitBtn.textContent = 'Saving...';
@@ -932,6 +1072,152 @@
             alert('An error occurred. Please try again.');
             submitBtn.disabled = false;
             submitBtn.textContent = 'Submit Feedback';
+        });
+    }
+    
+    // Redo self-assessment (update adjectives while keeping peer feedback)
+    function redoSelfAssessment() {
+        // Clear selected adjectives and show self-assessment form
+        selectedAdjectives = [];
+        resultsContainer.style.display = 'none';
+        selfContainer.style.display = 'block';
+        
+        selfContainer.innerHTML = `
+            <div class="jmi-section">
+                <h3>Update Your Self-Assessment</h3>
+                <p>Choose 6-10 adjectives that best describe you. Your peer feedback will be preserved.</p>
+                <div id="jmi-adjective-grid"></div>
+                <div class="jmi-controls">
+                    <div id="jmi-counter">0 selected (choose 6-10)</div>
+                    <button id="jmi-update-self" class="mi-quiz-button mi-quiz-button-primary" disabled>
+                        Update & Recalculate Results
+                    </button>
+                    <button id="jmi-cancel-redo" class="mi-quiz-button mi-quiz-button-secondary">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        renderMixedAdjectiveGrid('jmi-adjective-grid');
+        
+        const updateBtn = $id('jmi-update-self');
+        const cancelBtn = $id('jmi-cancel-redo');
+        const counter = $id('jmi-counter');
+        
+        // Handle adjective selection
+        selfContainer.addEventListener('change', (e) => {
+            if (e.target.classList.contains('jmi-adjective-checkbox')) {
+                updateSelectedAdjectives();
+                updateCounter();
+                updateSubmitButton();
+            }
+        });
+        
+        updateBtn.addEventListener('click', updateSelfAssessment);
+        cancelBtn.addEventListener('click', () => {
+            // Return to results view
+            checkProgress(true); // Fetch and show current results
+        });
+        
+        function updateSelectedAdjectives() {
+            selectedAdjectives = $$('.jmi-adjective-checkbox:checked').map(cb => cb.value);
+        }
+        
+        function updateCounter() {
+            const count = selectedAdjectives.length;
+            counter.textContent = `${count} selected (choose 6-10)`;
+            counter.className = count >= 6 && count <= 10 ? 'jmi-counter-valid' : 'jmi-counter-invalid';
+        }
+        
+        function updateSubmitButton() {
+            updateBtn.disabled = selectedAdjectives.length < 6 || selectedAdjectives.length > 10;
+        }
+    }
+    
+    // Update self-assessment via AJAX
+    function updateSelfAssessment() {
+        const updateBtn = $id('jmi-update-self');
+        updateBtn.disabled = true;
+        updateBtn.textContent = 'Updating...';
+        
+        console.log('updateSelfAssessment called with adjectives:', selectedAdjectives);
+        
+        const body = new URLSearchParams({
+            action: 'miq_jmi_update_self',
+            _ajax_nonce: ajaxNonce,
+            adjectives: JSON.stringify(selectedAdjectives)
+        });
+        
+        console.log('Sending update request to:', ajaxUrl);
+        console.log('Request body:', Object.fromEntries(body));
+        
+        fetch(ajaxUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body
+        })
+        .then(r => {
+            console.log('Response status:', r.status);
+            return r.text().then(text => {
+                console.log('Raw response text:', text);
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error('Failed to parse JSON:', e);
+                    throw new Error('Invalid JSON response: ' + text);
+                }
+            });
+        })
+        .then(response => {
+            console.log('Parsed response:', response);
+            if (response.success) {
+                console.log('Update successful, response data:', response.data);
+                // Success! Now fetch and display updated results
+                if (response.data.can_view_results) {
+                    console.log('Results available, fetching fresh results...');
+                    appState = 'results';
+                    selfContainer.style.display = 'none';
+                    resultsContainer.style.display = 'block';
+                    
+                    // Fetch and render the updated results
+                    const resultsBody = new URLSearchParams({
+                        action: 'miq_jmi_generate_results',
+                        _ajax_nonce: ajaxNonce,
+                        uuid: currentUser.selfUuid
+                    });
+                    
+                    fetch(ajaxUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: resultsBody
+                    })
+                    .then(r => r.json())
+                    .then(resultsResponse => {
+                        if (resultsResponse.success) {
+                            console.log('Fresh results fetched, rendering...');
+                            renderResults(resultsResponse.data);
+                        } else {
+                            alert('Could not fetch updated results. Please refresh the page.');
+                        }
+                    });
+                } else {
+                    alert('Self-assessment updated! You need at least 2 peer responses to view results.');
+                    selfContainer.style.display = 'none';
+                    shareContainer.style.display = 'block';
+                }
+            } else {
+                console.error('Update failed:', response.data);
+                alert('Error: ' + (response.data || 'Could not update assessment'));
+                updateBtn.disabled = false;
+                updateBtn.textContent = 'Update & Recalculate Results';
+            }
+        })
+        .catch(err => {
+            console.error('Update error:', err);
+            alert('An error occurred. Check console for details: ' + err.message);
+            updateBtn.disabled = false;
+            updateBtn.textContent = 'Update & Recalculate Results';
         });
     }
 
@@ -1247,16 +1533,17 @@
         
         const { open, blind, hidden, unknown, domain_summary } = data;
 
-        // For admins, add peer count context
+        // For admins, add peer count context and peer breakdown
         const adminContext = (currentUser && currentUser.isAdmin) ? `
             <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 1em; margin-bottom: 1.5em;">
                 <h4 style="color: #856404; margin: 0 0 0.5em; display: flex; align-items: center; gap: 0.5em;">
                     🔧 Admin Testing View
                 </h4>
-                <p style="color: #856404; margin: 0; font-size: 0.9em;">
+                <p style="color: #856404; margin: 0 0 1em 0; font-size: 0.9em;">
                     These results are based on <strong>${(data.debug_info?.peer_responses?.length || 0) + 1} total responses</strong> (your self-assessment + ${data.debug_info?.peer_responses?.length || 0} peer${(data.debug_info?.peer_responses?.length || 0) === 1 ? '' : 's'}).
                     Use "Back to Testing Tools" to create more test peers and see how results evolve with additional data.
                 </p>
+                ${renderAdminPeerBreakdown(data)}
             </div>
         ` : '';
         
@@ -1270,25 +1557,25 @@
                     <div class="jmi-quadrant jmi-open" style="background-color: ${quadrant_colors.open}20; border-color: ${quadrant_colors.open};">
                         <h4>🌟 Open Area</h4>
                         <p class="jmi-quadrant-description">Traits recognized by both you and others</p>
-                        <div class="jmi-adjective-list">${renderAdjectiveList(open || [], 'open')}</div>
+                        <div class="jmi-adjective-list">${renderAdjectiveList(open || [], 'open', data)}</div>
                     </div>
                     
                     <div class="jmi-quadrant jmi-blind" style="background-color: ${quadrant_colors.blind}20; border-color: ${quadrant_colors.blind};">
                         <h4>👁️ Blind Spot</h4>
                         <p class="jmi-quadrant-description">Traits others see in you that you don't recognize</p>
-                        <div class="jmi-adjective-list">${renderAdjectiveList(blind || [], 'blind')}</div>
+                        <div class="jmi-adjective-list">${renderAdjectiveList(blind || [], 'blind', data)}</div>
                     </div>
                     
                     <div class="jmi-quadrant jmi-hidden" style="background-color: ${quadrant_colors.hidden}20; border-color: ${quadrant_colors.hidden};">
                         <h4>🔐 Hidden Area</h4>
                         <p class="jmi-quadrant-description">Traits you see in yourself that others don't recognize</p>
-                        <div class="jmi-adjective-list">${renderAdjectiveList(hidden || [], 'hidden')}</div>
+                        <div class="jmi-adjective-list">${renderAdjectiveList(hidden || [], 'hidden', data)}</div>
                     </div>
                     
                     <div class="jmi-quadrant jmi-unknown" style="background-color: ${quadrant_colors.unknown}20; border-color: ${quadrant_colors.unknown};">
                         <h4>❓ Unknown Area</h4>
                         <p class="jmi-quadrant-description">Traits neither you nor others have identified</p>
-                        <div class="jmi-adjective-list">${renderAdjectiveList(unknown || [], 'unknown')}</div>
+                        <div class="jmi-adjective-list">${renderAdjectiveList(unknown || [], 'unknown', data)}</div>
                     </div>
                 </div>
 
@@ -1304,7 +1591,7 @@
                 <div class="jmi-actions">
                     ${dashboardUrl ? `<a href="${dashboardUrl}?tab=lab" id="jmi-start-lab" class="mi-quiz-button mi-quiz-button-primary">🧪 Start Lab Mode</a>` : ''}
                     <button id="jmi-invite-more" class="mi-quiz-button mi-quiz-button-secondary">${currentUser && currentUser.isAdmin ? '🔧 Back to Testing Tools' : '👥 Invite More Peers'}</button>
-                    <button id="jmi-retake" class="mi-quiz-button mi-quiz-button-secondary">🔄 Retake</button>
+                    <button id="jmi-redo-self" class="mi-quiz-button mi-quiz-button-secondary">🔄 Redo Self-Assessment</button>
                     ${currentUser ? `<button id=\"jmi-delete\" class=\"mi-quiz-button mi-quiz-button-danger\">🗑️ Delete Results</button>` : ''}
                 </div>
             </div>
@@ -1329,14 +1616,10 @@
                 renderShareInterface(shareUrl);
             }
         });
-        $id('jmi-retake').addEventListener('click', () => {
-            if (confirm('Are you sure? This will reset your assessment and you\'ll need to invite peers again.')) {
-                appState = 'initial';
-                selectedAdjectives = [];
-                shareUuid = null;
-                resultsContainer.style.display = 'none';
-                selfContainer.style.display = 'block';
-                renderSelfAssessment();
+        // Redo self-assessment button (keeps peer feedback)
+        $id('jmi-redo-self').addEventListener('click', () => {
+            if (confirm('Update your self-selected adjectives? Your peer feedback will be preserved and results will be recalculated.')) {
+                redoSelfAssessment();
             }
         });
 
@@ -1376,8 +1659,112 @@
         }
     }
 
+    // Render admin peer breakdown (for admin testing view)
+    function renderAdminPeerBreakdown(data) {
+        if (!data.debug_info || !data.debug_info.peer_responses || data.debug_info.peer_responses.length === 0) {
+            return '';
+        }
+        
+        const { open, blind, hidden } = data;
+        const selfAdjectives = data.debug_info.self_adjectives || [];
+        
+        let html = '<details style="margin-top: 1em;">';
+        html += '<summary style="cursor: pointer; font-weight: 600; color: #92400e; font-size: 0.9em; padding: 0.5em; background: rgba(255, 255, 255, 0.6); border-radius: 4px; transition: background 0.2s;" onmouseover="this.style.background=\'rgba(255, 255, 255, 0.9)\'" onmouseout="this.style.background=\'rgba(255, 255, 255, 0.6)\'">👥 View Peer Response Details</summary>';
+        html += '<div style="margin-top: 0.75em; padding: 1em; background: rgba(255, 255, 255, 0.8); border-radius: 8px; border: 1px solid rgba(0, 0, 0, 0.08);">';
+        
+        // Self-assessment section with color coding
+        html += '<div style="margin-bottom: 1em; padding: 0.75em; background: white; border-radius: 6px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);">';
+        html += '<div style="font-weight: 600; color: #475569; font-size: 0.85em; margin-bottom: 0.6em; display: flex; align-items: center; gap: 0.5em;">';
+        html += '<span style="display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; background: #0ea5e9; color: white; border-radius: 50%; font-size: 0.7em;">✍️</span>';
+        html += 'Your Self-Assessment <span style="color: #94a3b8; font-weight: 400;">(' + selfAdjectives.length + ' adjectives)</span></div>';
+        html += '<div style="display: flex; flex-wrap: wrap; gap: 0.4em;">';
+        
+        // Get peer counts for self-adjectives
+        const peerCounts = data.debug_info?.peer_counts || {};
+        
+        selfAdjectives.forEach(adj => {
+            const peerCount = peerCounts[adj] || 0;
+            const isOpen = open.includes(adj);
+            const isHidden = hidden.includes(adj);
+            
+            let bgColor, textColor, borderColor, label;
+            if (isOpen) {
+                // Open - peers also selected this
+                bgColor = '#d1fae5';
+                textColor = '#065f46';
+                borderColor = '#6ee7b7';
+                label = '🌟 Open (peers agree)';
+            } else if (isHidden) {
+                // Hidden - you selected but peers didn't
+                bgColor = '#dbeafe';
+                textColor = '#1e40af';
+                borderColor = '#93c5fd';
+                label = '🔐 Hidden (peers didn\'t select)';
+            } else {
+                // Shouldn't happen, but default to neutral
+                bgColor = '#e0f2fe';
+                textColor = '#075985';
+                borderColor = '#bae6fd';
+                label = 'Self-selected';
+            }
+            
+            html += '<span style="display: inline-block; padding: 0.4em 0.8em; background: ' + bgColor + '; color: ' + textColor + '; border: 1px solid ' + borderColor + '; border-radius: 6px; font-size: 0.8em; font-weight: 500; cursor: help;" title="' + label + '">';
+            html += adj;
+            if (peerCount > 0) {
+                html += ' <span style="display: inline-block; margin-left: 0.3em; padding: 0.1em 0.4em; background: rgba(0, 0, 0, 0.15); border-radius: 8px; font-size: 0.85em; font-weight: 600;">×' + peerCount + '</span>';
+            }
+            html += '</span>';
+        });
+        html += '</div></div>';
+        
+        // Individual peer responses
+        data.debug_info.peer_responses.forEach((peer, index) => {
+            const isTestPeer = [999001, 999002].includes(peer.peer_user_id);
+            const peerLabel = isTestPeer ? '🧪 Test Peer ' + (peer.peer_user_id === 999001 ? '1' : '2') : '👤 Peer ' + (index + 1);
+            
+            html += '<div style="margin-bottom: 1em; padding: 0.75em; background: white; border-radius: 6px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);">';
+            html += '<div style="font-weight: 600; color: #475569; font-size: 0.85em; margin-bottom: 0.6em; display: flex; align-items: center; gap: 0.5em;">';
+            html += '<span style="display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; background: ' + (isTestPeer ? '#f97316' : '#10b981') + '; color: white; border-radius: 50%; font-size: 0.7em; padding: 0 0.3em;">' + (index + 1) + '</span>';
+            html += peerLabel + ' <span style="color: #94a3b8; font-weight: 400;">(' + peer.adjectives.length + ' adjectives)</span></div>';
+            html += '<div style="display: flex; flex-wrap: wrap; gap: 0.4em;">';
+            
+            peer.adjectives.forEach(adj => {
+                // Determine category for color coding with softer colors
+                let bgColor, textColor, borderColor, label;
+                if (open.includes(adj)) {
+                    bgColor = '#d1fae5';
+                    textColor = '#065f46';
+                    borderColor = '#6ee7b7';
+                    label = '🌟 Open';
+                } else if (blind.includes(adj)) {
+                    bgColor = '#fef3c7';
+                    textColor = '#92400e';
+                    borderColor = '#fcd34d';
+                    label = '👁️ Blind';
+                } else if (hidden.includes(adj)) {
+                    bgColor = '#dbeafe';
+                    textColor = '#1e40af';
+                    borderColor = '#93c5fd';
+                    label = '🔐 Hidden';
+                } else {
+                    bgColor = '#f1f5f9';
+                    textColor = '#475569';
+                    borderColor = '#cbd5e1';
+                    label = 'Unknown';
+                }
+                
+                html += '<span style="display: inline-block; padding: 0.4em 0.8em; background: ' + bgColor + '; color: ' + textColor + '; border: 1px solid ' + borderColor + '; border-radius: 6px; font-size: 0.8em; font-weight: 500; cursor: help;" title="' + label + '">' + adj + '</span>';
+            });
+            
+            html += '</div></div>';
+        });
+        
+        html += '</div></details>';
+        return html;
+    }
+    
     // Render list of adjectives with domain colors
-    function renderAdjectiveList(adjectives, quadrant) {
+    function renderAdjectiveList(adjectives, quadrant, data = null) {
         if (!adjectives || adjectives.length === 0) {
             return '<em class="jmi-no-adjectives">None identified</em>';
         }
@@ -1385,7 +1772,17 @@
         return adjectives.map(adj => {
             const domain = findAdjectiveDomain(adj);
             const color = domain_colors[domain] || '#6b7280';
-            return `<span class="jmi-adjective-pill jmi-${quadrant}" style="border-color: ${color};" title="${domain}">${adj}</span>`;
+            
+            // Add peer count badge if available (for Open and Blind quadrants)
+            let peerBadge = '';
+            if (data && data.debug_info && data.debug_info.peer_counts) {
+                const peerCount = data.debug_info.peer_counts[adj] || 0;
+                if (peerCount > 0 && (quadrant === 'open' || quadrant === 'blind')) {
+                    peerBadge = `<span class="jmi-peer-count" title="${peerCount} peer${peerCount === 1 ? '' : 's'} selected this">×${peerCount}</span>`;
+                }
+            }
+            
+            return `<span class="jmi-adjective-pill jmi-${quadrant}" style="border-color: ${color};" title="${domain}">${adj}${peerBadge}</span>`;
         }).join('');
     }
 
@@ -1798,8 +2195,13 @@
     
     // Render comprehensive debug section
     function renderDebugSection(data) {
-        if (window.location.hostname !== 'mi-test-site.local') {
-            return ''; // Only show debug on local dev
+        // Show for admins, local dev, or if admin has enabled the peer debug setting
+        const isAdmin = currentUser && currentUser.isAdmin;
+        const isLocal = window.location.hostname === 'mi-test-site.local';
+        const debugEnabled = jmi_quiz_data && jmi_quiz_data.showPeerDebug;
+        
+        if (!isAdmin && !isLocal && !debugEnabled) {
+            return ''; // Only show if admin, local dev, or debug setting enabled
         }
         
         const { open, blind, hidden, unknown, domain_summary, debug_info } = data;

@@ -20,7 +20,6 @@ class Bartle_Quiz_Plugin {
                 'order'            => 50,
                 'description'      => 'The Bartle Player Type Quiz is designed to uncover what truly motivates you when you engage with games, challenges, or even everyday learning.',
                 'description_completed' => 'This assessment reveals your primary player type, offering insights into your core motivations.',
-                'depends_on'       => 'cdt-quiz',
             ]);
         }
 
@@ -55,6 +54,8 @@ class Bartle_Quiz_Plugin {
         // Enqueue shared About card styles
         $base_url = plugin_dir_url(MC_QUIZ_PLATFORM_PATH . 'mi-quiz-platform.php');
         wp_enqueue_style('mc-about-cards', $base_url . 'assets/about-cards.css', [], '1.0.0');
+        // Enqueue MI quiz CSS for form styling
+        wp_enqueue_style('mi-quiz-css', $base_url . 'quizzes/mi-quiz/css/mi-quiz.css', [], '1.0.0');
         wp_register_script('bartle-quiz-js', plugins_url('quiz.js', __FILE__), ['jquery'], self::VERSION, true);
 
         // Load this quiz's questions.
@@ -98,6 +99,7 @@ class Bartle_Quiz_Plugin {
             'currentUser' => $user_data,
             'ajaxUrl'     => admin_url('admin-ajax.php'),
             'ajaxNonce'   => wp_create_nonce('bartle_nonce'),
+            'miqNonce'    => wp_create_nonce('miq_nonce'), // For registration endpoint
             'loginUrl'    => wp_login_url(get_permalink()),
             'logoUrl'     => MC_Helpers::logo_url(),
             'dashboardUrl' => $dashboard_url,

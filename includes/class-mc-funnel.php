@@ -96,9 +96,9 @@ class MC_Funnel {
         
         if (!$user_id) {
             return [
-                'status' => 'locked',
-                'badge_text' => 'Locked', 
-                'description' => 'Complete previous steps to unlock'
+                'status' => 'available',
+                'badge_text' => 'Available', 
+                'description' => 'Start your self-assessment'
             ];
         }
         
@@ -163,18 +163,11 @@ class MC_Funnel {
      */
     public static function get_unlock_status($user_id = null) {
         $config = self::get_config();
-        $completion = self::get_completion_status($user_id);
         $unlock_status = [];
         
-        foreach ($config['steps'] as $index => $step_slug) {
-            if ($index === 0) {
-                // First step is always unlocked
-                $unlock_status[$step_slug] = true;
-            } else {
-                // Other steps unlock when previous step is completed
-                $prev_slug = $config['steps'][$index - 1] ?? '';
-                $unlock_status[$step_slug] = !empty($prev_slug) && ($completion[$prev_slug] ?? false);
-            }
+        // All quizzes are now available in any order
+        foreach ($config['steps'] as $step_slug) {
+            $unlock_status[$step_slug] = true;
         }
         
         return $unlock_status;

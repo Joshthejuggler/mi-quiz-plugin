@@ -6,6 +6,7 @@ class Johari_MI_Quiz_Module {
     const SLUG    = 'johari-mi-quiz';
     const OPT_BCC = 'jmi_bcc_emails';
     const OPT_ANTITHREAD = 'jmi_antithread';
+    const OPT_SHOW_PEER_DEBUG = 'jmi_show_peer_debug';
 
     // DB table suffixes
     const TABLE_SELF = 'jmi_self';
@@ -67,6 +68,9 @@ class Johari_MI_Quiz_Module {
 
         // User action: delete their Johari results and reset assessment
         add_action('wp_ajax_miq_jmi_delete_results', [$this, 'ajax_delete_results']);
+        
+        // User action: update self-assessment (redo) without deleting peer feedback
+        add_action('wp_ajax_miq_jmi_update_self', [$this, 'ajax_update_self']);
 
         add_action('delete_user', [$this, 'handle_user_deletion']);
         
@@ -235,6 +239,7 @@ class Johari_MI_Quiz_Module {
     public function register_settings() {
         register_setting('mc_quiz_platform_settings', self::OPT_BCC);
         register_setting('mc_quiz_platform_settings', self::OPT_ANTITHREAD);
+        register_setting('mc_quiz_platform_settings', self::OPT_SHOW_PEER_DEBUG);
         add_settings_section('jmi_main', 'Johari × MI Settings', function(){
             echo '<p>Peer-feedback settings for the Johari × MI assessment.</p>';
         }, 'quiz-platform-settings');
@@ -242,6 +247,11 @@ class Johari_MI_Quiz_Module {
             $v = esc_attr(get_option(self::OPT_BCC, ''));
             echo '<input type="text" style="width:480px" name="'.esc_attr(self::OPT_BCC).'" value="'.$v.'" placeholder="admin@example.com, another@example.com">';
             echo '<p class="description">Admins to notify with a copy of results. Comma-separated.</p>';
+        }, 'quiz-platform-settings', 'jmi_main');
+        add_settings_field(self::OPT_SHOW_PEER_DEBUG, 'Show Peer Debug Info to All Users', function(){
+            $v = get_option(self::OPT_SHOW_PEER_DEBUG, '0');
+            echo '<label><input type="checkbox" name="'.esc_attr(self::OPT_SHOW_PEER_DEBUG).'" value="1" '.checked($v, '1', false).'> Enable peer response debug visibility for all users</label>';
+            echo '<p class="description">When enabled, all users can see detailed peer response breakdowns in their results (normally admin-only). Useful for testing.</p>';
         }, 'quiz-platform-settings', 'jmi_main');
     }
 
@@ -442,8 +452,10 @@ class Johari_MI_Quiz_Module {
             'currentUser' => $user_data,
             'ajaxUrl'     => admin_url('admin-ajax.php'),
             'ajaxNonce'   => wp_create_nonce('jmi_nonce'),
+            'miqNonce'    => wp_create_nonce('miq_nonce'), // For registration endpoint
             'data'        => $adjective_data,
             'dashboardUrl'=> $dashboard_url,
+            'showPeerDebug' => get_option(self::OPT_SHOW_PEER_DEBUG, '0') === '1',
         ];
         wp_localize_script('jmi-js', 'jmi_quiz_data', $localized);
         wp_enqueue_script('jmi-js');
@@ -685,6 +697,88 @@ class Johari_MI_Quiz_Module {
         delete_user_meta($user_id, 'jmi_self_uuid');
 
         wp_send_json_success(['message' => 'Johari results deleted']);
+    }
+    
+    /**
+     * AJAX: Update self-assessment (redo) without deleting peer feedback
+     */
+    public function ajax_update_self() {
+        check_ajax_referer('jmi_nonce', '_ajax_nonce');
+        
+        $user_id = get_current_user_id();
+        if (!$user_id) {
+            wp_send_json_error('Not logged in');
+        }
+        
+        $adjectives_raw = isset($_POST['adjectives']) ? wp_unslash($_POST['adjectives']) : '';
+        $adjectives = json_decode($adjectives_raw, true);
+        
+        // Validate adjectives
+        if (!is_array($adjectives) || count($adjectives) < 6 || count($adjectives) > 10) {
+            wp_send_json_error('Please select 6-10 adjectives.');
+        }
+        
+        // Load valid adjectives to verify selection
+        $adjective_data = require __DIR__ . '/jmi-adjectives.php';
+        $all_valid = $adjective_data['all_adjectives'];
+        
+        foreach ($adjectives as $adj) {
+            if (!in_array($adj, $all_valid)) {
+                wp_send_json_error('Invalid adjective selected.');
+            }
+        }
+        
+        global $wpdb;
+        $self_table = $this->table(self::TABLE_SELF);
+        $agg_table = $this->table(self::TABLE_AGG);
+        
+        // Find user's existing assessment
+        $self_row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM `$self_table` WHERE user_id = %d ORDER BY id DESC LIMIT 1", 
+            $user_id
+        ));
+        
+        if (!$self_row) {
+            wp_send_json_error('No existing assessment found to update.');
+        }
+        
+        $now = current_time('mysql');
+        
+        // Update the adjectives in the self-assessment
+        $result = $wpdb->update(
+            $self_table,
+            [
+                'adjectives' => json_encode($adjectives),
+                'updated_at' => $now
+            ],
+            ['id' => $self_row->id],
+            ['%s', '%s'],
+            ['%d']
+        );
+        
+        if ($result === false) {
+            wp_send_json_error('Could not update assessment.');
+        }
+        
+        // Clear cached results to force recalculation with new self-adjectives
+        $wpdb->delete($agg_table, ['self_id' => $self_row->id]);
+        
+        // Clear user meta profile to force fresh generation
+        delete_user_meta($user_id, 'johari_mi_profile');
+        
+        // Get peer count to determine if results are ready
+        $feedback_table = $this->table(self::TABLE_FEEDBACK);
+        $peer_count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM `$feedback_table` WHERE self_id = %d", 
+            $self_row->id
+        ));
+        
+        wp_send_json_success([
+            'message' => 'Self-assessment updated successfully',
+            'self_id' => $self_row->id,
+            'peer_count' => intval($peer_count),
+            'can_view_results' => $peer_count >= 2
+        ]);
     }
     
     private function calculate_johari_window($self_id) {
@@ -1385,14 +1479,37 @@ class Johari_MI_Quiz_Module {
                     '<p><strong>Current Peer Count:</strong> ' + data.peer_count + '</p>'
                 );
                 
-                $('#self-adjectives-display').html(
-                    '<p><strong>Self-Selected Adjectives (' + data.self_adjectives.length + '):</strong></p>' +
+                // Display self-selected adjectives
+                let selfHtml = '<p><strong>Self-Selected Adjectives (' + data.self_adjectives.length + '):</strong></p>' +
                     '<div style="margin: 10px 0;">' +
                         data.self_adjectives.map(adj => 
                             '<span style="display: inline-block; margin: 3px; padding: 4px 8px; background: #e9ecef; border-radius: 12px; font-size: 12px;">' + adj + '</span>'
                         ).join('') +
-                    '</div>'
-                );
+                    '</div>';
+                
+                // Display existing peer responses if any
+                if (data.peer_responses && data.peer_responses.length > 0) {
+                    selfHtml += '<div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px; border-left: 4px solid #17a2b8;">';
+                    selfHtml += '<h5 style="color: #17a2b8; margin-top: 0;">👥 Existing Peer Responses (' + data.peer_responses.length + ')</h5>';
+                    
+                    data.peer_responses.forEach(function(peer, index) {
+                        const borderColor = peer.is_test_peer ? '#fd7e14' : '#28a745';
+                        const bgColor = peer.is_test_peer ? '#fff3cd' : '#d4edda';
+                        
+                        selfHtml += '<div style="margin-bottom: 10px; padding: 10px; background: ' + bgColor + '; border-radius: 4px; border-left: 3px solid ' + borderColor + ';">';
+                        selfHtml += '<div style="font-weight: bold; color: ' + borderColor + '; margin-bottom: 5px;">' + peer.label + ' (User ID: ' + peer.user_id + ')</div>';
+                        selfHtml += '<div style="font-size: 11px; color: #6c757d; margin-bottom: 5px;">Submitted: ' + peer.created_at + '</div>';
+                        selfHtml += '<div style="margin-top: 5px;">';
+                        selfHtml += peer.adjectives.map(adj => 
+                            '<span style="display: inline-block; margin: 2px; padding: 3px 7px; background: white; border: 1px solid ' + borderColor + '; border-radius: 10px; font-size: 11px;">' + adj + '</span>'
+                        ).join('');
+                        selfHtml += '</div></div>';
+                    });
+                    
+                    selfHtml += '</div>';
+                }
+                
+                $('#self-adjectives-display').html(selfHtml);
             }
             
             function setupAdjectiveGrids() {
@@ -1606,47 +1723,91 @@ class Johari_MI_Quiz_Module {
             }
             
             function displayTestResults(data) {
+                // Helper function to get peer count for an adjective
+                const getPeerCount = (adjective) => {
+                    return data.debug_info?.peer_counts?.[adjective] || 0;
+                };
+                
+                // Helper function to render adjectives with peer counts
+                const renderAdjectivesWithCounts = (adjectives, bgColor) => {
+                    if (!adjectives || adjectives.length === 0) return '<em style="color: #999;">None identified</em>';
+                    return adjectives.map(adj => {
+                        const count = getPeerCount(adj);
+                        const countBadge = count > 0 ? ' <span style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 10px; font-size: 9px;">×' + count + '</span>' : '';
+                        return '<span style="display: inline-block; margin: 3px; padding: 4px 8px; background: ' + bgColor + '; border-radius: 12px; font-size: 11px;">' + adj + countBadge + '</span>';
+                    }).join('');
+                };
+                
                 const html = 
-                    '<h5>🎯 Johari Window Results:</h5>' +
+                    '<h5 style="margin-top: 20px; color: #1a202c;">🎯 Complete Johari Window Results</h5>' +
+                    '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #0ea5e9;">' +
+                        '<p style="margin: 0; color: #64748b; font-size: 13px;"><strong>Results based on:</strong> ' + (data.debug_info?.self_adjectives?.length || 0) + ' self-adjectives + ' + (data.debug_info?.total_peers || 0) + ' peer responses = ' + ((data.open?.length || 0) + (data.blind?.length || 0) + (data.hidden?.length || 0)) + ' total categorized adjectives</p>' +
+                    '</div>' +
                     '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">' +
-                        '<div style="background: #d4edda; padding: 10px; border-radius: 5px;">' +
-                            '<strong>🌟 Open (' + (data.open?.length || 0) + '):</strong><br>' +
-                            (data.open?.join(', ') || 'None') +
+                        '<div style="background: #d4edda; padding: 15px; border-radius: 8px; border: 2px solid #28a745;">' +
+                            '<h6 style="margin: 0 0 8px 0; color: #155724; font-size: 14px;">🌟 Open Area (' + (data.open?.length || 0) + ')</h6>' +
+                            '<p style="margin: 0 0 10px 0; font-size: 11px; color: #155724;"><em>Recognized by both you and others</em></p>' +
+                            '<div>' + renderAdjectivesWithCounts(data.open, '#28a745') + '</div>' +
                         '</div>' +
-                        '<div style="background: #f8d7da; padding: 10px; border-radius: 5px;">' +
-                            '<strong>👁️ Blind (' + (data.blind?.length || 0) + '):</strong><br>' +
-                            (data.blind?.join(', ') || 'None') +
+                        '<div style="background: #fff3cd; padding: 15px; border-radius: 8px; border: 2px solid #ffc107;">' +
+                            '<h6 style="margin: 0 0 8px 0; color: #856404; font-size: 14px;">👁️ Blind Spot (' + (data.blind?.length || 0) + ')</h6>' +
+                            '<p style="margin: 0 0 10px 0; font-size: 11px; color: #856404;"><em>Others see in you, you don\'t recognize</em></p>' +
+                            '<div>' + renderAdjectivesWithCounts(data.blind, '#ffc107') + '</div>' +
                         '</div>' +
-                        '<div style="background: #fff3cd; padding: 10px; border-radius: 5px;">' +
-                            '<strong>🔐 Hidden (' + (data.hidden?.length || 0) + '):</strong><br>' +
-                            (data.hidden?.join(', ') || 'None') +
+                        '<div style="background: #e3f2fd; padding: 15px; border-radius: 8px; border: 2px solid #2196f3;">' +
+                            '<h6 style="margin: 0 0 8px 0; color: #0c5460; font-size: 14px;">🔐 Hidden Area (' + (data.hidden?.length || 0) + ')</h6>' +
+                            '<p style="margin: 0 0 10px 0; font-size: 11px; color: #0c5460;"><em>You see in yourself, others don\'t recognize</em></p>' +
+                            '<div>' + renderAdjectivesWithCounts(data.hidden, '#2196f3') + '</div>' +
                         '</div>' +
-                        '<div style="background: #e2e3e5; padding: 10px; border-radius: 5px;">' +
-                            '<strong>❓ Unknown (first 10):</strong><br>' +
-                            (data.unknown?.slice(0, 10).join(', ') || 'None') +
+                        '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 2px solid #6c757d;">' +
+                            '<h6 style="margin: 0 0 8px 0; color: #495057; font-size: 14px;">❓ Unknown Area (' + (data.unknown?.length || 0) + ')</h6>' +
+                            '<p style="margin: 0 0 10px 0; font-size: 11px; color: #495057;"><em>Neither you nor others identified (showing first 15)</em></p>' +
+                            '<div>' + renderAdjectivesWithCounts(data.unknown?.slice(0, 15), '#6c757d') + '</div>' +
+                            (data.unknown?.length > 15 ? '<p style="margin: 8px 0 0 0; font-size: 11px; color: #6c757d;">... and ' + (data.unknown.length - 15) + ' more</p>' : '') +
                         '</div>' +
                     '</div>' +
                     (data.debug_info ? 
-                        '<details style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px;">' +
-                            '<summary style="cursor: pointer; font-weight: bold;">🔍 Debug Information</summary>' +
-                            '<div style="margin-top: 10px; font-family: monospace; font-size: 12px;">' +
-                                '<div><strong>Self-adjectives (' + (data.debug_info.self_adjectives?.length || 0) + '):</strong><br>' +
-                                (data.debug_info.self_adjectives?.join(', ') || 'None') + '</div><br>' +
-                                '<div><strong>All peer adjectives (' + (data.debug_info.all_peer_adjectives?.length || 0) + '):</strong><br>' +
-                                (data.debug_info.all_peer_adjectives?.join(', ') || 'None') + '</div><br>' +
-                                '<div><strong>Peer responses (' + (data.debug_info.total_peers || 0) + ' peers):</strong><br>' +
+                        '<details open style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6;">' +
+                            '<summary style="cursor: pointer; font-weight: bold; color: #495057; font-size: 14px;">🔍 Detailed Breakdown</summary>' +
+                            '<div style="margin-top: 15px;">' +
+                                '<div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 12px; border-left: 3px solid #17a2b8;">' +
+                                    '<h6 style="margin: 0 0 8px 0; color: #17a2b8;">📝 Your Self-Assessment (' + (data.debug_info.self_adjectives?.length || 0) + ' adjectives)</h6>' +
+                                    '<div>' + (data.debug_info.self_adjectives || []).map(adj => 
+                                        '<span style="display: inline-block; margin: 2px; padding: 4px 8px; background: #17a2b8; color: white; border-radius: 12px; font-size: 11px;">' + adj + '</span>'
+                                    ).join('') + '</div>' +
+                                '</div>' +
+                                '<div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 12px; border-left: 3px solid #6c757d;">' +
+                                    '<h6 style="margin: 0 0 8px 0; color: #6c757d;">👥 All Peer Selections (' + (data.debug_info.all_peer_adjectives?.length || 0) + ' unique adjectives from ' + (data.debug_info.total_peers || 0) + ' peers)</h6>' +
+                                    '<div>' + (data.debug_info.all_peer_adjectives || []).map(adj => {
+                                        const count = data.debug_info.peer_counts?.[adj] || 0;
+                                        return '<span style="display: inline-block; margin: 2px; padding: 4px 8px; background: #6c757d; color: white; border-radius: 12px; font-size: 11px;">' + adj + ' <span style="background: rgba(255,255,255,0.3); padding: 1px 5px; border-radius: 8px; margin-left: 3px;">×' + count + '</span></span>';
+                                    }).join('') + '</div>' +
+                                '</div>' +
                                 (data.debug_info.peer_responses ? 
-                                    data.debug_info.peer_responses.map(p => 
-                                        'Peer ' + p.peer_user_id + ': ' + p.adjectives.join(', ')
-                                    ).join('<br>') : 'None') + '</div><br>' +
-                                '<div><strong>Peer counts:</strong><br>' +
-                                (data.debug_info.peer_counts ? 
-                                    Object.entries(data.debug_info.peer_counts).map(([adj, count]) => 
-                                        adj + ': ' + count
-                                    ).join(', ') : 'None') + '</div>' +
+                                    '<div style="background: white; padding: 12px; border-radius: 6px; border-left: 3px solid #28a745;">' +
+                                        '<h6 style="margin: 0 0 12px 0; color: #28a745;">🔬 Individual Peer Responses</h6>' +
+                                        data.debug_info.peer_responses.map((p, idx) => {
+                                            const peerLabel = [999001, 999002].includes(p.peer_user_id) ? '🧪 Test Peer ' + (p.peer_user_id === 999001 ? '1' : '2') : '👤 Peer ' + (idx + 1);
+                                            const borderColor = [999001, 999002].includes(p.peer_user_id) ? '#fd7e14' : '#28a745';
+                                            return '<div style="margin-bottom: 10px; padding: 8px; background: #f8f9fa; border-radius: 4px; border-left: 2px solid ' + borderColor + ';">' +
+                                                '<div style="font-weight: bold; font-size: 11px; color: ' + borderColor + '; margin-bottom: 4px;">' + peerLabel + ' (User ID: ' + p.peer_user_id + ') — ' + p.adjectives.length + ' adjectives</div>' +
+                                                '<div>' + p.adjectives.map(adj => {
+                                                    // Determine category for color coding
+                                                    let color = '#6c757d';
+                                                    if ((data.open || []).includes(adj)) color = '#28a745';
+                                                    else if ((data.blind || []).includes(adj)) color = '#ffc107';
+                                                    else if ((data.hidden || []).includes(adj)) color = '#2196f3';
+                                                    return '<span style="display: inline-block; margin: 2px; padding: 3px 6px; background: ' + color + '; color: white; border-radius: 10px; font-size: 10px;">' + adj + '</span>';
+                                                }).join('') + '</div>' +
+                                            '</div>';
+                                        }).join('') +
+                                    '</div>' : '') +
                             '</div>' +
                         '</details>' : '') +
-                    '<p style="margin-top: 15px;"><strong>✅ Test completed!</strong> <a href="/johari-x-mi-assessment/" target="_blank">View full results page</a></p>';
+                    '<div style="margin-top: 15px; padding: 12px; background: #e8f5e9; border-radius: 6px; border-left: 3px solid #28a745;">' +
+                        '<p style="margin: 0; font-size: 13px;"><strong>✅ Test Results Generated!</strong> ' +
+                        '<a href="/johari-x-mi-assessment/" target="_blank" style="color: #0ea5e9;">View on full results page →</a></p>' +
+                    '</div>';
                 
                 $('#test-results-output').html(html);
             }
@@ -2872,11 +3033,38 @@ class Johari_MI_Quiz_Module {
             wp_send_json_error('Assessment not found');
         }
         
-        // Get peer feedback count
+        // Get peer feedback count and responses
         $feedback_table = $this->table(self::TABLE_FEEDBACK);
         $peer_count = $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM `$feedback_table` WHERE self_id = %d", $assessment_id
         ));
+        
+        // Get all peer responses with details
+        $peer_responses = $wpdb->get_results($wpdb->prepare(
+            "SELECT f.peer_user_id, f.adjectives, f.created_at, u.display_name 
+             FROM `$feedback_table` f 
+             LEFT JOIN {$wpdb->users} u ON f.peer_user_id = u.ID 
+             WHERE f.self_id = %d 
+             ORDER BY f.created_at ASC", $assessment_id
+        ));
+        
+        // Parse peer responses
+        $peer_data = [];
+        foreach ($peer_responses as $peer) {
+            $peer_adjectives = json_decode($peer->adjectives, true) ?: [];
+            $is_test_peer = in_array($peer->peer_user_id, [999001, 999002]);
+            $peer_label = $is_test_peer ? 
+                '🧪 Test Peer ' . ($peer->peer_user_id == 999001 ? '1' : '2') : 
+                ($peer->display_name ?: 'Peer ' . $peer->peer_user_id);
+            
+            $peer_data[] = [
+                'user_id' => $peer->peer_user_id,
+                'label' => $peer_label,
+                'adjectives' => $peer_adjectives,
+                'created_at' => $peer->created_at,
+                'is_test_peer' => $is_test_peer
+            ];
+        }
         
         // Parse self-selected adjectives
         $self_adjectives = json_decode($self_row->adjectives, true) ?: [];
@@ -2888,7 +3076,8 @@ class Johari_MI_Quiz_Module {
             'user_email' => $self_row->user_email ?: '',
             'created_at' => $self_row->created_at,
             'peer_count' => intval($peer_count),
-            'self_adjectives' => $self_adjectives
+            'self_adjectives' => $self_adjectives,
+            'peer_responses' => $peer_data
         ]);
     }
     

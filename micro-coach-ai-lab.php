@@ -46,10 +46,16 @@ class Micro_Coach_AI_Lab {
         add_action('wp_ajax_mc_lab_generate_ai_variant', [$this, 'ajax_generate_ai_variant']);
         add_action('wp_ajax_mc_lab_iterate', [$this, 'ajax_iterate']);
         add_action('wp_ajax_mc_lab_analyze_role_models', [$this, 'ajax_analyze_role_models']);
+        add_action('wp_ajax_mc_lab_generate_career_map', [$this, 'ajax_generate_career_map']);
+        add_action('wp_ajax_mc_lab_career_feedback', [$this, 'ajax_career_feedback']);
+        add_action('wp_ajax_mc_lab_get_saved_careers', [$this, 'ajax_get_saved_careers']);
+        add_action('wp_ajax_mc_lab_delete_saved_career', [$this, 'ajax_delete_saved_career']);
+        add_action('wp_ajax_mc_lab_career_suggest', [$this, 'ajax_career_suggest']);
         
-        // Hook into the main dashboard to add Lab Mode tab
+        // Hook into the main dashboard to add Lab Mode and Career Explorer tabs
         add_filter('mc_dashboard_custom_tabs', [$this, 'add_lab_mode_tab']);
         add_action('mc_dashboard_custom_tab_content', [$this, 'render_lab_mode_content']);
+        add_action('mc_dashboard_custom_tab_content', [$this, 'render_career_explorer_content']);
     }
     
     /**
@@ -155,7 +161,7 @@ class Micro_Coach_AI_Lab {
     }
     
     /**
-     * Add Lab Mode tab to the dashboard (if all assessments are complete)
+     * Add Lab Mode and Career Explorer tabs to the dashboard (if all assessments are complete)
      */
     public function add_lab_mode_tab($tabs) {
         $user_id = get_current_user_id();
@@ -176,6 +182,7 @@ class Micro_Coach_AI_Lab {
         
         if ($all_complete) {
             $tabs['tab-lab'] = '🧪 Lab Mode';
+            $tabs['tab-career'] = '⚡ Career Explorer';
         }
         
         return $tabs;
@@ -363,20 +370,192 @@ class Micro_Coach_AI_Lab {
                 setTimeout(initializeLabModeOnce, 100); // Small delay to let tab content show
             });
 
-            // If URL requests Lab tab (e.g., ?tab=lab or #tab-lab), activate it
+            // If URL requests Lab tab or Career Explorer directly
             try {
                 var params = new URLSearchParams(window.location.search);
                 var wantsLab = (params.get('tab') === 'lab') || (window.location.hash === '#tab-lab' || window.location.hash === '#lab');
-                if (wantsLab) {
+                var wantsCareer = params.get('career') === '1' || window.location.hash === '#career-explorer';
+                
+                if (wantsCareer || wantsLab) {
                     var labBtn = document.querySelector('[data-tab="tab-lab"]');
                     if (labBtn) {
                         // Switch tab and initialize
                         labBtn.click();
-                        setTimeout(initializeLabModeOnce, 150);
+                        setTimeout(function() {
+                            initializeLabModeOnce();
+                            
+                            // If career explorer requested, jump directly to it
+                            if (wantsCareer) {
+                                setTimeout(function() {
+                                    if (window.LabModeApp && typeof window.LabModeApp.showCareerExplorerDirectly === 'function') {
+                                        console.log('Jumping to Career Explorer...');
+                                        window.LabModeApp.showCareerExplorerDirectly();
+                                    }
+                                }, 500);
+                            }
+                        }, 150);
                     }
                 }
             } catch (e) {
                 console.warn('Lab Mode: unable to parse URL params for tab switch');
+            }
+        });
+        </script>
+        <?php
+    }
+    
+    /**
+     * Render Career Explorer content in the dashboard
+     */
+    public function render_career_explorer_content($tab_id) {
+        // Only render for the career explorer tab
+        if ($tab_id !== 'tab-career') {
+            return;
+        }
+        
+        $user_id = get_current_user_id();
+        if (!$user_id) return;
+        
+        // Check if all assessments are complete (same check as tab visibility)
+        $quizzes = Micro_Coach_Core::get_quizzes();
+        $all_complete = true;
+        foreach ($quizzes as $quiz) {
+            if (!empty($quiz['results_meta_key'])) {
+                $results = get_user_meta($user_id, $quiz['results_meta_key'], true);
+                if (empty($results)) {
+                    $all_complete = false;
+                    break;
+                }
+            }
+        }
+        
+        if (!$all_complete) return;
+        
+        // Render Career Explorer directly
+        echo '<div id="career-explorer-standalone"></div>';
+        ?>
+        <script>
+        jQuery(document).ready(function($) {
+            console.log("Career Explorer tab script running...");
+            
+            // Flags to prevent multiple loads
+            window.careerExplorerAssetsLoaded = window.careerExplorerAssetsLoaded || false;
+            window.careerExplorerInitialized = window.careerExplorerInitialized || false;
+            
+            function loadCareerExplorerAssets() {
+                if (window.careerExplorerAssetsLoaded) {
+                    console.log("Career Explorer assets already loaded");
+                    return Promise.resolve();
+                }
+                
+                console.log("Loading Career Explorer assets...");
+                window.careerExplorerAssetsLoaded = true;
+                
+                return new Promise(function(resolve, reject) {
+                    // Load Lab Mode CSS (includes career explorer styles)
+                    var css = document.createElement('link');
+                    css.rel = 'stylesheet';
+                    css.href = '<?php echo esc_url_raw(plugins_url('assets/lab-mode.css', __FILE__)); ?>?ver=' + Date.now();
+                    document.head.appendChild(css);
+                    
+                    // Load AI Loading Overlay CSS
+                    var aiCss = document.createElement('link');
+                    aiCss.rel = 'stylesheet';
+                    aiCss.href = '<?php echo esc_url_raw(plugins_url('assets/ai-loading-overlay.css', __FILE__)); ?>?ver=' + Date.now();
+                    document.head.appendChild(aiCss);
+                    
+                    // Load AI Loading Overlay JavaScript
+                    var aiScript = document.createElement('script');
+                    aiScript.src = '<?php echo esc_url_raw(plugins_url('assets/ai-loading-overlay.js', __FILE__)); ?>?ver=' + Date.now();
+                    aiScript.onload = function() {
+                        console.log("AI Loading Overlay JS loaded");
+                        
+                        // Load Lab Mode JavaScript (includes career explorer functions)
+                        var script = document.createElement('script');
+                        script.src = '<?php echo esc_url_raw(plugins_url('assets/lab-mode.js', __FILE__)); ?>?ver=' + Date.now();
+                        script.onload = function() {
+                            console.log("Career Explorer JS loaded");
+                            resolve();
+                        };
+                        script.onerror = reject;
+                        document.head.appendChild(script);
+                    };
+                    aiScript.onerror = reject;
+                    document.head.appendChild(aiScript);
+                });
+            }
+            
+            function initCareerExplorer() {
+                if (window.careerExplorerInitialized) {
+                    console.log("Career Explorer already initialized");
+                    return;
+                }
+                
+                if (typeof window.LabModeApp === 'undefined') {
+                    console.error("LabModeApp not available");
+                    return;
+                }
+                
+                window.careerExplorerInitialized = true;
+                console.log("Initializing Career Explorer standalone...");
+                
+                // Render career explorer directly in standalone container
+                var html = `
+                    <div class="career-explorer-standalone-wrapper">
+                        ${window.LabModeApp.renderCareerExplorerTab()}
+                    </div>
+                `;
+                
+                $('#career-explorer-standalone').html(html);
+            }
+            
+            // Initialize labMode data globally
+            window.labMode = window.labMode || {
+                ajaxUrl: '<?php echo admin_url('admin-ajax.php'); ?>',
+                nonce: '<?php echo wp_create_nonce('mc_lab_nonce'); ?>',
+                userId: <?php echo get_current_user_id(); ?>
+            };
+            
+            // Check if tab is already active when page loads
+            if ($('#tab-career.active').length > 0 || $('#tab-career').is(':visible')) {
+                console.log("Career Explorer tab is active on load, initializing...");
+                loadCareerExplorerAssets().then(function() {
+                    setTimeout(initCareerExplorer, 150);
+                }).catch(function(err) {
+                    console.error("Failed to load Career Explorer assets:", err);
+                });
+            }
+            
+            // Listen for tab clicks to load assets when Career Explorer becomes active
+            // Support both data-tab attribute and direct clicks on tab links
+            $(document).on('click', '[data-tab="tab-career"], .tab-link[href="#tab-career"]', function(e) {
+                console.log("Career Explorer tab clicked");
+                
+                loadCareerExplorerAssets().then(function() {
+                    setTimeout(initCareerExplorer, 150);
+                }).catch(function(err) {
+                    console.error("Failed to load Career Explorer assets:", err);
+                });
+            });
+            
+            // Also watch for tab content becoming visible (for tab switching)
+            var observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.target.id === 'tab-career' && $(mutation.target).hasClass('active')) {
+                        console.log("Career Explorer tab became active via mutation");
+                        loadCareerExplorerAssets().then(function() {
+                            setTimeout(initCareerExplorer, 150);
+                        });
+                    }
+                });
+            });
+            
+            var careerTab = document.getElementById('tab-career');
+            if (careerTab) {
+                observer.observe(careerTab, {
+                    attributes: true,
+                    attributeFilter: ['class']
+                });
             }
         });
         </script>
@@ -2149,6 +2328,883 @@ class Micro_Coach_AI_Lab {
         error_log('Lab Mode Role Models - Cleaned suggestions count: ' . count($cleaned_suggestions));
         
         return $cleaned_suggestions;
+    }
+    
+    /**
+     * AJAX: Generate Career Mind Map
+     */
+    public function ajax_generate_career_map() {
+        check_ajax_referer('mc_lab_nonce', 'nonce');
+        
+        $user_id = get_current_user_id();
+        if (!$user_id || !$this->user_can_access_lab_mode()) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $career_interest = sanitize_text_field($_POST['career_interest'] ?? '');
+        
+        if (empty(trim($career_interest))) {
+            wp_send_json_error('Please enter a career or field to explore');
+        }
+        
+        // Get user profile data
+        $profile_data = $this->get_career_explorer_profile($user_id);
+        
+        if (!$profile_data) {
+            wp_send_json_error('Unable to load your profile data. Please ensure all assessments are complete.');
+        }
+        
+        error_log('Career Explorer - Career interest: ' . $career_interest);
+        error_log('Career Explorer - Profile data loaded: ' . print_r($profile_data, true));
+        
+        try {
+            $career_map = $this->generate_career_map_with_ai($career_interest, $profile_data);
+            
+            wp_send_json_success([
+                'career_map' => $career_map,
+                'career_interest' => $career_interest
+            ]);
+            
+        } catch (Exception $e) {
+            error_log('Career Explorer - AI generation failed: ' . $e->getMessage());
+            wp_send_json_error('Failed to generate career map: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Get user profile data formatted for Career Explorer
+     */
+    private function get_career_explorer_profile($user_id) {
+        $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
+        $cdt_results = get_user_meta($user_id, 'cdt_quiz_results', true);
+        $bartle_results = get_user_meta($user_id, 'bartle_quiz_results', true);
+        
+        if (empty($mi_results) || empty($cdt_results) || empty($bartle_results)) {
+            return null;
+        }
+        
+        require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/mi-quiz/mi-questions.php';
+        require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/cdt-quiz/questions.php';
+        require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/bartle-quiz/questions.php';
+        
+        // Format MI top 3
+        $mi_top3 = [];
+        if (!empty($mi_results['top3'])) {
+            foreach ($mi_results['top3'] as $mi_slug) {
+                $score = $mi_results['part1Scores'][$mi_slug] ?? 0;
+                $mi_top3[] = [
+                    'key' => $mi_slug,
+                    'label' => $mi_categories[$mi_slug] ?? ucfirst(str_replace('-', ' ', $mi_slug)),
+                    'score' => (int) $score
+                ];
+            }
+        }
+        
+        // Format CDT scores
+        $cdt_scores = [];
+        $cdt_top = null;
+        $cdt_edge = null;
+        if (!empty($cdt_results['sortedScores'])) {
+            foreach ($cdt_results['sortedScores'] as $index => $score_data) {
+                $cdt_slug = $score_data[0];
+                $score = $score_data[1];
+                $cdt_scores[$cdt_slug] = (int) $score;
+                
+                if ($index === 0) {
+                    $cdt_top = $cdt_categories[$cdt_slug] ?? ucfirst(str_replace('-', ' ', $cdt_slug));
+                }
+                if ($index === count($cdt_results['sortedScores']) - 1) {
+                    $cdt_edge = $cdt_categories[$cdt_slug] ?? ucfirst(str_replace('-', ' ', $cdt_slug));
+                }
+            }
+        }
+        
+        // Format Bartle player type
+        $player_type = [];
+        if (!empty($bartle_results['sortedScores'])) {
+            $player_type['primary'] = $bartle_categories[$bartle_results['sortedScores'][0][0]] ?? 'Unknown';
+            if (isset($bartle_results['sortedScores'][1])) {
+                $player_type['secondary'] = $bartle_categories[$bartle_results['sortedScores'][1][0]] ?? null;
+            }
+        }
+        
+        // Get Johari adjectives (if available)
+        $johari_adjectives = [];
+        $jmi_results = get_user_meta($user_id, 'johari_mi_quiz_results', true);
+        if (!empty($jmi_results['selected_adjectives'])) {
+            $johari_adjectives = $jmi_results['selected_adjectives'];
+        }
+        
+        // Get age group if available
+        $age_group = 'Adult'; // Default
+        $qualifiers = get_user_meta($user_id, 'mc_lab_qualifiers', true);
+        if (!empty($qualifiers['curiosity']['ageGroup'])) {
+            $age_group = $qualifiers['curiosity']['ageGroup'];
+        }
+        
+        return [
+            'mi_top3' => $mi_top3,
+            'cdt_scores' => $cdt_scores,
+            'cdt_top' => $cdt_top,
+            'cdt_edge' => $cdt_edge,
+            'player_type' => $player_type,
+            'johari_adjectives' => $johari_adjectives,
+            'age_group' => $age_group
+        ];
+    }
+    
+    /**
+     * Generate Career Mind Map using AI
+     */
+    private function generate_career_map_with_ai($career_interest, $user_profile) {
+        if (!class_exists('Micro_Coach_AI')) {
+            throw new Exception('Micro_Coach_AI class not available');
+        }
+        
+        $api_key = Micro_Coach_AI::get_openai_api_key();
+        if (empty($api_key)) {
+            throw new Exception('OpenAI API key not configured');
+        }
+        
+        // Build system prompt
+        $system_prompt = 'You are a career advisor AI that helps users explore careers aligned with their psychological profile.\n\nYou will receive:\n- A career they\'re curious about\n- Their MI (Multiple Intelligences) top 3\n- Their CDT (Cognitive Dissonance Tolerance) scores and edges\n- Their Bartle Player Type (motivation style)\n- Johari window adjectives (self-perception traits)\n- Age group\n\nYou must return a SINGLE JSON object with this structure:\n{\n  "career_map": {\n    "central_career": "<the career they entered>",\n    "adjacent": [\n      {\n        "title": "Career Title",\n        "why_it_fits": "Brief explanation",\n        "profile_match": {\n          "mi": ["relevant MI"],\n          "cdt": "relevant CDT trait",\n          "bartle": "relevant player type",\n          "johari": ["relevant adjectives"]\n        }\n      }\n    ],\n    "parallel": [same structure as adjacent],\n    "wildcard": [same structure as adjacent]\n  }\n}\n\nRULES:\n- Adjacent careers: 3-5 careers very similar to input, easy transitions, low skill change\n- Parallel careers: 3-5 careers with similar core strengths but different industries\n- Wildcard careers: 2-3 unexpected careers based purely on user profile (MI/CDT/Bartle/Johari), not the input career\n- All careers must be real, legal, accessible\n- Tailor to age group (Teen/Student/Adult)\n- For wildcards, deeply leverage user\'s unique profile combination\n- NO prose, NO markdown, ONLY valid JSON';
+        
+        // Build user prompt
+        $mi_summary = implode(', ', array_map(function($mi) { return $mi['label']; }, $user_profile['mi_top3']));
+        $johari_summary = !empty($user_profile['johari_adjectives']) ? implode(', ', $user_profile['johari_adjectives']) : 'Not available';
+        
+        $user_prompt = sprintf(
+            "Career Interest: %s\n\nUser Profile:\n- MI Top 3: %s\n- CDT Highest: %s\n- CDT Edge (growth area): %s\n- Bartle Type: %s%s\n- Johari Adjectives: %s\n- Age Group: %s\n\nGenerate a career mind map with adjacent, parallel, and wildcard options.",
+            $career_interest,
+            $mi_summary,
+            $user_profile['cdt_top'],
+            $user_profile['cdt_edge'],
+            $user_profile['player_type']['primary'],
+            !empty($user_profile['player_type']['secondary']) ? ' / ' . $user_profile['player_type']['secondary'] : '',
+            $johari_summary,
+            $user_profile['age_group']
+        );
+        
+        error_log('Career Explorer - System prompt length: ' . strlen($system_prompt));
+        error_log('Career Explorer - User prompt: ' . $user_prompt);
+        
+        // Call OpenAI API
+        $model = Micro_Coach_AI::get_selected_model();
+        
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system_prompt],
+                ['role' => 'user', 'content' => $user_prompt]
+            ],
+            'temperature' => 0.7,
+            'max_tokens' => 2000,
+            'response_format' => ['type' => 'json_object']
+        ];
+        
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+            'timeout' => 60,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json'
+            ],
+            'body' => wp_json_encode($payload)
+        ]);
+        
+        if (is_wp_error($response)) {
+            throw new Exception('API request failed: ' . $response->get_error_message());
+        }
+        
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code !== 200) {
+            $body = wp_remote_retrieve_body($response);
+            $error_data = json_decode($body, true);
+            throw new Exception('API returned status ' . $status_code . ': ' . ($error_data['error']['message'] ?? 'Unknown error'));
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if (!$data || !isset($data['choices'][0]['message']['content'])) {
+            throw new Exception('Invalid API response structure');
+        }
+        
+        $content = $data['choices'][0]['message']['content'];
+        error_log('Career Explorer - AI response: ' . $content);
+        
+        $career_map = json_decode($content, true);
+        
+        if (!$career_map || !isset($career_map['career_map'])) {
+            throw new Exception('Failed to decode career map JSON or missing career_map field');
+        }
+        
+        // Validate structure
+        $required_sections = ['adjacent', 'parallel', 'wildcard'];
+        foreach ($required_sections as $section) {
+            if (!isset($career_map['career_map'][$section])) {
+                $career_map['career_map'][$section] = [];
+            }
+        }
+        
+        return $career_map['career_map'];
+    }
+    
+    /**
+     * AJAX: Handle career feedback (replacements, save, explain)
+     */
+    public function ajax_career_feedback() {
+        check_ajax_referer('mc_lab_nonce', 'nonce');
+        
+        $user_id = get_current_user_id();
+        if (!$user_id || !$this->user_can_access_lab_mode()) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $feedback_action = sanitize_text_field($_POST['feedback_action'] ?? '');
+        $career_rejected = sanitize_text_field($_POST['career_rejected'] ?? '');
+        $central_career = sanitize_text_field($_POST['central_career'] ?? '');
+        $distance_group = sanitize_text_field($_POST['distance_group'] ?? 'adjacent');
+        
+        error_log('Career Feedback - Action: ' . $feedback_action);
+        error_log('Career Feedback - Rejected: ' . $career_rejected);
+        error_log('Career Feedback - Central: ' . $central_career);
+        error_log('Career Feedback - Distance: ' . $distance_group);
+        
+        try {
+            switch ($feedback_action) {
+                case 'save':
+                    $career_data = json_decode(stripslashes($_POST['career_data'] ?? ''), true);
+                    $saved = $this->save_career_favorite($user_id, $career_data);
+                    wp_send_json_success(['saved' => $saved]);
+                    break;
+                    
+                case 'explain_fit':
+                    $explanation = $this->generate_career_explanation($user_id, $career_rejected, $central_career, $distance_group);
+                    wp_send_json_success(['explanation' => $explanation]);
+                    break;
+                    
+                case 'too_similar':
+                case 'too_different':
+                case 'not_interested':
+                    $profile_data = $this->get_career_explorer_profile($user_id);
+                    $replacement = $this->generate_career_replacement($profile_data, $central_career, $career_rejected, $distance_group, $feedback_action);
+                    wp_send_json_success(['replacement' => $replacement]);
+                    break;
+                    
+                default:
+                    wp_send_json_error('Invalid feedback action');
+            }
+        } catch (Exception $e) {
+            error_log('Career Feedback - Error: ' . $e->getMessage());
+            wp_send_json_error($e->getMessage());
+        }
+    }
+    
+    /**
+     * Save career to user favorites
+     */
+    private function save_career_favorite($user_id, $career_data) {
+        // Get existing saved careers
+        $saved_careers = get_user_meta($user_id, 'mc_saved_careers', true);
+        if (!is_array($saved_careers)) {
+            $saved_careers = [];
+        }
+        
+        // Add timestamp and save
+        $career_data['saved_at'] = current_time('mysql');
+        $saved_careers[] = $career_data;
+        
+        // Keep only last 50 saved careers
+        if (count($saved_careers) > 50) {
+            $saved_careers = array_slice($saved_careers, -50);
+        }
+        
+        update_user_meta($user_id, 'mc_saved_careers', $saved_careers);
+        
+        error_log('Career saved: ' . $career_data['title']);
+        return true;
+    }
+    
+    /**
+     * AJAX: Get saved careers for current user
+     */
+    public function ajax_get_saved_careers() {
+        check_ajax_referer('mc_lab_nonce', 'nonce');
+        
+        $user_id = get_current_user_id();
+        if (!$user_id || !$this->user_can_access_lab_mode()) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $saved_careers = get_user_meta($user_id, 'mc_saved_careers', true);
+        if (!is_array($saved_careers)) {
+            $saved_careers = [];
+        }
+        
+        // Sort by saved_at descending (newest first)
+        usort($saved_careers, function($a, $b) {
+            return strcmp($b['saved_at'] ?? '', $a['saved_at'] ?? '');
+        });
+        
+        wp_send_json_success([
+            'careers' => $saved_careers,
+            'count' => count($saved_careers)
+        ]);
+    }
+    
+    /**
+     * AJAX: Delete a saved career by index
+     */
+    public function ajax_delete_saved_career() {
+        check_ajax_referer('mc_lab_nonce', 'nonce');
+        
+        $user_id = get_current_user_id();
+        if (!$user_id || !$this->user_can_access_lab_mode()) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        $index = intval($_POST['index'] ?? -1);
+        if ($index < 0) {
+            wp_send_json_error('Invalid index');
+        }
+        
+        $saved_careers = get_user_meta($user_id, 'mc_saved_careers', true);
+        if (!is_array($saved_careers)) {
+            wp_send_json_error('No saved careers found');
+        }
+        
+        // Sort by saved_at descending to match display order
+        usort($saved_careers, function($a, $b) {
+            return strcmp($b['saved_at'] ?? '', $a['saved_at'] ?? '');
+        });
+        
+        if (!isset($saved_careers[$index])) {
+            wp_send_json_error('Career not found at index: ' . $index);
+        }
+        
+        $deleted_title = $saved_careers[$index]['title'] ?? 'Unknown';
+        
+        // Remove the career at the specified index
+        array_splice($saved_careers, $index, 1);
+        
+        // Update user meta
+        update_user_meta($user_id, 'mc_saved_careers', $saved_careers);
+        
+        error_log('Career deleted: ' . $deleted_title . ' (index: ' . $index . ')');
+        
+        wp_send_json_success([
+            'deleted' => true,
+            'remaining_count' => count($saved_careers)
+        ]);
+    }
+    
+    /**
+     * Generate explanation for why a career fits
+     */
+    private function generate_career_explanation($user_id, $career_title, $central_career, $distance_group) {
+        if (!class_exists('Micro_Coach_AI')) {
+            throw new Exception('Micro_Coach_AI class not available');
+        }
+        
+        $api_key = Micro_Coach_AI::get_openai_api_key();
+        if (empty($api_key)) {
+            throw new Exception('OpenAI API key not configured');
+        }
+        
+        $profile_data = $this->get_career_explorer_profile($user_id);
+        if (!$profile_data) {
+            throw new Exception('Unable to load profile data');
+        }
+        
+        // Build explanation prompt
+        $mi_summary = implode(', ', array_map(function($mi) { return $mi['label']; }, $profile_data['mi_top3']));
+        $johari_summary = !empty($profile_data['johari_adjectives']) ? implode(', ', $profile_data['johari_adjectives']) : 'Not available';
+        
+        // No need for random angles anymore - we're doing two sections
+        
+        $system_prompt = 'You are a career advisor. Generate TWO separate sections:\n\nSECTION 1 - Profile Fit (2-3 sentences):\nExplain WHY this career aligns with their specific MI strengths, CDT traits, and Bartle type. Be concrete about how their profile makes them naturally suited to this work.\n\nSECTION 2 - A Typical Day (2-3 sentences):\nDescribe WHAT a typical workday looks like - specific activities, interactions, and tasks they\'d actually do. Make it vivid and tangible.\n\nRULES:\n- NEVER use: "will allow you to", "will shine", "make you uniquely equipped", "suggests you will thrive", "means you can", "will empower you"\n- Use concrete, specific language\n- Write conversationally\n\nReturn as JSON: {"profile_fit": "...", "typical_day": "..."}';
+        
+        $user_prompt = sprintf(
+            "Career: %s\nProfile: %s MI, %s CDT strength, %s growth edge, %s type\nContext: %s path from %s\n\nGenerate both sections.",
+            $career_title,
+            $mi_summary,
+            $profile_data['cdt_top'],
+            $profile_data['cdt_edge'],
+            $profile_data['player_type']['primary'],
+            $distance_group,
+            $central_career
+        );
+        
+        $model = Micro_Coach_AI::get_selected_model();
+        
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system_prompt],
+                ['role' => 'user', 'content' => $user_prompt]
+            ],
+            'temperature' => 0.8,
+            'max_tokens' => 300,
+            'response_format' => ['type' => 'json_object']
+        ];
+        
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+            'timeout' => 30,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json'
+            ],
+            'body' => wp_json_encode($payload)
+        ]);
+        
+        if (is_wp_error($response)) {
+            throw new Exception('API request failed: ' . $response->get_error_message());
+        }
+        
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code !== 200) {
+            throw new Exception('API returned status: ' . $status_code);
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if (!$data || !isset($data['choices'][0]['message']['content'])) {
+            throw new Exception('Invalid API response');
+        }
+        
+        $content = $data['choices'][0]['message']['content'];
+        error_log('Career Explanation - Raw AI response: ' . $content);
+        
+        $sections = json_decode($content, true);
+        error_log('Career Explanation - Decoded sections: ' . print_r($sections, true));
+        
+        if (!$sections || !isset($sections['profile_fit']) || !isset($sections['typical_day'])) {
+            error_log('Career Explanation - Missing required fields. Sections: ' . print_r($sections, true));
+            throw new Exception('Invalid explanation format - missing profile_fit or typical_day');
+        }
+        
+        return $sections;
+    }
+    
+    /**
+     * Generate career replacement based on feedback
+     */
+    private function generate_career_replacement($profile_data, $central_career, $rejected_career, $distance_group, $feedback_action) {
+        if (!class_exists('Micro_Coach_AI')) {
+            throw new Exception('Micro_Coach_AI class not available');
+        }
+        
+        $api_key = Micro_Coach_AI::get_openai_api_key();
+        if (empty($api_key)) {
+            throw new Exception('OpenAI API key not configured');
+        }
+        
+        // Build system prompt with feedback-specific instructions
+        $distance_instruction = '';
+        if ($feedback_action === 'too_similar') {
+            $distance_instruction = 'The user found "%s" too similar to "%s". Suggest a career that is FARTHER away - more different, requiring more skill transition, in a different domain.';
+        } elseif ($feedback_action === 'too_different') {
+            $distance_instruction = 'The user found "%s" too different from "%s". Suggest a career that is CLOSER - more similar, easier transition, related skills.';
+        } else { // not_interested
+            $distance_instruction = 'The user is not interested in "%s". Suggest a different %s career (same distance from "%s") that might appeal to them based on their profile.';
+        }
+        
+        $distance_instruction = sprintf($distance_instruction, $rejected_career, $central_career, $distance_group, $central_career);
+        
+        $system_prompt = 'You are a career advisor providing alternative career suggestions based on user feedback. ' . $distance_instruction . '\n\nReturn ONLY valid JSON in this format:\n{\n  "title": "Career Title",\n  "why_it_fits": "Brief explanation",\n  "profile_match": {\n    "mi": ["relevant MI"],\n    "cdt": "relevant CDT",\n    "bartle": "relevant Bartle",\n    "johari": ["relevant adjectives"]\n  }\n}\n\nThe career must be real, legal, accessible, and appropriately different/similar based on the feedback.';
+        
+        // Build user prompt
+        $mi_summary = implode(', ', array_map(function($mi) { return $mi['label']; }, $profile_data['mi_top3']));
+        $johari_summary = !empty($profile_data['johari_adjectives']) ? implode(', ', $profile_data['johari_adjectives']) : 'Not available';
+        
+        $user_prompt = sprintf(
+            "Central Career: %s\nRejected Career: %s\nFeedback: %s\n\nUser Profile:\n- MI Top 3: %s\n- CDT Highest: %s\n- CDT Edge: %s\n- Bartle Type: %s\n- Johari Adjectives: %s\n\nProvide one replacement career that addresses the feedback.",
+            $central_career,
+            $rejected_career,
+            $feedback_action,
+            $mi_summary,
+            $profile_data['cdt_top'],
+            $profile_data['cdt_edge'],
+            $profile_data['player_type']['primary'],
+            $johari_summary
+        );
+        
+        error_log('Career Replacement - System prompt: ' . substr($system_prompt, 0, 200));
+        error_log('Career Replacement - User prompt: ' . $user_prompt);
+        
+        $model = Micro_Coach_AI::get_selected_model();
+        
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system_prompt],
+                ['role' => 'user', 'content' => $user_prompt]
+            ],
+            'temperature' => 0.8,
+            'max_tokens' => 400,
+            'response_format' => ['type' => 'json_object']
+        ];
+        
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+            'timeout' => 30,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json'
+            ],
+            'body' => wp_json_encode($payload)
+        ]);
+        
+        if (is_wp_error($response)) {
+            throw new Exception('API request failed: ' . $response->get_error_message());
+        }
+        
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code !== 200) {
+            throw new Exception('API returned status: ' . $status_code);
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if (!$data || !isset($data['choices'][0]['message']['content'])) {
+            throw new Exception('Invalid API response');
+        }
+        
+        $content = $data['choices'][0]['message']['content'];
+        error_log('Career Replacement - AI response: ' . $content);
+        
+        $replacement = json_decode($content, true);
+        
+        if (!$replacement || !isset($replacement['title'])) {
+            throw new Exception('Failed to decode replacement career JSON');
+        }
+        
+        return $replacement;
+    }
+    
+    /**
+     * AJAX: Career Suggest with Filters (New Enhanced Endpoint)
+     */
+    public function ajax_career_suggest() {
+        check_ajax_referer('mc_lab_nonce', 'nonce');
+        
+        $user_id = get_current_user_id();
+        if (!$user_id || !$this->user_can_access_lab_mode()) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        // Parse request payload
+        $seed_career = sanitize_text_field($_POST['seed_career'] ?? '');
+        $filters = json_decode(stripslashes($_POST['filters'] ?? '{}'), true);
+        $novelty_bias = floatval($_POST['novelty_bias'] ?? 0.25);
+        $limit_per_bucket = intval($_POST['limit_per_bucket'] ?? 6);
+        
+        // Get user profile data
+        $profile_data = $this->get_enhanced_career_profile($user_id);
+        
+        if (!$profile_data) {
+            wp_send_json_error('Unable to load your profile data. Please ensure all assessments are complete.');
+        }
+        
+        error_log('Career Suggest - Seed: ' . $seed_career . ', Novelty: ' . $novelty_bias);
+        error_log('Career Suggest - Filters: ' . print_r($filters, true));
+        
+        try {
+            $suggestions = $this->generate_career_suggestions_with_filters(
+                $seed_career,
+                $profile_data,
+                $filters,
+                $novelty_bias,
+                $limit_per_bucket
+            );
+            
+            wp_send_json_success([
+                'adjacent' => $suggestions['adjacent'] ?? [],
+                'parallel' => $suggestions['parallel'] ?? [],
+                'wildcard' => $suggestions['wildcard'] ?? []
+            ]);
+            
+        } catch (Exception $e) {
+            error_log('Career Suggest - AI generation failed: ' . $e->getMessage());
+            wp_send_json_error('Failed to generate career suggestions: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Get enhanced user profile data for Career Explorer with filters
+     */
+    private function get_enhanced_career_profile($user_id) {
+        $mi_results = get_user_meta($user_id, 'miq_quiz_results', true);
+        $cdt_results = get_user_meta($user_id, 'cdt_quiz_results', true);
+        $bartle_results = get_user_meta($user_id, 'bartle_quiz_results', true);
+        
+        if (empty($mi_results) || empty($cdt_results) || empty($bartle_results)) {
+            return null;
+        }
+        
+        require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/mi-quiz/mi-questions.php';
+        require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/cdt-quiz/questions.php';
+        require_once MC_QUIZ_PLATFORM_PATH . 'quizzes/bartle-quiz/questions.php';
+        
+        // Format MI top 3 with slugs
+        $mi_top3 = [];
+        if (!empty($mi_results['top3'])) {
+            foreach ($mi_results['top3'] as $mi_slug) {
+                $score = $mi_results['part1Scores'][$mi_slug] ?? 0;
+                $mi_top3[] = [
+                    'slug' => $mi_slug,
+                    'score' => (int) $score
+                ];
+            }
+        }
+        
+        // Format CDT scores with snake_case slugs
+        $cdt_scores = [];
+        $cdt_top = null;
+        $cdt_edge = null;
+        
+        // Map display names to snake_case
+        $cdt_slug_map = [
+            'discomfort-regulation' => 'discomfort_regulation',
+            'conflict-resolution-tolerance' => 'conflict_resolution_tolerance',
+            'value-conflict-navigation' => 'value_conflict_navigation',
+            'ambiguity-tolerance' => 'ambiguity_tolerance',
+            'self-confrontation-capacity' => 'self_confrontation_capacity'
+        ];
+        
+        if (!empty($cdt_results['sortedScores'])) {
+            foreach ($cdt_results['sortedScores'] as $index => $score_data) {
+                $cdt_slug = $score_data[0];
+                $score = $score_data[1];
+                $snake_slug = $cdt_slug_map[$cdt_slug] ?? str_replace('-', '_', $cdt_slug);
+                $cdt_scores[$snake_slug] = (int) $score;
+                
+                if ($index === 0) {
+                    $cdt_top = $snake_slug;
+                }
+                if ($index === count($cdt_results['sortedScores']) - 1) {
+                    $cdt_edge = $snake_slug;
+                }
+            }
+        }
+        
+        // Format Bartle player type
+        $bartle_primary = null;
+        $bartle_secondary = null;
+        if (!empty($bartle_results['sortedScores'])) {
+            $bartle_primary = strtolower($bartle_results['sortedScores'][0][0]);
+            if (isset($bartle_results['sortedScores'][1])) {
+                $bartle_secondary = strtolower($bartle_results['sortedScores'][1][0]);
+            }
+        }
+        
+        // Get Johari adjectives (if available)
+        $johari_adjectives = [];
+        $jmi_results = get_user_meta($user_id, 'johari_mi_quiz_results', true);
+        if (!empty($jmi_results['selected_adjectives'])) {
+            $johari_adjectives = array_map('strtolower', $jmi_results['selected_adjectives']);
+        }
+        
+        return [
+            'mi_top3' => $mi_top3,
+            'cdt_scores' => $cdt_scores,
+            'cdt_top' => $cdt_top,
+            'cdt_edge' => $cdt_edge,
+            'bartle' => [
+                'primary' => $bartle_primary,
+                'secondary' => $bartle_secondary
+            ],
+            'johari' => $johari_adjectives
+        ];
+    }
+    
+    /**
+     * Generate career suggestions with filters using AI
+     */
+    private function generate_career_suggestions_with_filters($seed_career, $profile, $filters, $novelty_bias, $limit) {
+        if (!class_exists('Micro_Coach_AI')) {
+            throw new Exception('Micro_Coach_AI class not available');
+        }
+        
+        $api_key = Micro_Coach_AI::get_openai_api_key();
+        if (empty($api_key)) {
+            throw new Exception('OpenAI API key not configured');
+        }
+        
+        // Build comprehensive system prompt per spec
+        $system_prompt = $this->build_career_suggest_system_prompt();
+        
+        // Build user prompt with profile and filters
+        $user_prompt = $this->build_career_suggest_user_prompt($seed_career, $profile, $filters, $novelty_bias, $limit);
+        
+        error_log('Career Suggest - System prompt length: ' . strlen($system_prompt));
+        error_log('Career Suggest - User prompt: ' . substr($user_prompt, 0, 500));
+        
+        $model = Micro_Coach_AI::get_selected_model();
+        
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system_prompt],
+                ['role' => 'user', 'content' => $user_prompt]
+            ],
+            'temperature' => 0.7 + ($novelty_bias * 0.3), // Increase temp with novelty
+            'max_tokens' => 2000,
+            'response_format' => ['type' => 'json_object']
+        ];
+        
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+            'timeout' => 60,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json'
+            ],
+            'body' => wp_json_encode($payload)
+        ]);
+        
+        if (is_wp_error($response)) {
+            throw new Exception('API request failed: ' . $response->get_error_message());
+        }
+        
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code !== 200) {
+            $body = wp_remote_retrieve_body($response);
+            $error_data = json_decode($body, true);
+            throw new Exception('API returned status ' . $status_code . ': ' . ($error_data['error']['message'] ?? 'Unknown error'));
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if (!$data || !isset($data['choices'][0]['message']['content'])) {
+            throw new Exception('Invalid API response structure');
+        }
+        
+        $content = $data['choices'][0]['message']['content'];
+        error_log('Career Suggest - AI response length: ' . strlen($content));
+        
+        $result = json_decode($content, true);
+        
+        if (!$result || (!isset($result['adjacent']) && !isset($result['parallel']) && !isset($result['wildcard']))) {
+            throw new Exception('Failed to decode career suggestions JSON or missing required sections');
+        }
+        
+        // Ensure all sections exist
+        $result['adjacent'] = $result['adjacent'] ?? [];
+        $result['parallel'] = $result['parallel'] ?? [];
+        $result['wildcard'] = $result['wildcard'] ?? [];
+        
+        return $result;
+    }
+    
+    /**
+     * Build system prompt for career suggestions
+     */
+    private function build_career_suggest_system_prompt() {
+        return 'You generate career suggestions tailored to a user\'s psychological profile:
+- Multiple Intelligences (top 3 + scores)
+- Cognitive Dissonance Tolerance (subscales + top + edge)
+- Bartle player type (primary, optional secondary)
+- Johari adjective descriptors
+
+You must:
+1) Return ONLY JSON with three arrays: {"adjacent":[...], "parallel":[...], "wildcard":[...]}.
+2) Map each idea to the profile with a brief, concrete "why it fits."
+3) Respect filters:
+   - demand_horizon: trending_now | high_growth_5y | future_proof_10y | stable_low_vol | automation_resistant
+   - education_levels: no_degree | certificate_bootcamp | bachelor | advanced
+   - work_env: remote_friendly | hybrid | outdoor | hands_on | solo | collaborative | client_facing | structured | flexible
+   - role_orientation: analytical | creative | leadership | technical | people_centered | helping | problem_solving | adventure_fieldwork
+   - comp_band: lower | middle | upper | high_responsibility
+   - social_impact: high_social | environmental | community | mission_driven
+   - remote_only: boolean
+   - stretch_opposites: boolean (include 20–40% "opposite" style fits in wildcard)
+4) Calibrate novelty:
+   - novelty_bias ∈ [0,1]; 0 = conventional, 1 = very unusual (affects wildcard most).
+5) Distribution:
+   - adjacent: easy pivots, similar skill cluster
+   - parallel: same strengths, different domain/industry
+   - wildcard: surprising but genuinely profile-consistent
+6) Each item object MUST include:
+   - title (string)
+   - why_it_fits (<= 200 chars)
+   - profile_match: { mi: string[], cdt_top: string, bartle: string, johari: string[] }
+   - meta: { demand_horizon: string, education: string, work_env: string[], comp_band: string, social_impact: string[] }
+7) Obey filters strictly. If a filter cannot be satisfied, reduce count but never hallucinate prerequisites.
+8) Safety: exclude unsafe, illegal, or age-inappropriate roles. Prefer accessible first steps.
+9) If seed_career is empty, infer from MI/CDT/Bartle to populate all three buckets.
+10) No prose, markdown, or comments. JSON only.';
+    }
+    
+    /**
+     * Build user prompt for career suggestions
+     */
+    private function build_career_suggest_user_prompt($seed_career, $profile, $filters, $novelty_bias, $limit) {
+        $prompt = "";
+        
+        // Seed career
+        if (!empty($seed_career)) {
+            $prompt .= "seed_career: " . $seed_career . "\n\n";
+        } else {
+            $prompt .= "seed_career: (empty - infer from profile)\n\n";
+        }
+        
+        // Profile data
+        $prompt .= "profile:\n";
+        
+        // MI top 3
+        $mi_strings = [];
+        foreach ($profile['mi_top3'] as $mi) {
+            $mi_strings[] = '{"slug":"' . $mi['slug'] . '","score":' . $mi['score'] . '}';
+        }
+        $prompt .= "  mi_top3: [" . implode(',', $mi_strings) . "]\n";
+        
+        // CDT scores
+        $cdt_strings = [];
+        foreach ($profile['cdt_scores'] as $key => $val) {
+            $cdt_strings[] = '"' . $key . '":' . $val;
+        }
+        $prompt .= "  cdt_scores: {" . implode(',', $cdt_strings) . "}\n";
+        $prompt .= "  cdt_top: \"" . $profile['cdt_top'] . "\"\n";
+        $prompt .= "  cdt_edge: \"" . $profile['cdt_edge'] . "\"\n";
+        
+        // Bartle
+        $prompt .= "  bartle: {\"primary\":\"" . $profile['bartle']['primary'] . "\"";
+        if ($profile['bartle']['secondary']) {
+            $prompt .= ",\"secondary\":\"" . $profile['bartle']['secondary'] . "\"";
+        }
+        $prompt .= "}\n";
+        
+        // Johari
+        $johari_json = json_encode($profile['johari']);
+        $prompt .= "  johari: " . $johari_json . "\n\n";
+        
+        // Filters
+        $prompt .= "filters:\n";
+        
+        $filter_keys = [
+            'demand_horizon', 'education_levels', 'work_env', 'role_orientation',
+            'comp_band', 'social_impact', 'remote_only', 'stretch_opposites'
+        ];
+        
+        foreach ($filter_keys as $key) {
+            $value = $filters[$key] ?? null;
+            if ($value === null) {
+                $prompt .= "  $key: null\n";
+            } elseif (is_array($value)) {
+                $prompt .= "  $key: " . json_encode($value) . "\n";
+            } elseif (is_bool($value)) {
+                $prompt .= "  $key: " . ($value ? 'true' : 'false') . "\n";
+            } else {
+                $prompt .= "  $key: \"$value\"\n";
+            }
+        }
+        
+        $prompt .= "\nnovelty_bias: " . number_format($novelty_bias, 2) . "\n";
+        $prompt .= "limit_per_bucket: " . $limit . "\n";
+        
+        return $prompt;
     }
 }
 

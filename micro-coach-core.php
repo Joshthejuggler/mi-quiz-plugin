@@ -213,12 +213,9 @@ class Micro_Coach_Core {
                 $next_step_action = 'switch-to-ai-tab';
             }
             if ($progress_pct < 100) {
+                // Find the first incomplete quiz (no dependency check - users can take in any order)
                 foreach ($quizzes as $id => $quiz) {
-                    $dependency_met = true;
-                    if (!empty($quiz['depends_on']) && !($completion_status[$quiz['depends_on']] ?? false)) {
-                        $dependency_met = false;
-                    }
-                    if ($dependency_met && !($completion_status[$id] ?? false)) {
+                    if (!($completion_status[$id] ?? false)) {
                         $next_step_url = $this->find_page_by_shortcode($quiz['shortcode']);
                         $next_step_title = 'Next Step: ' . $quiz['title'];
                         break;
@@ -739,15 +736,9 @@ class Micro_Coach_Core {
                                 foreach ($quizzes as $id => $quiz):
                                     $has_results = $completion_status[$id] ?? false;
                                     $quiz_page_url = $this->find_page_by_shortcode($quiz['shortcode']);
+                                    // All quizzes are available in any order
                                     $dependency_met = true;
                                     $dependency_title = '';
-                                    if (!empty($quiz['depends_on'])) {
-                                        $dependency_id = $quiz['depends_on'];
-                                        if (isset($quizzes[$dependency_id])) {
-                                            $dependency_title = $quizzes[$dependency_id]['title'];
-                                            if (!($completion_status[$dependency_id] ?? false)) { $dependency_met = false; }
-                                        }
-                                    }
                                     $description = ($has_results && !empty($quiz['description_completed'])) ? $quiz['description_completed'] : (!empty($saved_descriptions[$id]) ? $saved_descriptions[$id] : $quiz['description']);
                                     
                                     $mi_profile_content = '';
@@ -840,7 +831,14 @@ class Micro_Coach_Core {
                         </div>
                         <?php
                         // Allow plugins to add custom tab content
-                        do_action('mc_dashboard_custom_tab_content');
+                        // Loop through custom tabs and create their content divs
+                        foreach ($custom_tabs as $tab_id => $tab_label) {
+                            if ($tab_id !== 'tab-lab') {
+                                echo '<div id="' . esc_attr($tab_id) . '" class="tab-content">';
+                                do_action('mc_dashboard_custom_tab_content', $tab_id);
+                                echo '</div>';
+                            }
+                        }
                         ?>
                     </div>
                 <?php else: ?>
@@ -851,15 +849,9 @@ class Micro_Coach_Core {
                         foreach ($quizzes as $id => $quiz):
                             $has_results = $completion_status[$id] ?? false;
                             $quiz_page_url = $this->find_page_by_shortcode($quiz['shortcode']);
+                            // All quizzes are available in any order
                             $dependency_met = true;
                             $dependency_title = '';
-                            if (!empty($quiz['depends_on'])) {
-                                $dependency_id = $quiz['depends_on'];
-                                if (isset($quizzes[$dependency_id])) {
-                                    $dependency_title = $quizzes[$dependency_id]['title'];
-                                    if (!($completion_status[$dependency_id] ?? false)) { $dependency_met = false; }
-                                }
-                            }
                             $description = ($has_results && !empty($quiz['description_completed'])) ? $quiz['description_completed'] : (!empty($saved_descriptions[$id]) ? $saved_descriptions[$id] : $quiz['description']);
                             $prediction_paragraph = '';
                             if ($id === 'cdt-quiz' && ($completion_status['mi-quiz'] ?? false)) {
@@ -2615,16 +2607,8 @@ class Micro_Coach_Core {
                     $johari_status = null;
                     if ($step_slug === 'johari-mi-quiz') {
                         $johari_status = MC_Funnel::get_johari_status($user_id);
-                        // Enforce unlock dependency: if previous step not unlocked,
-                        // force Johari to show as locked (not available) even if
-                        // get_johari_status() returns 'available'.
-                        if (!$is_unlocked) {
-                            $johari_status = [
-                                'status' => 'locked',
-                                'badge_text' => 'Locked',
-                                'description' => 'Complete previous steps to unlock'
-                            ];
-                        }
+                        // Note: Johari is now always available like other quizzes
+                        // The get_johari_status method handles its own internal states
                     }
                     
                     $classes = ['mc-funnel-step'];

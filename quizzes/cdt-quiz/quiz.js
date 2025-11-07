@@ -138,6 +138,78 @@
     const $id = (id) => document.getElementById(id);
 
     /**
+     * Show login/registration prompt for non-logged-in users
+     */
+    function showLoginRegister() {
+        container.innerHTML = `
+            <div class="cdt-quiz-card cdt-results-section bg-secondary">
+                <h2 class="cdt-section-title">Get Your Full Results & Action Plan</h2>
+                <p>Enter your name and email to create your free account. We'll instantly email you a copy of your results and show them on the next screen.</p>
+                <form id="cdt-register-form">
+                    <div class="mi-form-field">
+                        <label for="cdt_reg_first_name">First Name</label>
+                        <input type="text" id="cdt_reg_first_name" required>
+                    </div>
+                    <div class="mi-form-field">
+                        <label for="cdt_reg_email">Email Address</label>
+                        <input type="email" id="cdt_reg_email" required>
+                    </div>
+                    <div class="form-submit-wrapper">
+                        <button type="button" id="cdt_register_btn" class="cdt-quiz-button cdt-quiz-button-primary">Email My Results & Create Account</button>
+                    </div>
+                    <p id="cdt_reg_status" class="form-status"></p>
+                </form>
+                <p class="form-secondary-action">Already have an account? <a href="${loginUrl}">Log in here</a>.</p>
+            </div>`;
+
+        const regBtn = $id('cdt_register_btn');
+        const statusEl = $id('cdt_reg_status');
+        $id('cdt-register-form').addEventListener('submit', e => e.preventDefault());
+        regBtn.addEventListener('click', () => {
+            const email = $id('cdt_reg_email').value.trim();
+            const firstName = $id('cdt_reg_first_name').value.trim();
+
+            if (!firstName) { statusEl.innerHTML = 'Please enter your first name.'; statusEl.style.color = 'red'; return; }
+            if (!email || !/\S+@\S+\.\S+/.test(email)) { statusEl.innerHTML = 'Please enter a valid email address.'; statusEl.style.color = 'red'; return; }
+
+            statusEl.innerHTML = 'Creating your account...';
+            statusEl.style.color = 'inherit';
+            regBtn.disabled = true;
+
+            const body = new URLSearchParams({ 
+                action: 'miq_magic_register',
+                _ajax_nonce: data.miqNonce, 
+                email: email, 
+                first_name: firstName, 
+                results_html: '',
+                results_data: JSON.stringify(quizState)
+            });
+
+            fetch(ajaxUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
+            .then(r => r.json())
+            .then(j => {
+                if (j.success) {
+                    statusEl.innerHTML = j.data;
+                    statusEl.style.color = 'green';
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    let errorMsg = 'An unknown error occurred. Please try again.';
+                    if (j.data) {
+                        errorMsg = typeof j.data === 'string' ? j.data : (j.data.message || JSON.stringify(j.data));
+                    }
+                    statusEl.innerHTML = 'Error: ' + errorMsg;
+                    statusEl.style.color = 'red';
+                    regBtn.disabled = false;
+                }
+            }).catch(() => {
+                statusEl.innerHTML = 'An unexpected error occurred. Please try again.';
+                statusEl.style.color = 'red';
+                regBtn.disabled = false;
+            });
+        });
+    }
+
+    /**
      * Instantly fills out the quiz with random answers and shows the results.
      * This is a development tool for testing.
      */
@@ -354,13 +426,13 @@
         });
         html += `</div><div class="cdt-quiz-footer">
             <button type="button" id="cdt-prev-btn" class="cdt-quiz-button" disabled>Previous</button>
-            <button type="button" id="cdt-next-btn" class="cdt-quiz-button cdt-quiz-button-primary" disabled>Next</button>
+            <button type="button" id="cdt-finish-btn" class="cdt-quiz-button cdt-quiz-button-primary" style="display:none;">Finish</button>
         </div>`;
         container.innerHTML = html;
 
         const steps = container.querySelectorAll('.cdt-step');
         const prevBtn = $id('cdt-prev-btn');
-        const nextBtn = $id('cdt-next-btn');
+        const finishBtn = $id('cdt-finish-btn');
         const bar = container.querySelector('.cdt-progress-bar');
         let currentStep = 0;
         const totalSteps = steps.length;
@@ -491,9 +563,12 @@
         const updateNavState = () => {
             const hasAnswer = !!steps[currentStep].querySelector('input:checked');
             prevBtn.disabled = (currentStep === 0);
-            nextBtn.disabled = !hasAnswer;
-            // Update label to Finish on last step for clarity
-            nextBtn.textContent = (currentStep >= totalSteps - 1) ? 'Finish' : 'Next';
+            // Show finish button only on last step and only if answered
+            if (currentStep >= totalSteps - 1) {
+                finishBtn.style.display = hasAnswer ? 'inline-block' : 'none';
+            } else {
+                finishBtn.style.display = 'none';
+            }
         };
 
         const showStep = (k) => {
@@ -505,12 +580,8 @@
         };
 
         prevBtn.addEventListener('click', () => { if (currentStep > 0) { showStep(currentStep - 1); } });
-        nextBtn.addEventListener('click', () => {
-            if (currentStep < totalSteps - 1) {
-                showStep(currentStep + 1);
-                return;
-            }
-            // Last step: ensure all questions are answered
+        finishBtn.addEventListener('click', () => {
+            // Ensure all questions are answered
             const allAnswered = Array.from(steps).every(s => s.querySelector('input:checked'));
             if (!allAnswered) {
                 // jump to first unanswered
@@ -529,12 +600,12 @@
             computeAdminAwardForStep(s);
             updateNavState();
             
-            // Auto-advance to next question after a short delay (like MI quiz)
+            // Auto-advance to next question after a short delay (matching MI quiz timing)
             setTimeout(() => {
-                if (currentStep < totalSteps - 1) {
-                    showStep(currentStep + 1);
+                if (stepIndex < totalSteps - 1) {
+                    showStep(stepIndex + 1);
                 }
-            }, 200);
+            }, 120);
         })));
 
         showStep(0);
@@ -647,6 +718,12 @@
         quizState.scores = scores;
         quizState.maxByCat = maxByCat;
         quizState.sortedScores = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+
+        // Check if user needs to register before showing results
+        if (!isLoggedIn) {
+            showLoginRegister();
+            return;
+        }
 
         renderResults();
     }
