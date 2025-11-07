@@ -3356,6 +3356,12 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
         
         // Render mind-map view (D3 visualization)
         renderMindMapView: function(data, seedCareer, isDice) {
+            // Ensure filters are initialized
+            if (!this.careerFilters) {
+                this.careerFilters = this.getDefaultFilters();
+                this.loadFiltersFromStorage();
+            }
+            
             // Get saved lane preference or default to 'adjacent'
             const savedLane = localStorage.getItem('mindmap_expansion_lane') || 'adjacent';
             
