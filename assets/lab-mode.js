@@ -3361,7 +3361,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     <div class="mindmap-header">
                         <div class="mindmap-header-top">
                             <h3>${isDice ? '🎲 Dice Roll' : 'Mind-Map'}: ${seedCareer || 'Your Profile'}</h3>
-                            <span class="mindmap-hint">👆 Click to expand • Hover for quick actions</span>
+                            <span class="mindmap-hint">👆 Click to choose expansion type • Hover for quick actions</span>
                         </div>
                         <div class="mindmap-breadcrumbs"></div>
                         
@@ -3733,8 +3733,97 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 .on('end', dragended);
         },
         
-        // Expand node: fetch mixed related careers (adjacent/parallel/wildcard)
-        expandNode: async function(nodeId) {
+        // Show lane selection menu
+        showLaneSelectionMenu: function(event, nodeData) {
+            // Check if already expanded
+            if (this.mindMapState.expandedNodes.has(nodeData.id)) {
+                this.showNodeFeedback(nodeData.id, 'Already expanded', 'info');
+                return;
+            }
+            
+            // Remove any existing menu
+            $('.lane-selection-menu').remove();
+            
+            // Create menu
+            const menu = $(`
+                <div class="lane-selection-menu">
+                    <div class="lane-menu-header">Expand: ${this.escapeHtml(nodeData.title)}</div>
+                    <button class="lane-menu-option lane-adjacent" data-lane="adjacent" data-node-id="${nodeData.id}">
+                        <span class="lane-dot lane-adjacent"></span>
+                        <span class="lane-label">
+                            <strong>Adjacent</strong>
+                            <small>Similar roles, easy transitions</small>
+                        </span>
+                    </button>
+                    <button class="lane-menu-option lane-parallel" data-lane="parallel" data-node-id="${nodeData.id}">
+                        <span class="lane-dot lane-parallel"></span>
+                        <span class="lane-label">
+                            <strong>Parallel</strong>
+                            <small>Similar skills, different industries</small>
+                        </span>
+                    </button>
+                    <button class="lane-menu-option lane-wildcard" data-lane="wildcard" data-node-id="${nodeData.id}">
+                        <span class="lane-dot lane-wildcard"></span>
+                        <span class="lane-label">
+                            <strong>Wildcard</strong>
+                            <small>Unexpected but fitting options</small>
+                        </span>
+                    </button>
+                    <button class="lane-menu-option lane-mixed" data-lane="mixed" data-node-id="${nodeData.id}">
+                        <span class="lane-icon">✨</span>
+                        <span class="lane-label">
+                            <strong>Mixed Variety</strong>
+                            <small>All three types (3× cost)</small>
+                        </span>
+                    </button>
+                </div>
+            `);
+            
+            // Position menu near the node
+            const menuWidth = 280;
+            const menuHeight = 240;
+            let left = event.pageX + 10;
+            let top = event.pageY - menuHeight / 2;
+            
+            // Keep menu on screen
+            if (left + menuWidth > $(window).width()) {
+                left = event.pageX - menuWidth - 10;
+            }
+            if (top < 10) top = 10;
+            if (top + menuHeight > $(window).height()) {
+                top = $(window).height() - menuHeight - 10;
+            }
+            
+            menu.css({ left: left + 'px', top: top + 'px' });
+            $('body').append(menu);
+            
+            // Animate in
+            setTimeout(() => menu.addClass('visible'), 10);
+            
+            // Handle option clicks
+            const self = this;
+            menu.find('.lane-menu-option').on('click', function(e) {
+                e.stopPropagation();
+                const lane = $(this).data('lane');
+                const nodeId = $(this).data('node-id');
+                menu.removeClass('visible');
+                setTimeout(() => menu.remove(), 200);
+                self.expandNodeWithLane(nodeId, lane);
+            });
+            
+            // Close menu when clicking outside
+            const closeMenu = function(e) {
+                if (!$(e.target).closest('.lane-selection-menu').length) {
+                    menu.removeClass('visible');
+                    setTimeout(() => menu.remove(), 200);
+                    $(document).off('click', closeMenu);
+                }
+            };
+            setTimeout(() => $(document).on('click', closeMenu), 100);
+        },
+        
+        // Expand node with selected lane(s)
+        expandNodeWithLane: async function(nodeId, lane) {
             const node = this.mindMapState.nodes[nodeId];
             if (!node) {
                 console.error('Node not found:', nodeId);
@@ -3757,90 +3846,73 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             
             this.mindMapState.openRequests.add(requestKey);
             
+            // Determine which lanes to fetch
+            const lanesToFetch = lane === 'mixed' 
+                ? ['adjacent', 'parallel', 'wildcard'] 
+                : [lane];
+            
+            const laneConfig = {
+                adjacent: { limit: 5, novelty: 0.1, label: 'adjacent' },
+                parallel: { limit: 5, novelty: 0.25, label: 'parallel' },
+                wildcard: { limit: 4, novelty: 0.5, label: 'wildcard' }
+            };
+            
             // Show loading feedback
-            this.showNodeFeedback(nodeId, 'Loading variety of careers...', 'loading');
-            console.log('Expanding node with variety:', nodeId);
+            const loadingMsg = lane === 'mixed' 
+                ? 'Loading variety of careers...' 
+                : `Loading ${lane} careers...`;
+            this.showNodeFeedback(nodeId, loadingMsg, 'loading');
+            console.log(`Expanding node with lane: ${lane}`, nodeId);
             
             try {
-                // Fetch all three lane types in parallel for variety
-                const [adjacentResp, parallelResp, wildcardResp] = await Promise.all([
-                    $.ajax({
+                // Fetch selected lane(s)
+                const requests = lanesToFetch.map(laneType => {
+                    const config = laneConfig[laneType];
+                    return $.ajax({
                         url: labMode.ajaxUrl,
                         method: 'POST',
                         data: {
                             action: 'mc_lab_get_related_careers',
                             nonce: labMode.nonce,
                             career_title: node.title,
-                            lane: 'adjacent',
-                            limit: 3,
-                            novelty: 0.1,
+                            lane: laneType,
+                            limit: lane === 'mixed' ? 3 : config.limit,
+                            novelty: config.novelty,
                             filters: JSON.stringify(this.careerFilters || {})
                         }
-                    }),
-                    $.ajax({
-                        url: labMode.ajaxUrl,
-                        method: 'POST',
-                        data: {
-                            action: 'mc_lab_get_related_careers',
-                            nonce: labMode.nonce,
-                            career_title: node.title,
-                            lane: 'parallel',
-                            limit: 3,
-                            novelty: 0.25,
-                            filters: JSON.stringify(this.careerFilters || {})
-                        }
-                    }),
-                    $.ajax({
-                        url: labMode.ajaxUrl,
-                        method: 'POST',
-                        data: {
-                            action: 'mc_lab_get_related_careers',
-                            nonce: labMode.nonce,
-                            career_title: node.title,
-                            lane: 'wildcard',
-                            limit: 2,
-                            novelty: 0.5,
-                            filters: JSON.stringify(this.careerFilters || {})
-                        }
-                    })
-                ]);
+                    });
+                });
+                
+                const responses = await Promise.all(requests);
                 
                 // Collect all successful results and track usage
                 let totalAdded = 0;
                 
-                if (adjacentResp.success && adjacentResp.data) {
-                    const careers = adjacentResp.data.careers || adjacentResp.data;
-                    this.addChildrenToMap(nodeId, 'adjacent', careers);
-                    totalAdded += careers.length;
-                    if (adjacentResp.data.usage) this.trackUsage(adjacentResp.data.usage);
-                }
-                
-                if (parallelResp.success && parallelResp.data) {
-                    const careers = parallelResp.data.careers || parallelResp.data;
-                    this.addChildrenToMap(nodeId, 'parallel', careers);
-                    totalAdded += careers.length;
-                    if (parallelResp.data.usage) this.trackUsage(parallelResp.data.usage);
-                }
-                
-                if (wildcardResp.success && wildcardResp.data) {
-                    const careers = wildcardResp.data.careers || wildcardResp.data;
-                    this.addChildrenToMap(nodeId, 'wildcard', careers);
-                    totalAdded += careers.length;
-                    if (wildcardResp.data.usage) this.trackUsage(wildcardResp.data.usage);
-                }
+                responses.forEach((response, index) => {
+                    if (response.success && response.data) {
+                        const careers = response.data.careers || response.data;
+                        const laneType = lanesToFetch[index];
+                        this.addChildrenToMap(nodeId, laneType, careers);
+                        totalAdded += careers.length;
+                        if (response.data.usage) this.trackUsage(response.data.usage);
+                    }
+                });
                 
                 if (totalAdded > 0) {
                     this.mindMapState.expandedNodes.add(nodeId);
                     this.updateMindMapVisualization();
                     
                     // Show success feedback
-                    this.showNodeFeedback(nodeId, `Added ${totalAdded} careers (mixed types)`, 'success');
+                    const successMsg = lane === 'mixed' 
+                        ? `Added ${totalAdded} careers (mixed types)` 
+                        : `Added ${totalAdded} ${lane} careers`;
+                    this.showNodeFeedback(nodeId, successMsg, 'success');
                     
                     // Update usage display for admins
                     this.updateUsageDisplay();
                     
                     // Analytics
-                    console.log('career_map_expand', { nodeId, totalAdded });
+                    console.log('career_map_expand', { nodeId, lane, totalAdded });
                 } else {
                     this.showNodeFeedback(nodeId, 'No careers found', 'error');
                 }
@@ -4031,11 +4103,11 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 }
             });
             
-            // Single-click: expand node with variety
+            // Single-click: show lane selection menu
             node.on('click', (event, d) => {
                 event.stopPropagation();
                 if (d.type === 'career') {
-                    this.expandNode(d.id);
+                    this.showLaneSelectionMenu(event, d);
                 }
             });
             
