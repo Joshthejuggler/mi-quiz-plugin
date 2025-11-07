@@ -464,24 +464,36 @@ class Micro_Coach_AI_Lab {
                     aiCss.href = '<?php echo esc_url_raw(plugins_url('assets/ai-loading-overlay.css', __FILE__)); ?>?ver=' + Date.now();
                     document.head.appendChild(aiCss);
                     
-                    // Load AI Loading Overlay JavaScript
-                    var aiScript = document.createElement('script');
-                    aiScript.src = '<?php echo esc_url_raw(plugins_url('assets/ai-loading-overlay.js', __FILE__)); ?>?ver=' + Date.now();
-                    aiScript.onload = function() {
-                        console.log("AI Loading Overlay JS loaded");
+                    // Load D3.js FIRST for Mind-Map visualization
+                    var d3Script = document.createElement('script');
+                    d3Script.src = 'https://d3js.org/d3.v7.min.js';
+                    d3Script.onload = function() {
+                        console.log("D3.js loaded");
                         
-                        // Load Lab Mode JavaScript (includes career explorer functions)
-                        var script = document.createElement('script');
-                        script.src = '<?php echo esc_url_raw(plugins_url('assets/lab-mode.js', __FILE__)); ?>?ver=' + Date.now();
-                        script.onload = function() {
-                            console.log("Career Explorer JS loaded");
-                            resolve();
+                        // Load AI Loading Overlay JavaScript
+                        var aiScript = document.createElement('script');
+                        aiScript.src = '<?php echo esc_url_raw(plugins_url('assets/ai-loading-overlay.js', __FILE__)); ?>?ver=' + Date.now();
+                        aiScript.onload = function() {
+                            console.log("AI Loading Overlay JS loaded");
+                            
+                            // Load Lab Mode JavaScript (includes career explorer functions)
+                            var script = document.createElement('script');
+                            script.src = '<?php echo esc_url_raw(plugins_url('assets/lab-mode.js', __FILE__)); ?>?ver=' + Date.now();
+                            script.onload = function() {
+                                console.log("Career Explorer JS loaded");
+                                resolve();
+                            };
+                            script.onerror = reject;
+                            document.head.appendChild(script);
                         };
-                        script.onerror = reject;
-                        document.head.appendChild(script);
+                        aiScript.onerror = reject;
+                        document.head.appendChild(aiScript);
                     };
-                    aiScript.onerror = reject;
-                    document.head.appendChild(aiScript);
+                    d3Script.onerror = function() {
+                        console.error('Failed to load D3.js');
+                        reject(new Error('D3.js failed to load'));
+                    };
+                    document.head.appendChild(d3Script);
                 });
             }
             
