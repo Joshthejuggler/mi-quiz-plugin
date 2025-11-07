@@ -3370,9 +3370,9 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                         <div class="mindmap-breadcrumbs"></div>
                     </div>
                     
-                    <!-- Floating filter summary -->
-                    <div class="mindmap-filter-summary" id="mindmap-filter-summary">
-                        ${this.renderFilterSummary()}
+                    <!-- Filters for Mind-Map -->
+                    <div class="mindmap-filters-section">
+                        ${this.renderFiltersBar()}
                     </div>
                     
                     <!-- Full-width expansion type selector -->
@@ -3383,34 +3383,34 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                                 <span class="lane-icon">⭐</span>
                                 <span class="lane-text">
                                     <strong>Good Fit</strong>
-                                    <small>Best profile matches (70%+ fit)</small>
+                                    <small>Best matches</small>
                                 </span>
                             </button>
                             <button class="lane-selector-btn ${savedLane === 'adjacent' ? 'active' : ''}" data-lane="adjacent" onclick="LabModeApp.setExpansionLane('adjacent')">
                                 <span class="lane-dot lane-adjacent"></span>
                                 <span class="lane-text">
                                     <strong>Adjacent</strong>
-                                    <small>Similar roles, easy transitions</small>
+                                    <small>Easy transitions</small>
                                 </span>
                             </button>
                             <button class="lane-selector-btn ${savedLane === 'parallel' ? 'active' : ''}" data-lane="parallel" onclick="LabModeApp.setExpansionLane('parallel')">
                                 <span class="lane-dot lane-parallel"></span>
                                 <span class="lane-text">
                                     <strong>Parallel</strong>
-                                    <small>Similar skills, different industries</small>
+                                    <small>Different industries</small>
                                 </span>
                             </button>
                             <button class="lane-selector-btn ${savedLane === 'wildcard' ? 'active' : ''}" data-lane="wildcard" onclick="LabModeApp.setExpansionLane('wildcard')">
                                 <span class="lane-dot lane-wildcard"></span>
                                 <span class="lane-text">
                                     <strong>Wildcard</strong>
-                                    <small>Unexpected but fitting options</small>
+                                    <small>Unexpected options</small>
                                 </span>
                             </button>
                             <button class="lane-selector-btn ${savedLane === 'mixed' ? 'active' : ''}" data-lane="mixed" onclick="LabModeApp.setExpansionLane('mixed')">
                                 <span class="lane-icon">✨</span>
                                 <span class="lane-text">
-                                    <strong>Mixed Variety</strong>
+                                    <strong>Mixed</strong>
                                     <small>All types (3× cost)</small>
                                 </span>
                             </button>
