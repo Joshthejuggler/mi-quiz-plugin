@@ -6805,64 +6805,58 @@ body.modal-open {
     user-select: none;
 }
 
-/* Lane Selector Controls */
-.mindmap-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-}
-
-.mindmap-lane-selector {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+/* Full-Width Lane Selector Bar */
+.mindmap-lane-selector-bar {
+    width: 100%;
     background: #f8fafc;
-    padding: 8px 12px;
-    border-radius: 8px;
     border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px;
+    margin: 16px 0;
 }
 
 .lane-selector-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: #64748b;
-    white-space: nowrap;
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 12px;
+}
+
+.lane-selector-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
 }
 
 .lane-selector-btn {
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
+    gap: 12px;
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
     background: white;
-    font-size: 13px;
-    font-weight: 500;
-    color: #475569;
     cursor: pointer;
-    transition: all 0.15s ease;
-    white-space: nowrap;
+    transition: all 0.2s ease;
 }
 
 .lane-selector-btn:hover {
     border-color: #cbd5e1;
     background: #f8fafc;
-    color: #1e293b;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .lane-selector-btn.active {
     border-color: #3B82F6;
     background: #EFF6FF;
-    color: #2563EB;
-    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
 }
 
 .lane-selector-btn .lane-dot {
-    width: 10px;
-    height: 10px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     flex-shrink: 0;
 }
@@ -6880,7 +6874,38 @@ body.modal-open {
 }
 
 .lane-selector-btn .lane-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.lane-selector-btn .lane-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+    flex: 1;
+}
+
+.lane-selector-btn .lane-text strong {
     font-size: 14px;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.lane-selector-btn .lane-text small {
+    font-size: 11px;
+    color: #64748b;
+    line-height: 1.3;
+}
+
+.lane-selector-btn.active .lane-text strong {
+    color: #2563EB;
+}
+
+@media (max-width: 768px) {
+    .lane-selector-buttons {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* Mind-Map Tooltip */

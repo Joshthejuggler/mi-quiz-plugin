@@ -3367,40 +3367,54 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                             <span class="mindmap-hint">👆 Click nodes to expand • Hover for quick actions</span>
                         </div>
                         
-                        <div class="mindmap-controls">
-                            <div class="mindmap-lane-selector">
-                                <span class="lane-selector-label">Expansion type:</span>
-                                <button class="lane-selector-btn ${savedLane === 'adjacent' ? 'active' : ''}" data-lane="adjacent" onclick="LabModeApp.setExpansionLane('adjacent')">
-                                    <span class="lane-dot lane-adjacent"></span>
-                                    Adjacent
-                                </button>
-                                <button class="lane-selector-btn ${savedLane === 'parallel' ? 'active' : ''}" data-lane="parallel" onclick="LabModeApp.setExpansionLane('parallel')">
-                                    <span class="lane-dot lane-parallel"></span>
-                                    Parallel
-                                </button>
-                                <button class="lane-selector-btn ${savedLane === 'wildcard' ? 'active' : ''}" data-lane="wildcard" onclick="LabModeApp.setExpansionLane('wildcard')">
-                                    <span class="lane-dot lane-wildcard"></span>
-                                    Wildcard
-                                </button>
-                                <button class="lane-selector-btn ${savedLane === 'mixed' ? 'active' : ''}" data-lane="mixed" onclick="LabModeApp.setExpansionLane('mixed')">
-                                    <span class="lane-icon">✨</span>
-                                    Mixed
-                                </button>
-                            </div>
-                            <div class="mindmap-breadcrumbs"></div>
-                        </div>
-                        
-                        <div class="mindmap-legend">
-                            <span class="legend-item"><span class="legend-dot lane-adjacent"></span> Adjacent</span>
-                            <span class="legend-item"><span class="legend-dot lane-parallel"></span> Parallel</span>
-                            <span class="legend-item"><span class="legend-dot lane-wildcard"></span> Wildcard</span>
-                            <span class="legend-item legend-highlight"><span class="legend-dot legend-dot-highlight"></span> Good fit (70%+)</span>
-                        </div>
+                        <div class="mindmap-breadcrumbs"></div>
                     </div>
                     
                     <!-- Floating filter summary -->
                     <div class="mindmap-filter-summary" id="mindmap-filter-summary">
                         ${this.renderFilterSummary()}
+                    </div>
+                    
+                    <!-- Full-width expansion type selector -->
+                    <div class="mindmap-lane-selector-bar">
+                        <span class="lane-selector-label">Expansion type:</span>
+                        <div class="lane-selector-buttons">
+                            <button class="lane-selector-btn ${savedLane === 'goodfit' ? 'active' : ''}" data-lane="goodfit" onclick="LabModeApp.setExpansionLane('goodfit')">
+                                <span class="lane-icon">⭐</span>
+                                <span class="lane-text">
+                                    <strong>Good Fit</strong>
+                                    <small>Best profile matches (70%+ fit)</small>
+                                </span>
+                            </button>
+                            <button class="lane-selector-btn ${savedLane === 'adjacent' ? 'active' : ''}" data-lane="adjacent" onclick="LabModeApp.setExpansionLane('adjacent')">
+                                <span class="lane-dot lane-adjacent"></span>
+                                <span class="lane-text">
+                                    <strong>Adjacent</strong>
+                                    <small>Similar roles, easy transitions</small>
+                                </span>
+                            </button>
+                            <button class="lane-selector-btn ${savedLane === 'parallel' ? 'active' : ''}" data-lane="parallel" onclick="LabModeApp.setExpansionLane('parallel')">
+                                <span class="lane-dot lane-parallel"></span>
+                                <span class="lane-text">
+                                    <strong>Parallel</strong>
+                                    <small>Similar skills, different industries</small>
+                                </span>
+                            </button>
+                            <button class="lane-selector-btn ${savedLane === 'wildcard' ? 'active' : ''}" data-lane="wildcard" onclick="LabModeApp.setExpansionLane('wildcard')">
+                                <span class="lane-dot lane-wildcard"></span>
+                                <span class="lane-text">
+                                    <strong>Wildcard</strong>
+                                    <small>Unexpected but fitting options</small>
+                                </span>
+                            </button>
+                            <button class="lane-selector-btn ${savedLane === 'mixed' ? 'active' : ''}" data-lane="mixed" onclick="LabModeApp.setExpansionLane('mixed')">
+                                <span class="lane-icon">✨</span>
+                                <span class="lane-text">
+                                    <strong>Mixed Variety</strong>
+                                    <small>All types (3× cost)</small>
+                                </span>
+                            </button>
+                        </div>
                     </div>
                     
                     <div id="career-mindmap-canvas"></div>
@@ -3800,11 +3814,18 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             this.mindMapState.openRequests.add(requestKey);
             
             // Determine which lanes to fetch
-            const lanesToFetch = lane === 'mixed' 
-                ? ['adjacent', 'parallel', 'wildcard'] 
-                : [lane];
+            let lanesToFetch;
+            if (lane === 'mixed') {
+                lanesToFetch = ['adjacent', 'parallel', 'wildcard'];
+            } else if (lane === 'goodfit') {
+                // Good fit uses adjacent lane with high fit threshold
+                lanesToFetch = ['adjacent'];
+            } else {
+                lanesToFetch = [lane];
+            }
             
             const laneConfig = {
+                goodfit: { limit: 5, novelty: 0.05, label: 'goodfit' },
                 adjacent: { limit: 5, novelty: 0.1, label: 'adjacent' },
                 parallel: { limit: 5, novelty: 0.25, label: 'parallel' },
                 wildcard: { limit: 4, novelty: 0.5, label: 'wildcard' }
@@ -3820,7 +3841,8 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             try {
                 // Fetch selected lane(s)
                 const requests = lanesToFetch.map(laneType => {
-                    const config = laneConfig[laneType];
+                    const actualLane = lane === 'goodfit' ? 'adjacent' : laneType;
+                    const config = laneConfig[lane === 'goodfit' ? 'goodfit' : laneType];
                     return $.ajax({
                         url: labMode.ajaxUrl,
                         method: 'POST',
@@ -3828,10 +3850,11 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                             action: 'mc_lab_get_related_careers',
                             nonce: labMode.nonce,
                             career_title: node.title,
-                            lane: laneType,
+                            lane: actualLane,
                             limit: lane === 'mixed' ? 3 : config.limit,
                             novelty: config.novelty,
-                            filters: JSON.stringify(this.careerFilters || {})
+                            filters: JSON.stringify(this.careerFilters || {}),
+                            min_fit: lane === 'goodfit' ? 0.7 : 0  // Only for goodfit lane
                         }
                     });
                 });
@@ -4065,6 +4088,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                         this.mindMapState.hasShownLaneAlert = true;
                         const currentLane = this.getExpansionLane();
                         const laneNames = {
+                            goodfit: 'Good Fit (best profile matches, 70%+ fit)',
                             adjacent: 'Adjacent (similar, easy transitions)',
                             parallel: 'Parallel (similar skills, different industries)',
                             wildcard: 'Wildcard (unexpected but fitting)',
