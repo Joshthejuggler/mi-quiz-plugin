@@ -3728,8 +3728,8 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 .on('end', dragended);
         },
         
-        // Expand node: fetch related careers and add to map
-        expandNode: async function(nodeId, lane = 'parallel') {
+        // Expand node: fetch mixed related careers (adjacent/parallel/wildcard)
+        expandNode: async function(nodeId) {
             const node = this.mindMapState.nodes[nodeId];
             if (!node) {
                 console.error('Node not found:', nodeId);
@@ -3744,7 +3744,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             }
             
             // Check if already loading
-            const requestKey = `${nodeId}|${lane}`;
+            const requestKey = nodeId;
             if (this.mindMapState.openRequests.has(requestKey)) {
                 console.log('Already loading:', requestKey);
                 return;
@@ -3753,37 +3753,82 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             this.mindMapState.openRequests.add(requestKey);
             
             // Show loading feedback
-            this.showNodeFeedback(nodeId, 'Loading related careers...', 'loading');
-            console.log('Expanding node:', nodeId, 'lane:', lane);
+            this.showNodeFeedback(nodeId, 'Loading variety of careers...', 'loading');
+            console.log('Expanding node with variety:', nodeId);
             
             try {
-                const response = await $.ajax({
-                    url: labMode.ajaxUrl,
-                    method: 'POST',
-                    data: {
-                        action: 'mc_lab_get_related_careers',
-                        nonce: labMode.nonce,
-                        career_title: node.title,
-                        lane: lane,
-                        limit: 8,
-                        novelty: 0.25,
-                        filters: JSON.stringify(this.careerFilters || {})
-                    }
-                });
+                // Fetch all three lane types in parallel for variety
+                const [adjacentResp, parallelResp, wildcardResp] = await Promise.all([
+                    $.ajax({
+                        url: labMode.ajaxUrl,
+                        method: 'POST',
+                        data: {
+                            action: 'mc_lab_get_related_careers',
+                            nonce: labMode.nonce,
+                            career_title: node.title,
+                            lane: 'adjacent',
+                            limit: 3,
+                            novelty: 0.1,
+                            filters: JSON.stringify(this.careerFilters || {})
+                        }
+                    }),
+                    $.ajax({
+                        url: labMode.ajaxUrl,
+                        method: 'POST',
+                        data: {
+                            action: 'mc_lab_get_related_careers',
+                            nonce: labMode.nonce,
+                            career_title: node.title,
+                            lane: 'parallel',
+                            limit: 3,
+                            novelty: 0.25,
+                            filters: JSON.stringify(this.careerFilters || {})
+                        }
+                    }),
+                    $.ajax({
+                        url: labMode.ajaxUrl,
+                        method: 'POST',
+                        data: {
+                            action: 'mc_lab_get_related_careers',
+                            nonce: labMode.nonce,
+                            career_title: node.title,
+                            lane: 'wildcard',
+                            limit: 2,
+                            novelty: 0.5,
+                            filters: JSON.stringify(this.careerFilters || {})
+                        }
+                    })
+                ]);
                 
-                if (response.success && response.data) {
-                    this.addChildrenToMap(nodeId, lane, response.data);
+                // Collect all successful results
+                let totalAdded = 0;
+                
+                if (adjacentResp.success && adjacentResp.data) {
+                    this.addChildrenToMap(nodeId, 'adjacent', adjacentResp.data);
+                    totalAdded += adjacentResp.data.length;
+                }
+                
+                if (parallelResp.success && parallelResp.data) {
+                    this.addChildrenToMap(nodeId, 'parallel', parallelResp.data);
+                    totalAdded += parallelResp.data.length;
+                }
+                
+                if (wildcardResp.success && wildcardResp.data) {
+                    this.addChildrenToMap(nodeId, 'wildcard', wildcardResp.data);
+                    totalAdded += wildcardResp.data.length;
+                }
+                
+                if (totalAdded > 0) {
                     this.mindMapState.expandedNodes.add(nodeId);
                     this.updateMindMapVisualization();
                     
                     // Show success feedback
-                    this.showNodeFeedback(nodeId, `Added ${response.data.length} careers`, 'success');
+                    this.showNodeFeedback(nodeId, `Added ${totalAdded} careers (mixed types)`, 'success');
                     
                     // Analytics
-                    console.log('career_map_expand', { nodeId, lane, count: response.data.length });
+                    console.log('career_map_expand', { nodeId, totalAdded });
                 } else {
-                    console.error('Failed to fetch related careers:', response);
-                    this.showNodeFeedback(nodeId, 'Failed to load careers', 'error');
+                    this.showNodeFeedback(nodeId, 'No careers found', 'error');
                 }
             } catch (error) {
                 console.error('Error expanding node:', error);
@@ -3829,7 +3874,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                         id: nodeId,
                         title: career.title,
                         type: 'career',
-                        lane: lane,
+                        lane: career.lane || lane,
                         depth: childDepth,
                         parentId: parentId,
                         fit: career.fit || 0.7,
@@ -3972,11 +4017,11 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 }
             });
             
-            // Single-click: expand node
+            // Single-click: expand node with variety
             node.on('click', (event, d) => {
                 event.stopPropagation();
                 if (d.type === 'career') {
-                    this.expandNode(d.id, 'parallel');
+                    this.expandNode(d.id);
                 }
             });
             
