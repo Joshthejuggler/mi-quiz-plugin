@@ -3359,7 +3359,10 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             return `
                 <div class="career-mindmap-container">
                     <div class="mindmap-header">
-                        <h3>${isDice ? '🎲 Dice Roll' : 'Mind-Map'}: ${seedCareer || 'Your Profile'}</h3>
+                        <div class="mindmap-header-top">
+                            <h3>${isDice ? '🎲 Dice Roll' : 'Mind-Map'}: ${seedCareer || 'Your Profile'}</h3>
+                            <span class="mindmap-hint">👆 Click to expand • Double-click to re-center</span>
+                        </div>
                         <div class="mindmap-breadcrumbs"></div>
                         <div class="mindmap-legend">
                             <span class="legend-item"><span class="legend-dot lane-adjacent"></span> Adjacent</span>
@@ -3728,6 +3731,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             // Check if already expanded
             if (this.mindMapState.expandedNodes.has(nodeId)) {
                 console.log('Node already expanded:', nodeId);
+                this.showNodeFeedback(nodeId, 'Already expanded', 'info');
                 return;
             }
             
@@ -3740,7 +3744,8 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             
             this.mindMapState.openRequests.add(requestKey);
             
-            // Show loading indicator
+            // Show loading feedback
+            this.showNodeFeedback(nodeId, 'Loading related careers...', 'loading');
             console.log('Expanding node:', nodeId, 'lane:', lane);
             
             try {
@@ -3762,15 +3767,18 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     this.mindMapState.expandedNodes.add(nodeId);
                     this.updateMindMapVisualization();
                     
+                    // Show success feedback
+                    this.showNodeFeedback(nodeId, `Added ${response.data.length} careers`, 'success');
+                    
                     // Analytics
                     console.log('career_map_expand', { nodeId, lane, count: response.data.length });
                 } else {
                     console.error('Failed to fetch related careers:', response);
-                    alert('Failed to load related careers. Please try again.');
+                    this.showNodeFeedback(nodeId, 'Failed to load careers', 'error');
                 }
             } catch (error) {
                 console.error('Error expanding node:', error);
-                alert('Network error. Please try again.');
+                this.showNodeFeedback(nodeId, 'Network error', 'error');
             } finally {
                 this.mindMapState.openRequests.delete(requestKey);
             }
@@ -3852,12 +3860,24 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             const width = canvas.width();
             const height = 600;
             
-            // Create SVG
+            // Create SVG with zoom support
             const svg = d3.select('#career-mindmap-canvas')
                 .append('svg')
                 .attr('width', width)
                 .attr('height', height)
                 .attr('viewBox', [0, 0, width, height]);
+            
+            // Add zoom group
+            const zoomGroup = svg.append('g');
+            
+            // Setup zoom behavior
+            const zoom = d3.zoom()
+                .scaleExtent([0.3, 3])
+                .on('zoom', (event) => {
+                    zoomGroup.attr('transform', event.transform);
+                });
+            
+            svg.call(zoom);
             
             // Convert state to D3 format
             const nodes = Object.values(this.mindMapState.nodes);
@@ -3865,15 +3885,15 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             
             console.log('Updating visualization:', { nodeCount: nodes.length, linkCount: links.length });
             
-            // Force simulation
+            // Force simulation with improved spacing
             const simulation = d3.forceSimulation(nodes)
-                .force('link', d3.forceLink(links).id(d => d.id).distance(150))
-                .force('charge', d3.forceManyBody().strength(-300))
+                .force('link', d3.forceLink(links).id(d => d.id).distance(180))
+                .force('charge', d3.forceManyBody().strength(-500))
                 .force('center', d3.forceCenter(width / 2, height / 2))
-                .force('collision', d3.forceCollide().radius(40));
+                .force('collision', d3.forceCollide().radius(60));
             
             // Render links
-            const link = svg.append('g')
+            const link = zoomGroup.append('g')
                 .selectAll('line')
                 .data(links)
                 .join('line')
@@ -3882,7 +3902,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 .attr('stroke-width', d => (d.similarity || 0.5) * 3);
             
             // Render nodes
-            const node = svg.append('g')
+            const node = zoomGroup.append('g')
                 .selectAll('g')
                 .data(nodes)
                 .join('g')
@@ -3895,12 +3915,47 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 .attr('class', d => d.lane ? `node-${d.lane}` : 'node-seed')
                 .attr('stroke-width', d => (d.fit || 0.5) * 5);
             
-            // Node labels
-            node.append('text')
-                .text(d => d.title)
-                .attr('dy', 35)
-                .attr('text-anchor', 'middle')
-                .attr('class', 'node-label');
+            // Node labels with improved positioning and wrapping
+            node.each(function(d) {
+                const nodeGroup = d3.select(this);
+                const words = d.title.split(' ');
+                const lineHeight = 12;
+                const maxWidth = 100;
+                
+                // Simple word wrapping
+                if (d.title.length > 15) {
+                    const lines = [];
+                    let currentLine = '';
+                    
+                    words.forEach(word => {
+                        const testLine = currentLine + (currentLine ? ' ' : '') + word;
+                        if (testLine.length > 15 && currentLine) {
+                            lines.push(currentLine);
+                            currentLine = word;
+                        } else {
+                            currentLine = testLine;
+                        }
+                    });
+                    if (currentLine) lines.push(currentLine);
+                    
+                    // Render multi-line text
+                    const startY = 35 + (lines.length - 1) * lineHeight / 2;
+                    lines.forEach((line, i) => {
+                        nodeGroup.append('text')
+                            .text(line)
+                            .attr('dy', startY + (i * lineHeight))
+                            .attr('text-anchor', 'middle')
+                            .attr('class', 'node-label');
+                    });
+                } else {
+                    // Single line
+                    nodeGroup.append('text')
+                        .text(d.title)
+                        .attr('dy', 35)
+                        .attr('text-anchor', 'middle')
+                        .attr('class', 'node-label');
+                }
+            });
             
             // Single-click: expand node
             node.on('click', (event, d) => {
@@ -4087,6 +4142,32 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             );
             this.hideNodeTooltip();
             this.updateMindMapVisualization();
+        },
+        
+        // Show visual feedback after node interaction
+        showNodeFeedback: function(nodeId, message, type = 'info') {
+            // Remove any existing feedback
+            $('#mindmap-feedback').remove();
+            
+            // Create feedback element
+            const feedbackClass = `mindmap-feedback mindmap-feedback-${type}`;
+            const icon = type === 'loading' ? '⏳' : type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+            
+            const feedback = $(`
+                <div id="mindmap-feedback" class="${feedbackClass}">
+                    <span class="feedback-icon">${icon}</span>
+                    <span class="feedback-message">${message}</span>
+                </div>
+            `);
+            
+            $('#career-mindmap-canvas').parent().append(feedback);
+            
+            // Auto-hide after 3 seconds (except for loading)
+            if (type !== 'loading') {
+                setTimeout(() => {
+                    feedback.fadeOut(300, function() { $(this).remove(); });
+                }, 3000);
+            }
         },
         
         // Render a career cluster with enhanced meta fields
