@@ -566,28 +566,29 @@ class Micro_Coach_AI_Lab {
      * Enqueue Lab Mode JavaScript and CSS
      */
     private function enqueue_lab_mode_assets() {
-        wp_enqueue_script(
-            'lab-mode-js',
-            plugins_url('assets/lab-mode.js', __FILE__),
-            ['jquery'],
-            time(),  // Use timestamp for cache busting during development
-            false  // Load in header instead of footer
-        );
-        
-        // Enqueue D3.js for Mind-Map visualization
+        // Enqueue D3.js FIRST for Mind-Map visualization
         wp_enqueue_script(
             'd3js',
             'https://d3js.org/d3.v7.min.js',
             [],
             '7.8.5',
-            false
+            false  // Load in header
+        );
+        
+        // Enqueue Lab Mode JS with D3 as dependency
+        wp_enqueue_script(
+            'lab-mode-js',
+            plugins_url('assets/lab-mode.js', __FILE__),
+            ['jquery', 'd3js'],  // Add d3js as dependency
+            time(),  // Use timestamp for cache busting during development
+            false  // Load in header instead of footer
         );
         
         // Enqueue AI Loading Overlay assets
         wp_enqueue_script(
             'ai-loading-overlay-js',
             plugins_url('assets/ai-loading-overlay.js', __FILE__),
-            ['jquery', 'd3js'],
+            ['jquery', 'd3js', 'lab-mode-js'],
             time(),
             false
         );
