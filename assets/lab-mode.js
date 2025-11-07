@@ -4447,6 +4447,8 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
         
         // Show visual feedback after node interaction
         showNodeFeedback: function(nodeId, message, type = 'info') {
+            console.log('showNodeFeedback called:', { nodeId, message, type });
+            
             // Remove any existing feedback
             $('#mindmap-feedback').remove();
             
@@ -4461,7 +4463,14 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 </div>
             `);
             
-            $('#career-mindmap-canvas').parent().append(feedback);
+            // Find container - try canvas parent, then mindmap container, then body
+            let container = $('.career-mindmap-container');
+            if (!container.length) {
+                container = $('body');
+            }
+            
+            container.append(feedback);
+            console.log('Feedback appended to:', container[0]);
             
             // Auto-hide after 3 seconds (except for loading)
             if (type !== 'loading') {
