@@ -6655,10 +6655,16 @@ body.modal-open {
 
 .mindmap-filters {
     margin: 12px 0;
+    position: relative;
 }
 
 .mindmap-filters .career-filters-bar {
     margin: 0;
+}
+
+.mindmap-filters #filter-drawers {
+    position: relative;
+    z-index: 100;
 }
 
 .mindmap-legend {

@@ -4150,7 +4150,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 const nodeId = $(e.currentTarget).data('node-id');
                 const node = self.mindMapState.nodes[nodeId];
                 if (node && node.data) {
-                    self.saveCareerFromMap(node.data, node.lane);
+                    self.saveCareerFromMindMap(node.data, node.lane);
                 }
             });
             
