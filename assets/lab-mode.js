@@ -4124,25 +4124,28 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     display: 'block'
                 });
             
+            // Store reference to this for event handlers
+            const self = this;
+            
             // Bind click events to tooltip buttons (use event delegation)
-            tooltip.off('click').on('click', '.tooltip-btn-save', (e) => {
+            tooltip.off('click').on('click', '.tooltip-btn-save', function(e) {
                 e.stopPropagation();
                 const nodeId = $(e.currentTarget).data('node-id');
-                const node = this.mindMapState.nodes[nodeId];
+                const node = self.mindMapState.nodes[nodeId];
                 if (node && node.data) {
-                    this.saveCareerFromMap(node.data, node.lane);
+                    self.saveCareerFromMap(node.data, node.lane);
                 }
             });
             
-            tooltip.on('click', '.tooltip-btn-dismiss', (e) => {
+            tooltip.on('click', '.tooltip-btn-dismiss', function(e) {
                 e.stopPropagation();
                 const nodeId = $(e.currentTarget).data('node-id');
-                this.dismissCareerFromMap(nodeId);
+                self.dismissCareerFromMap(nodeId);
             });
             
             // Keep tooltip visible when hovering over it
-            tooltip.off('mouseleave').on('mouseleave', () => {
-                this.hideNodeTooltip();
+            tooltip.off('mouseleave').on('mouseleave', function() {
+                self.hideNodeTooltip();
             });
         },
         
