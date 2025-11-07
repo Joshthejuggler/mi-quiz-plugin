@@ -3365,8 +3365,11 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
         
         // Initialize D3 mind-map visualization
         initializeMindMap: function(data, seedCareer) {
+            console.log('initializeMindMap called', { d3Available: typeof d3 !== 'undefined', data, seedCareer });
+            
             if (typeof d3 === 'undefined') {
-                console.error('D3.js not loaded');
+                console.error('D3.js not loaded - check that d3js script is enqueued');
+                $('#career-mindmap-canvas').html('<div style="padding: 40px; text-align: center; color: #dc2626;">D3.js library not loaded. Please refresh the page.</div>');
                 return;
             }
             
@@ -3376,11 +3379,21 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 return;
             }
             
+            console.log('Canvas found, width:', canvas.width());
+            
             // Clear any existing SVG
             canvas.empty();
             
             const width = canvas.width();
             const height = 600;
+            
+            if (width === 0) {
+                console.error('Canvas width is 0, waiting for layout...');
+                setTimeout(() => this.initializeMindMap(data, seedCareer), 200);
+                return;
+            }
+            
+            console.log('Creating SVG with dimensions:', { width, height });
             
             // Create SVG
             const svg = d3.select('#career-mindmap-canvas')
@@ -3392,6 +3405,8 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             // Prepare node data
             const nodes = this.prepareMindMapNodes(data, seedCareer);
             const links = this.prepareMindMapLinks(nodes);
+            
+            console.log('Nodes and links prepared:', { nodeCount: nodes.length, linkCount: links.length });
             
             // Force simulation
             const simulation = d3.forceSimulation(nodes)
