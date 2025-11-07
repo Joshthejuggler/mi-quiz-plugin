@@ -15,6 +15,7 @@
         experiments: [],
         compactMode: false,
         careerExplanationCache: {},
+        careerLayout: localStorage.getItem('career_layout') || 'cards',
         
         // Initialize the application
         init: function() {
@@ -2767,6 +2768,16 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                         <p class="career-explorer-subtitle">Discover roles aligned with your profile, with smart filters and labor-market insights.</p>
                     </div>
                     
+                    <!-- View Layout Tabs -->
+                    <div class="career-view-tabs">
+                        <button class="career-view-tab ${this.careerLayout === 'cards' ? 'active' : ''}" data-view="cards" onclick="LabModeApp.switchCareerView('cards')">
+                            📇 Cards
+                        </button>
+                        <button class="career-view-tab ${this.careerLayout === 'map' ? 'active' : ''}" data-view="map" onclick="LabModeApp.switchCareerView('map')">
+                            🗺️ Mind-Map
+                        </button>
+                    </div>
+                    
                     <!-- Mini tabs for Explorer / Saved Ideas -->
                     <div class="career-mini-tabs">
                         <button class="career-mini-tab active" data-mini-tab="explore" onclick="LabModeApp.switchCareerMiniTab('explore')">
@@ -2822,6 +2833,38 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             `;
             
             return html;
+        },
+        
+        // Switch career view layout (cards/map)
+        switchCareerView: function(layout) {
+            const oldLayout = this.careerLayout;
+            this.careerLayout = layout;
+            localStorage.setItem('career_layout', layout);
+            
+            // Update URL
+            try {
+                const url = new URL(window.location);
+                url.searchParams.set('layout', layout);
+                window.history.pushState({}, '', url);
+            } catch (e) {
+                console.warn('Failed to update URL:', e);
+            }
+            
+            // Update tab UI
+            $('.career-view-tab').removeClass('active');
+            $(`.career-view-tab[data-view="${layout}"]`).addClass('active');
+            
+            // Analytics
+            console.log('career_layout_switched', { from: oldLayout, to: layout });
+            
+            // Re-render results if they exist
+            if (this.currentCareerData) {
+                this.displayCareerSuggestions(
+                    this.currentCareerData,
+                    this.currentCareerInterest,
+                    this.isDiceRoll
+                );
+            }
         },
         
         // Get default filter values
@@ -3241,31 +3284,17 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             
             const resultsContainer = document.getElementById('career-explorer-results');
             
+            // Choose rendering based on layout
+            let contentHtml;
+            if (this.careerLayout === 'map') {
+                contentHtml = this.renderMindMapView(data, seedCareer, isDice);
+            } else {
+                contentHtml = this.renderCardsView(data, seedCareer, isDice);
+            }
+            
             const html = `
                 <div class="career-map-results ${isDice ? 'dice-roll' : ''}">
-                    <div class="career-map-header">
-                        <div class="career-header-row">
-                            <div>
-                                <h3>${isDice ? '🎲 Dice Roll Results' : (seedCareer ? 'Career Ideas for: ' + seedCareer : 'Career Ideas Based on Your Profile')}</h3>
-                                <p>Careers aligned with your MI, CDT, Bartle Type, and Johari profile</p>
-                            </div>
-                            <label class="compact-mode-toggle">
-                                <input 
-                                    type="checkbox" 
-                                    ${this.compactMode ? 'checked' : ''} 
-                                    onchange="LabModeApp.toggleCompactMode(this.checked)"
-                                >
-                                <span>Compact mode</span>
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="career-clusters">
-                        ${this.renderCareerClusterEnhanced('Adjacent Careers', 'Very similar; easy transitions', data.adjacent, 'adjacent')}
-                        ${this.renderCareerClusterEnhanced('Parallel Careers', 'Similar strengths, different industries', data.parallel, 'parallel')}
-                        ${this.renderCareerClusterEnhanced('Wildcard Careers', 'Unexpected options based on your unique profile', data.wildcard, 'wildcard')}
-                    </div>
-                    
+                    ${contentHtml}
                     <div class="career-map-actions">
                         <button class="lab-btn lab-btn-secondary" onclick="document.getElementById('career-interest-input').value=''; document.getElementById('career-interest-input').focus(); document.getElementById('career-explorer-results').style.display='none';">
                             Explore Another Career
@@ -3277,8 +3306,354 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             resultsContainer.innerHTML = html;
             resultsContainer.style.display = 'block';
             
+            // Initialize mind-map if that's the active layout
+            if (this.careerLayout === 'map') {
+                setTimeout(() => {
+                    this.initializeMindMap(data, seedCareer);
+                }, 100);
+            }
+            
             // Scroll to results
             resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        },
+        
+        // Render cards view (existing layout)
+        renderCardsView: function(data, seedCareer, isDice) {
+            return `
+                <div class="career-map-header">
+                    <div class="career-header-row">
+                        <div>
+                            <h3>${isDice ? '🎲 Dice Roll Results' : (seedCareer ? 'Career Ideas for: ' + seedCareer : 'Career Ideas Based on Your Profile')}</h3>
+                            <p>Careers aligned with your MI, CDT, Bartle Type, and Johari profile</p>
+                        </div>
+                        <label class="compact-mode-toggle">
+                            <input 
+                                type="checkbox" 
+                                ${this.compactMode ? 'checked' : ''} 
+                                onchange="LabModeApp.toggleCompactMode(this.checked)"
+                            >
+                            <span>Compact mode</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="career-clusters">
+                    ${this.renderCareerClusterEnhanced('Adjacent Careers', 'Very similar; easy transitions', data.adjacent, 'adjacent')}
+                    ${this.renderCareerClusterEnhanced('Parallel Careers', 'Similar strengths, different industries', data.parallel, 'parallel')}
+                    ${this.renderCareerClusterEnhanced('Wildcard Careers', 'Unexpected options based on your unique profile', data.wildcard, 'wildcard')}
+                </div>
+            `;
+        },
+        
+        // Render mind-map view (D3 visualization)
+        renderMindMapView: function(data, seedCareer, isDice) {
+            return `
+                <div class="career-mindmap-container">
+                    <div class="mindmap-header">
+                        <h3>${isDice ? '🎲 Dice Roll' : 'Mind-Map'}: ${seedCareer || 'Your Profile'}</h3>
+                        <div class="mindmap-legend">
+                            <span class="legend-item"><span class="legend-dot lane-adjacent"></span> Adjacent</span>
+                            <span class="legend-item"><span class="legend-dot lane-parallel"></span> Parallel</span>
+                            <span class="legend-item"><span class="legend-dot lane-wildcard"></span> Wildcard</span>
+                        </div>
+                    </div>
+                    <div id="career-mindmap-canvas"></div>
+                    <div class="mindmap-node-drawer" id="mindmap-drawer" style="display: none;"></div>
+                </div>
+            `;
+        },
+        
+        // Initialize D3 mind-map visualization
+        initializeMindMap: function(data, seedCareer) {
+            if (typeof d3 === 'undefined') {
+                console.error('D3.js not loaded');
+                return;
+            }
+            
+            const canvas = $('#career-mindmap-canvas');
+            if (!canvas.length) {
+                console.error('Mind-map canvas not found');
+                return;
+            }
+            
+            // Clear any existing SVG
+            canvas.empty();
+            
+            const width = canvas.width();
+            const height = 600;
+            
+            // Create SVG
+            const svg = d3.select('#career-mindmap-canvas')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height)
+                .attr('viewBox', [0, 0, width, height]);
+            
+            // Prepare node data
+            const nodes = this.prepareMindMapNodes(data, seedCareer);
+            const links = this.prepareMindMapLinks(nodes);
+            
+            // Force simulation
+            const simulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(links).id(d => d.id).distance(150))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(40));
+            
+            // Render links
+            const link = svg.append('g')
+                .selectAll('line')
+                .data(links)
+                .join('line')
+                .attr('class', 'mindmap-link')
+                .attr('stroke', '#94a3b8')
+                .attr('stroke-width', d => (d.similarity || 0.5) * 3);
+            
+            // Render nodes
+            const node = svg.append('g')
+                .selectAll('g')
+                .data(nodes)
+                .join('g')
+                .attr('class', d => `mindmap-node ${d.type}`)
+                .call(this.mindMapDrag(simulation));
+            
+            // Node circles
+            node.append('circle')
+                .attr('r', d => d.type === 'seed' ? 30 : 20)
+                .attr('class', d => d.lane ? `node-${d.lane}` : 'node-seed')
+                .attr('stroke-width', d => (d.fit || 0.5) * 5);
+            
+            // Node labels
+            node.append('text')
+                .text(d => d.title)
+                .attr('dy', 35)
+                .attr('text-anchor', 'middle')
+                .attr('class', 'node-label');
+            
+            // Node interactions
+            node.on('click', (event, d) => {
+                this.showMindMapNodeDrawer(d);
+            });
+            
+            // Update positions on tick
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+                
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+        },
+        
+        // Prepare mind-map nodes from career data
+        prepareMindMapNodes: function(data, seedCareer) {
+            const nodes = [];
+            
+            // Center node
+            nodes.push({
+                id: 'seed',
+                title: seedCareer || 'Your Profile',
+                type: 'seed'
+            });
+            
+            // Adjacent careers
+            if (data.adjacent && data.adjacent.length > 0) {
+                data.adjacent.forEach((career, i) => {
+                    nodes.push({
+                        id: `adj-${i}`,
+                        title: career.title,
+                        type: 'career',
+                        lane: 'adjacent',
+                        fit: career.profile_match?.fit || 0.7,
+                        similarity: career.profile_match?.similarity || 0.8,
+                        data: career
+                    });
+                });
+            }
+            
+            // Parallel careers
+            if (data.parallel && data.parallel.length > 0) {
+                data.parallel.forEach((career, i) => {
+                    nodes.push({
+                        id: `par-${i}`,
+                        title: career.title,
+                        type: 'career',
+                        lane: 'parallel',
+                        fit: career.profile_match?.fit || 0.6,
+                        similarity: career.profile_match?.similarity || 0.5,
+                        data: career
+                    });
+                });
+            }
+            
+            // Wildcard careers
+            if (data.wildcard && data.wildcard.length > 0) {
+                data.wildcard.forEach((career, i) => {
+                    nodes.push({
+                        id: `wild-${i}`,
+                        title: career.title,
+                        type: 'career',
+                        lane: 'wildcard',
+                        fit: career.profile_match?.fit || 0.5,
+                        similarity: career.profile_match?.similarity || 0.3,
+                        data: career
+                    });
+                });
+            }
+            
+            return nodes;
+        },
+        
+        // Prepare mind-map links
+        prepareMindMapLinks: function(nodes) {
+            const links = [];
+            const seed = nodes.find(n => n.type === 'seed');
+            
+            nodes.forEach(node => {
+                if (node.type === 'career') {
+                    links.push({
+                        source: seed.id,
+                        target: node.id,
+                        similarity: node.similarity || 0.5
+                    });
+                }
+            });
+            
+            return links;
+        },
+        
+        // Show mind-map node drawer
+        showMindMapNodeDrawer: function(nodeData) {
+            if (!nodeData.data) return; // Skip seed node
+            
+            const career = nodeData.data;
+            const drawer = $('#mindmap-drawer');
+            
+            const html = `
+                <div class="drawer-header">
+                    <h4>${this.escapeHtml(career.title)}</h4>
+                    <button class="drawer-close" onclick="LabModeApp.closeMindMapDrawer()">✕</button>
+                </div>
+                <div class="drawer-body">
+                    <p>${this.escapeHtml(career.why_it_fits)}</p>
+                    ${career.profile_match ? this.renderProfileMatchSection(career.profile_match, false) : ''}
+                    ${career.meta ? this.renderRequirementsSection(career.meta, false) : ''}
+                    ${career.meta ? this.renderWorkStyleSection(career.meta, false) : ''}
+                </div>
+                <div class="drawer-actions">
+                    <button class="lab-btn lab-btn-secondary" onclick="LabModeApp.mindMapNodeAction('not_interested', '${nodeData.id}')">
+                        Not interested
+                    </button>
+                    <button class="lab-btn lab-btn-primary" onclick="LabModeApp.mindMapNodeAction('save', '${nodeData.id}')">
+                        Save ♥
+                    </button>
+                </div>
+            `;
+            
+            drawer.html(html).slideDown(200);
+            
+            // Analytics
+            console.log('career_map_node_opened', { nodeId: nodeData.id, lane: nodeData.lane });
+        },
+        
+        // Close mind-map drawer
+        closeMindMapDrawer: function() {
+            $('#mindmap-drawer').slideUp(200);
+        },
+        
+        // Mind-map node action (save/dismiss)
+        mindMapNodeAction: function(action, nodeId) {
+            // Find the node data
+            const nodes = this.currentCareerData ? 
+                [...(this.currentCareerData.adjacent || []), 
+                 ...(this.currentCareerData.parallel || []), 
+                 ...(this.currentCareerData.wildcard || [])] : [];
+            
+            // Parse node ID to find career
+            const match = nodeId.match(/^(adj|par|wild)-(\d+)$/);
+            if (!match) return;
+            
+            const [, lane, index] = match;
+            const laneMap = { adj: 'adjacent', par: 'parallel', wild: 'wildcard' };
+            const laneName = laneMap[lane];
+            const careerIndex = parseInt(index);
+            
+            const careerData = this.currentCareerData[laneName]?.[careerIndex];
+            if (!careerData) return;
+            
+            // Handle action
+            if (action === 'save') {
+                console.log('career_map_node_action', { action: 'save', nodeId, lane: laneName });
+                // Call save API (reuse existing saveCareer logic)
+                this.saveCareerFromMindMap(careerData, laneName);
+            } else if (action === 'not_interested') {
+                console.log('career_map_node_action', { action: 'dismiss', nodeId, lane: laneName });
+                // Close drawer and maybe remove from view
+                this.closeMindMapDrawer();
+                alert('Career dismissed. This feature will be enhanced to replace the node.');
+            }
+        },
+        
+        // Save career from mind-map
+        saveCareerFromMindMap: function(career, clusterType) {
+            const centralCareer = this.currentCareerInterest || '';
+            
+            $.ajax({
+                url: labMode.ajaxUrl,
+                method: 'POST',
+                data: {
+                    action: 'mc_lab_career_feedback',
+                    nonce: labMode.nonce,
+                    feedback_action: 'save',
+                    career_rejected: career.title,
+                    central_career: centralCareer,
+                    distance_group: clusterType,
+                    career_data: JSON.stringify({
+                        title: career.title,
+                        why_it_fits: career.why_it_fits,
+                        distance_group: clusterType,
+                        central_career: centralCareer
+                    })
+                },
+                success: (response) => {
+                    if (response.success) {
+                        this.closeMindMapDrawer();
+                        alert('Career saved! View it in the Saved Ideas tab.');
+                    } else {
+                        alert('Failed to save career');
+                    }
+                },
+                error: () => {
+                    alert('Network error. Please try again.');
+                }
+            });
+        },
+        
+        // D3 drag behavior for mind-map
+        mindMapDrag: function(simulation) {
+            function dragstarted(event) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                event.subject.fx = event.subject.x;
+                event.subject.fy = event.subject.y;
+            }
+            
+            function dragged(event) {
+                event.subject.fx = event.x;
+                event.subject.fy = event.y;
+            }
+            
+            function dragended(event) {
+                if (!event.active) simulation.alphaTarget(0);
+                event.subject.fx = null;
+                event.subject.fy = null;
+            }
+            
+            return d3.drag()
+                .on('start', dragstarted)
+                .on('drag', dragged)
+                .on('end', dragended);
         },
         
         // Render a career cluster with enhanced meta fields

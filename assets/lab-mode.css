@@ -6580,3 +6580,252 @@ body.modal-open {
         align-self: flex-start;
     }
 }
+
+/* ===== Career Mind-Map View ===== */
+
+/* View Layout Tabs */
+.career-view-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.career-view-tab {
+    padding: 10px 20px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #4b5563;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.career-view-tab:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+}
+
+.career-view-tab.active {
+    background: #3b82f6;
+    color: #ffffff;
+    border-color: #3b82f6;
+}
+
+/* Mind-Map Container */
+.career-mindmap-container {
+    position: relative;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.mindmap-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.mindmap-header h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.mindmap-legend {
+    display: flex;
+    gap: 16px;
+    font-size: 13px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.legend-dot.lane-adjacent {
+    background: #3B82F6;
+}
+
+.legend-dot.lane-parallel {
+    background: #8B5CF6;
+}
+
+.legend-dot.lane-wildcard {
+    background: #F59E0B;
+}
+
+/* SVG Canvas */
+#career-mindmap-canvas {
+    width: 100%;
+    min-height: 600px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #f9fafb;
+}
+
+/* Nodes */
+.mindmap-node {
+    cursor: pointer;
+}
+
+.mindmap-node circle {
+    stroke: #ffffff;
+    stroke-width: 3px;
+    transition: all 0.2s;
+}
+
+.mindmap-node:hover circle {
+    filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+    stroke-width: 4px;
+}
+
+.node-seed {
+    fill: #1e293b;
+}
+
+.node-adjacent {
+    fill: #3B82F6;
+}
+
+.node-parallel {
+    fill: #8B5CF6;
+}
+
+.node-wildcard {
+    fill: #F59E0B;
+}
+
+.node-label {
+    font-size: 11px;
+    fill: #1e293b;
+    font-weight: 500;
+    pointer-events: none;
+}
+
+/* Links */
+.mindmap-link {
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.mindmap-link:hover {
+    opacity: 1;
+}
+
+/* Node Drawer */
+.mindmap-node-drawer {
+    position: absolute;
+    top: 80px;
+    right: 20px;
+    width: 320px;
+    max-height: 500px;
+    overflow-y: auto;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 10;
+}
+
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.drawer-header h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.drawer-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #6b7280;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.drawer-close:hover {
+    color: #1f2937;
+}
+
+.drawer-body {
+    padding: 16px;
+}
+
+.drawer-body p {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #475569;
+}
+
+.drawer-actions {
+    display: flex;
+    gap: 8px;
+    padding: 16px;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* Responsive Mind-Map */
+@media (max-width: 768px) {
+    .career-view-tabs {
+        flex-direction: column;
+    }
+    
+    .career-view-tab {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .mindmap-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .mindmap-legend {
+        flex-wrap: wrap;
+    }
+    
+    #career-mindmap-canvas {
+        min-height: 400px;
+    }
+    
+    .mindmap-node-drawer {
+        position: fixed;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        max-height: 70vh;
+        border-radius: 12px 12px 0 0;
+    }
+}
