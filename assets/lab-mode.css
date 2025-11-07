@@ -6653,10 +6653,19 @@ body.modal-open {
     border-radius: 6px;
 }
 
+.mindmap-filters {
+    margin: 12px 0;
+}
+
+.mindmap-filters .career-filters-bar {
+    margin: 0;
+}
+
 .mindmap-legend {
     display: flex;
     gap: 16px;
     font-size: 13px;
+    margin-top: 12px;
 }
 
 .legend-item {
@@ -6672,11 +6681,11 @@ body.modal-open {
 }
 
 .legend-dot.lane-adjacent {
-    background: #3B82F6;
+    background: #10B981;
 }
 
 .legend-dot.lane-parallel {
-    background: #8B5CF6;
+    background: #3B82F6;
 }
 
 .legend-dot.lane-wildcard {
@@ -6757,11 +6766,11 @@ body.modal-open {
 }
 
 .tooltip-lane.badge-adjacent {
-    background: #3B82F6;
+    background: #10B981;
 }
 
 .tooltip-lane.badge-parallel {
-    background: #8B5CF6;
+    background: #3B82F6;
 }
 
 .tooltip-lane.badge-wildcard {
@@ -6930,11 +6939,11 @@ body.modal-open {
 }
 
 .node-adjacent {
-    fill: #3B82F6;
+    fill: #10B981;
 }
 
 .node-parallel {
-    fill: #8B5CF6;
+    fill: #3B82F6;
 }
 
 .node-wildcard {

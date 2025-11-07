@@ -3364,6 +3364,12 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                             <span class="mindmap-hint">👆 Click to expand • Hover for quick actions</span>
                         </div>
                         <div class="mindmap-breadcrumbs"></div>
+                        
+                        <!-- Filters for Mind-Map -->
+                        <div class="mindmap-filters">
+                            ${this.renderFiltersBar()}
+                        </div>
+                        
                         <div class="mindmap-legend">
                             <span class="legend-item"><span class="legend-dot lane-adjacent"></span> Adjacent</span>
                             <span class="legend-item"><span class="legend-dot lane-parallel"></span> Parallel</span>
