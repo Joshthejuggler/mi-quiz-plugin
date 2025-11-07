@@ -4097,6 +4097,17 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 tooltip = $('#mindmap-tooltip');
             }
             
+            // Ensure MI is an array
+            let miArray = [];
+            if (Array.isArray(nodeData.mi)) {
+                miArray = nodeData.mi;
+            } else if (nodeData.mi) {
+                miArray = [nodeData.mi];
+            }
+            
+            // Render MI badges
+            const miBadges = miArray.slice(0, 2).map(mi => `<span class="badge-mi-sm">${this.escapeHtml(mi)}</span>`).join('');
+            
             const html = `
                 <div class="tooltip-header">
                     <strong>${this.escapeHtml(nodeData.title)}</strong>
@@ -4107,8 +4118,8 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     <span class="tooltip-stat">Similarity: ${Math.round((nodeData.similarity || 0) * 100)}%</span>
                 </div>
                 <div class="tooltip-badges">
-                    ${(nodeData.mi || []).slice(0, 2).map(mi => `<span class="badge-mi-sm">${mi}</span>`).join('')}
-                    ${nodeData.bartle ? `<span class="badge-bartle-sm">${nodeData.bartle}</span>` : ''}
+                    ${miBadges}
+                    ${nodeData.bartle ? `<span class="badge-bartle-sm">${this.escapeHtml(nodeData.bartle)}</span>` : ''}
                 </div>
                 <div class="tooltip-actions">
                     <button class="tooltip-btn tooltip-btn-save" data-node-id="${nodeData.id}" title="Save">♥</button>
