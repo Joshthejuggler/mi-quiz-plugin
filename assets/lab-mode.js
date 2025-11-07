@@ -16,6 +16,15 @@
         compactMode: false,
         careerExplanationCache: {},
         careerLayout: localStorage.getItem('career_layout') || 'cards',
+        mindMapState: {
+            centerId: 'seed',
+            nodes: {},
+            edges: [],
+            openRequests: new Set(),
+            history: [],
+            expandedNodes: new Set()
+        },
+        savedCareers: new Set(),
         
         // Initialize the application
         init: function() {
@@ -3351,6 +3360,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 <div class="career-mindmap-container">
                     <div class="mindmap-header">
                         <h3>${isDice ? '🎲 Dice Roll' : 'Mind-Map'}: ${seedCareer || 'Your Profile'}</h3>
+                        <div class="mindmap-breadcrumbs"></div>
                         <div class="mindmap-legend">
                             <span class="legend-item"><span class="legend-dot lane-adjacent"></span> Adjacent</span>
                             <span class="legend-item"><span class="legend-dot lane-parallel"></span> Parallel</span>
@@ -3379,87 +3389,123 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 return;
             }
             
-            console.log('Canvas found, width:', canvas.width());
-            
-            // Clear any existing SVG
-            canvas.empty();
-            
             const width = canvas.width();
-            const height = 600;
-            
             if (width === 0) {
                 console.error('Canvas width is 0, waiting for layout...');
                 setTimeout(() => this.initializeMindMap(data, seedCareer), 200);
                 return;
             }
             
-            console.log('Creating SVG with dimensions:', { width, height });
+            // Reset state for new map
+            this.mindMapState = {
+                centerId: 'seed',
+                nodes: {},
+                edges: [],
+                openRequests: new Set(),
+                history: [],
+                expandedNodes: new Set()
+            };
             
-            // Create SVG
-            const svg = d3.select('#career-mindmap-canvas')
-                .append('svg')
-                .attr('width', width)
-                .attr('height', height)
-                .attr('viewBox', [0, 0, width, height]);
+            // Populate initial state from data
+            // Seed node
+            this.mindMapState.nodes['seed'] = {
+                id: 'seed',
+                title: seedCareer || 'Your Profile',
+                type: 'seed',
+                depth: 0
+            };
             
-            // Prepare node data
-            const nodes = this.prepareMindMapNodes(data, seedCareer);
-            const links = this.prepareMindMapLinks(nodes);
+            // Adjacent careers
+            if (data.adjacent && data.adjacent.length > 0) {
+                data.adjacent.forEach((career, i) => {
+                    const nodeId = `adj-${i}`;
+                    this.mindMapState.nodes[nodeId] = {
+                        id: nodeId,
+                        title: career.title,
+                        type: 'career',
+                        lane: 'adjacent',
+                        depth: 1,
+                        parentId: 'seed',
+                        fit: career.profile_match?.fit || 0.7,
+                        similarity: career.profile_match?.similarity || 0.8,
+                        data: career,
+                        mi: career.profile_match?.mi || [],
+                        cdt_top: career.profile_match?.cdt_top,
+                        bartle: career.profile_match?.bartle
+                    };
+                    
+                    this.mindMapState.edges.push({
+                        source: 'seed',
+                        target: nodeId,
+                        similarity: career.profile_match?.similarity || 0.8
+                    });
+                });
+            }
             
-            console.log('Nodes and links prepared:', { nodeCount: nodes.length, linkCount: links.length });
+            // Parallel careers
+            if (data.parallel && data.parallel.length > 0) {
+                data.parallel.forEach((career, i) => {
+                    const nodeId = `par-${i}`;
+                    this.mindMapState.nodes[nodeId] = {
+                        id: nodeId,
+                        title: career.title,
+                        type: 'career',
+                        lane: 'parallel',
+                        depth: 1,
+                        parentId: 'seed',
+                        fit: career.profile_match?.fit || 0.6,
+                        similarity: career.profile_match?.similarity || 0.5,
+                        data: career,
+                        mi: career.profile_match?.mi || [],
+                        cdt_top: career.profile_match?.cdt_top,
+                        bartle: career.profile_match?.bartle
+                    };
+                    
+                    this.mindMapState.edges.push({
+                        source: 'seed',
+                        target: nodeId,
+                        similarity: career.profile_match?.similarity || 0.5
+                    });
+                });
+            }
             
-            // Force simulation
-            const simulation = d3.forceSimulation(nodes)
-                .force('link', d3.forceLink(links).id(d => d.id).distance(150))
-                .force('charge', d3.forceManyBody().strength(-300))
-                .force('center', d3.forceCenter(width / 2, height / 2))
-                .force('collision', d3.forceCollide().radius(40));
+            // Wildcard careers
+            if (data.wildcard && data.wildcard.length > 0) {
+                data.wildcard.forEach((career, i) => {
+                    const nodeId = `wild-${i}`;
+                    this.mindMapState.nodes[nodeId] = {
+                        id: nodeId,
+                        title: career.title,
+                        type: 'career',
+                        lane: 'wildcard',
+                        depth: 1,
+                        parentId: 'seed',
+                        fit: career.profile_match?.fit || 0.5,
+                        similarity: career.profile_match?.similarity || 0.3,
+                        data: career,
+                        mi: career.profile_match?.mi || [],
+                        cdt_top: career.profile_match?.cdt_top,
+                        bartle: career.profile_match?.bartle
+                    };
+                    
+                    this.mindMapState.edges.push({
+                        source: 'seed',
+                        target: nodeId,
+                        similarity: career.profile_match?.similarity || 0.3
+                    });
+                });
+            }
             
-            // Render links
-            const link = svg.append('g')
-                .selectAll('line')
-                .data(links)
-                .join('line')
-                .attr('class', 'mindmap-link')
-                .attr('stroke', '#94a3b8')
-                .attr('stroke-width', d => (d.similarity || 0.5) * 3);
-            
-            // Render nodes
-            const node = svg.append('g')
-                .selectAll('g')
-                .data(nodes)
-                .join('g')
-                .attr('class', d => `mindmap-node ${d.type}`)
-                .call(this.mindMapDrag(simulation));
-            
-            // Node circles
-            node.append('circle')
-                .attr('r', d => d.type === 'seed' ? 30 : 20)
-                .attr('class', d => d.lane ? `node-${d.lane}` : 'node-seed')
-                .attr('stroke-width', d => (d.fit || 0.5) * 5);
-            
-            // Node labels
-            node.append('text')
-                .text(d => d.title)
-                .attr('dy', 35)
-                .attr('text-anchor', 'middle')
-                .attr('class', 'node-label');
-            
-            // Node interactions
-            node.on('click', (event, d) => {
-                this.showMindMapNodeDrawer(d);
+            console.log('State initialized:', { 
+                nodeCount: Object.keys(this.mindMapState.nodes).length, 
+                edgeCount: this.mindMapState.edges.length 
             });
             
-            // Update positions on tick
-            simulation.on('tick', () => {
-                link
-                    .attr('x1', d => d.source.x)
-                    .attr('y1', d => d.source.y)
-                    .attr('x2', d => d.target.x)
-                    .attr('y2', d => d.target.y);
-                
-                node.attr('transform', d => `translate(${d.x},${d.y})`);
-            });
+            // Initialize breadcrumbs
+            this.updateBreadcrumbs();
+            
+            // Render from state
+            this.updateMindMapVisualization();
         },
         
         // Prepare mind-map nodes from career data
@@ -3669,6 +3715,378 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 .on('start', dragstarted)
                 .on('drag', dragged)
                 .on('end', dragended);
+        },
+        
+        // Expand node: fetch related careers and add to map
+        expandNode: async function(nodeId, lane = 'parallel') {
+            const node = this.mindMapState.nodes[nodeId];
+            if (!node) {
+                console.error('Node not found:', nodeId);
+                return;
+            }
+            
+            // Check if already expanded
+            if (this.mindMapState.expandedNodes.has(nodeId)) {
+                console.log('Node already expanded:', nodeId);
+                return;
+            }
+            
+            // Check if already loading
+            const requestKey = `${nodeId}|${lane}`;
+            if (this.mindMapState.openRequests.has(requestKey)) {
+                console.log('Already loading:', requestKey);
+                return;
+            }
+            
+            this.mindMapState.openRequests.add(requestKey);
+            
+            // Show loading indicator
+            console.log('Expanding node:', nodeId, 'lane:', lane);
+            
+            try {
+                const response = await $.ajax({
+                    url: labMode.ajaxUrl,
+                    method: 'POST',
+                    data: {
+                        action: 'mc_lab_get_related_careers',
+                        nonce: labMode.nonce,
+                        career_title: node.title,
+                        lane: lane,
+                        limit: 8,
+                        novelty: 0.25
+                    }
+                });
+                
+                if (response.success && response.data) {
+                    this.addChildrenToMap(nodeId, lane, response.data);
+                    this.mindMapState.expandedNodes.add(nodeId);
+                    this.updateMindMapVisualization();
+                    
+                    // Analytics
+                    console.log('career_map_expand', { nodeId, lane, count: response.data.length });
+                } else {
+                    console.error('Failed to fetch related careers:', response);
+                    alert('Failed to load related careers. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error expanding node:', error);
+                alert('Network error. Please try again.');
+            } finally {
+                this.mindMapState.openRequests.delete(requestKey);
+            }
+        },
+        
+        // Add children to map with deduplication
+        addChildrenToMap: function(parentId, lane, children) {
+            const parentNode = this.mindMapState.nodes[parentId];
+            if (!parentNode) return;
+            
+            const parentDepth = parentNode.depth || 0;
+            const childDepth = parentDepth + 1;
+            
+            // Depth limit: 3 rings from current center
+            if (childDepth > 3) {
+                console.warn('Depth limit reached, not adding children');
+                return;
+            }
+            
+            children.forEach(career => {
+                // Check if career already exists in the map
+                const existingNode = Object.values(this.mindMapState.nodes).find(n => 
+                    n.title.toLowerCase() === career.title.toLowerCase()
+                );
+                
+                if (existingNode) {
+                    // Deduplicate: add linking edge instead
+                    console.log('Career already exists, adding edge:', career.title);
+                    this.mindMapState.edges.push({
+                        source: parentId,
+                        target: existingNode.id,
+                        similarity: career.similarity || 0.5
+                    });
+                } else {
+                    // Add new node
+                    const nodeId = career.id || `career-${Math.random().toString(36).substr(2, 9)}`;
+                    
+                    this.mindMapState.nodes[nodeId] = {
+                        id: nodeId,
+                        title: career.title,
+                        type: 'career',
+                        lane: lane,
+                        depth: childDepth,
+                        parentId: parentId,
+                        fit: career.fit || 0.7,
+                        similarity: career.similarity || 0.5,
+                        data: career,
+                        mi: career.mi || [],
+                        cdt_top: career.cdt_top,
+                        bartle: career.bartle
+                    };
+                    
+                    // Add edge from parent to new child
+                    this.mindMapState.edges.push({
+                        source: parentId,
+                        target: nodeId,
+                        similarity: career.similarity || 0.5
+                    });
+                }
+            });
+        },
+        
+        // Update Mind-Map visualization from state
+        updateMindMapVisualization: function() {
+            if (typeof d3 === 'undefined') {
+                console.error('D3.js not loaded');
+                return;
+            }
+            
+            const canvas = $('#career-mindmap-canvas');
+            if (!canvas.length) {
+                console.error('Mind-map canvas not found');
+                return;
+            }
+            
+            // Clear existing SVG
+            canvas.empty();
+            
+            const width = canvas.width();
+            const height = 600;
+            
+            // Create SVG
+            const svg = d3.select('#career-mindmap-canvas')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height)
+                .attr('viewBox', [0, 0, width, height]);
+            
+            // Convert state to D3 format
+            const nodes = Object.values(this.mindMapState.nodes);
+            const links = this.mindMapState.edges.map(e => ({...e})); // Clone edges
+            
+            console.log('Updating visualization:', { nodeCount: nodes.length, linkCount: links.length });
+            
+            // Force simulation
+            const simulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(links).id(d => d.id).distance(150))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(40));
+            
+            // Render links
+            const link = svg.append('g')
+                .selectAll('line')
+                .data(links)
+                .join('line')
+                .attr('class', 'mindmap-link')
+                .attr('stroke', '#94a3b8')
+                .attr('stroke-width', d => (d.similarity || 0.5) * 3);
+            
+            // Render nodes
+            const node = svg.append('g')
+                .selectAll('g')
+                .data(nodes)
+                .join('g')
+                .attr('class', d => `mindmap-node ${d.type}`)
+                .call(this.mindMapDrag(simulation));
+            
+            // Node circles
+            node.append('circle')
+                .attr('r', d => d.type === 'seed' ? 30 : 20)
+                .attr('class', d => d.lane ? `node-${d.lane}` : 'node-seed')
+                .attr('stroke-width', d => (d.fit || 0.5) * 5);
+            
+            // Node labels
+            node.append('text')
+                .text(d => d.title)
+                .attr('dy', 35)
+                .attr('text-anchor', 'middle')
+                .attr('class', 'node-label');
+            
+            // Single-click: expand node
+            node.on('click', (event, d) => {
+                event.stopPropagation();
+                if (d.type === 'career') {
+                    this.expandNode(d.id, 'parallel');
+                }
+            });
+            
+            // Double-click: re-root graph
+            node.on('dblclick', (event, d) => {
+                event.stopPropagation();
+                if (d.type === 'career') {
+                    this.setMapCenter(d.id);
+                }
+            });
+            
+            // Hover: show tooltip (future implementation)
+            node.on('mouseenter', (event, d) => {
+                if (d.type === 'career') {
+                    this.showNodeTooltip(event, d);
+                }
+            });
+            
+            node.on('mouseleave', () => {
+                this.hideNodeTooltip();
+            });
+            
+            // Update positions on tick
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+                
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+        },
+        
+        // Set new map center (re-root)
+        setMapCenter: function(nodeId) {
+            const node = this.mindMapState.nodes[nodeId];
+            if (!node || node.type === 'seed') return;
+            
+            // Add current center to history
+            this.mindMapState.history.push(this.mindMapState.centerId);
+            
+            // Set new center
+            this.mindMapState.centerId = nodeId;
+            
+            // Recalculate depths from new center
+            this.recalculateDepths(nodeId);
+            
+            // Update breadcrumbs
+            this.updateBreadcrumbs();
+            
+            // Re-render
+            this.updateMindMapVisualization();
+            
+            // Analytics
+            console.log('career_map_reroot', { nodeId });
+        },
+        
+        // Recalculate depths from new center using BFS
+        recalculateDepths: function(centerId) {
+            // Reset all depths
+            Object.values(this.mindMapState.nodes).forEach(node => {
+                node.depth = Infinity;
+            });
+            
+            // BFS from center
+            const queue = [centerId];
+            this.mindMapState.nodes[centerId].depth = 0;
+            
+            while (queue.length > 0) {
+                const currentId = queue.shift();
+                const currentNode = this.mindMapState.nodes[currentId];
+                const currentDepth = currentNode.depth;
+                
+                // Find all connected nodes
+                this.mindMapState.edges.forEach(edge => {
+                    let neighborId = null;
+                    
+                    if (edge.source === currentId || edge.source.id === currentId) {
+                        neighborId = edge.target.id || edge.target;
+                    } else if (edge.target === currentId || edge.target.id === currentId) {
+                        neighborId = edge.source.id || edge.source;
+                    }
+                    
+                    if (neighborId) {
+                        const neighbor = this.mindMapState.nodes[neighborId];
+                        if (neighbor && neighbor.depth > currentDepth + 1) {
+                            neighbor.depth = currentDepth + 1;
+                            queue.push(neighborId);
+                        }
+                    }
+                });
+            }
+        },
+        
+        // Update breadcrumbs navigation
+        updateBreadcrumbs: function() {
+            const path = this.getPathToNode(this.mindMapState.centerId);
+            const breadcrumbsHtml = path.map((nodeId, index) => {
+                const node = this.mindMapState.nodes[nodeId];
+                const isLast = index === path.length - 1;
+                return `
+                    <span class="breadcrumb-item ${isLast ? 'active' : ''}" 
+                          ${!isLast ? `onclick="LabModeApp.setMapCenter('${nodeId}')"` : ''}>
+                        ${this.escapeHtml(node.title)}
+                    </span>
+                    ${!isLast ? '<span class="breadcrumb-separator">›</span>' : ''}
+                `;
+            }).join('');
+            
+            $('.mindmap-breadcrumbs').html(breadcrumbsHtml);
+        },
+        
+        // Get path from seed to specified node
+        getPathToNode: function(nodeId) {
+            const path = [];
+            let currentId = nodeId;
+            
+            while (currentId) {
+                path.unshift(currentId);
+                const node = this.mindMapState.nodes[currentId];
+                if (!node || node.type === 'seed') break;
+                currentId = node.parentId;
+            }
+            
+            return path;
+        },
+        
+        // Show lightweight tooltip on hover
+        showNodeTooltip: function(event, nodeData) {
+            const tooltip = $('#mindmap-tooltip');
+            if (!tooltip.length) {
+                // Create tooltip if it doesn't exist
+                $('body').append('<div id="mindmap-tooltip" class="mindmap-tooltip" style="display: none;"></div>');
+            }
+            
+            const html = `
+                <div class="tooltip-header">
+                    <strong>${this.escapeHtml(nodeData.title)}</strong>
+                    <span class="tooltip-lane badge-${nodeData.lane}">${nodeData.lane}</span>
+                </div>
+                <div class="tooltip-stats">
+                    <span class="tooltip-stat">Fit: ${Math.round((nodeData.fit || 0) * 100)}%</span>
+                    <span class="tooltip-stat">Similarity: ${Math.round((nodeData.similarity || 0) * 100)}%</span>
+                </div>
+                <div class="tooltip-badges">
+                    ${(nodeData.mi || []).slice(0, 2).map(mi => `<span class="badge-mi-sm">${mi}</span>`).join('')}
+                    ${nodeData.bartle ? `<span class="badge-bartle-sm">${nodeData.bartle}</span>` : ''}
+                </div>
+                <div class="tooltip-actions">
+                    <button class="tooltip-btn" onclick="LabModeApp.saveCareerFromMap(LabModeApp.mindMapState.nodes['${nodeData.id}'].data, '${nodeData.lane}')" title="Save">♥</button>
+                    <button class="tooltip-btn" onclick="LabModeApp.dismissCareerFromMap('${nodeData.id}')" title="Not interested">✕</button>
+                </div>
+            `;
+            
+            $('#mindmap-tooltip')
+                .html(html)
+                .css({
+                    left: event.pageX + 10,
+                    top: event.pageY + 10,
+                    display: 'block'
+                });
+        },
+        
+        // Hide tooltip
+        hideNodeTooltip: function() {
+            $('#mindmap-tooltip').css('display', 'none');
+        },
+        
+        // Dismiss career from map (soft hide)
+        dismissCareerFromMap: function(nodeId) {
+            console.log('Dismissing career:', nodeId);
+            // For now, just hide the node (can be enhanced to replace it)
+            delete this.mindMapState.nodes[nodeId];
+            this.mindMapState.edges = this.mindMapState.edges.filter(e => 
+                e.source !== nodeId && e.target !== nodeId && 
+                e.source.id !== nodeId && e.target.id !== nodeId
+            );
+            this.hideNodeTooltip();
+            this.updateMindMapVisualization();
         },
         
         // Render a career cluster with enhanced meta fields

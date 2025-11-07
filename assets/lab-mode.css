@@ -6668,6 +6668,148 @@ body.modal-open {
     background: #F59E0B;
 }
 
+/* Breadcrumbs */
+.mindmap-breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #64748b;
+    margin: 12px 0;
+    flex-wrap: wrap;
+}
+
+.breadcrumb-item {
+    cursor: pointer;
+    color: #3B82F6;
+    transition: color 0.2s;
+}
+
+.breadcrumb-item:hover {
+    color: #2563EB;
+    text-decoration: underline;
+}
+
+.breadcrumb-item.active {
+    color: #1e293b;
+    font-weight: 600;
+    cursor: default;
+}
+
+.breadcrumb-item.active:hover {
+    text-decoration: none;
+}
+
+.breadcrumb-separator {
+    color: #cbd5e1;
+    font-weight: 400;
+    user-select: none;
+}
+
+/* Mind-Map Tooltip */
+.mindmap-tooltip {
+    position: absolute;
+    z-index: 1000;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-width: 280px;
+    pointer-events: none;
+}
+
+.tooltip-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.tooltip-header strong {
+    font-size: 14px;
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.tooltip-lane {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #ffffff;
+    font-weight: 500;
+}
+
+.tooltip-lane.badge-adjacent {
+    background: #3B82F6;
+}
+
+.tooltip-lane.badge-parallel {
+    background: #8B5CF6;
+}
+
+.tooltip-lane.badge-wildcard {
+    background: #F59E0B;
+}
+
+.tooltip-stats {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.tooltip-stat {
+    font-weight: 500;
+}
+
+.tooltip-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.badge-mi-sm,
+.badge-bartle-sm {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #f1f5f9;
+    color: #475569;
+    font-weight: 500;
+}
+
+.tooltip-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    pointer-events: all;
+}
+
+.tooltip-btn {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #475569;
+}
+
+.tooltip-btn:hover {
+    background: #e2e8f0;
+    border-color: #cbd5e1;
+    color: #1e293b;
+}
+
+.tooltip-btn:active {
+    transform: scale(0.95);
+}
+
 /* SVG Canvas */
 #career-mindmap-canvas {
     width: 100%;

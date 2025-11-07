@@ -51,6 +51,7 @@ class Micro_Coach_AI_Lab {
         add_action('wp_ajax_mc_lab_get_saved_careers', [$this, 'ajax_get_saved_careers']);
         add_action('wp_ajax_mc_lab_delete_saved_career', [$this, 'ajax_delete_saved_career']);
         add_action('wp_ajax_mc_lab_career_suggest', [$this, 'ajax_career_suggest']);
+        add_action('wp_ajax_mc_lab_get_related_careers', [$this, 'ajax_get_related_careers']);
         
         // Hook into the main dashboard to add Lab Mode and Career Explorer tabs
         add_filter('mc_dashboard_custom_tabs', [$this, 'add_lab_mode_tab']);
@@ -3225,6 +3226,203 @@ You must:
         
         $prompt .= "\nnovelty_bias: " . number_format($novelty_bias, 2) . "\n";
         $prompt .= "limit_per_bucket: " . $limit . "\n";
+        
+        return $prompt;
+    }
+    
+    /**
+     * AJAX: Get Related Careers for Mind-Map Expansion
+     * Endpoint: mc_lab_get_related_careers
+     * Params: career_title (string), lane (adjacent|parallel|wildcard), limit (int, default 8), novelty (float, default 0)
+     */
+    public function ajax_get_related_careers() {
+        check_ajax_referer('mc_lab_nonce', 'nonce');
+        
+        $user_id = get_current_user_id();
+        if (!$user_id || !$this->user_can_access_lab_mode()) {
+            wp_send_json_error('Insufficient permissions');
+        }
+        
+        // Parse request parameters
+        $career_title = sanitize_text_field($_POST['career_title'] ?? '');
+        $lane = sanitize_text_field($_POST['lane'] ?? 'parallel');
+        $limit = intval($_POST['limit'] ?? 8);
+        $novelty = floatval($_POST['novelty'] ?? 0);
+        
+        // Validate lane parameter
+        if (!in_array($lane, ['adjacent', 'parallel', 'wildcard'])) {
+            wp_send_json_error('Invalid lane parameter');
+        }
+        
+        if (empty($career_title)) {
+            wp_send_json_error('career_title is required');
+        }
+        
+        // Get user profile data
+        $profile_data = $this->get_enhanced_career_profile($user_id);
+        
+        if (!$profile_data) {
+            wp_send_json_error('Unable to load your profile data. Please ensure all assessments are complete.');
+        }
+        
+        try {
+            $related_careers = $this->generate_related_careers(
+                $career_title,
+                $lane,
+                $profile_data,
+                $limit,
+                $novelty
+            );
+            
+            wp_send_json_success($related_careers);
+            
+        } catch (Exception $e) {
+            error_log('Get Related Careers - AI generation failed: ' . $e->getMessage());
+            wp_send_json_error('Failed to generate related careers: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Generate related careers using AI based on lane type
+     */
+    private function generate_related_careers($career_title, $lane, $profile, $limit, $novelty) {
+        if (!class_exists('Micro_Coach_AI')) {
+            throw new Exception('Micro_Coach_AI class not available');
+        }
+        
+        $api_key = Micro_Coach_AI::get_openai_api_key();
+        if (empty($api_key)) {
+            throw new Exception('OpenAI API key not configured');
+        }
+        
+        // Build lane-specific system prompt
+        $system_prompt = $this->build_related_careers_system_prompt($lane);
+        
+        // Build user prompt with profile and career title
+        $user_prompt = $this->build_related_careers_user_prompt($career_title, $profile, $limit, $novelty);
+        
+        $model = Micro_Coach_AI::get_selected_model();
+        
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system_prompt],
+                ['role' => 'user', 'content' => $user_prompt]
+            ],
+            'temperature' => 0.7 + ($novelty * 0.3),
+            'max_tokens' => 1500,
+            'response_format' => ['type' => 'json_object']
+        ];
+        
+        $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
+            'timeout' => 60,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json'
+            ],
+            'body' => wp_json_encode($payload)
+        ]);
+        
+        if (is_wp_error($response)) {
+            throw new Exception('API request failed: ' . $response->get_error_message());
+        }
+        
+        $status_code = wp_remote_retrieve_response_code($response);
+        if ($status_code !== 200) {
+            $body = wp_remote_retrieve_body($response);
+            $error_data = json_decode($body, true);
+            throw new Exception('API returned status ' . $status_code . ': ' . ($error_data['error']['message'] ?? 'Unknown error'));
+        }
+        
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+        
+        if (!isset($data['choices'][0]['message']['content'])) {
+            throw new Exception('Invalid API response structure');
+        }
+        
+        $content = $data['choices'][0]['message']['content'];
+        $careers = json_decode($content, true);
+        
+        if (!$careers || !isset($careers['careers'])) {
+            throw new Exception('Failed to decode related careers JSON');
+        }
+        
+        // Add IDs and ensure consistency
+        $result = [];
+        foreach ($careers['careers'] as $index => $career) {
+            $result[] = [
+                'id' => 'career-' . md5($career['title'] . $lane . $index),
+                'title' => $career['title'],
+                'lane' => $lane,
+                'fit' => $career['fit'] ?? 0.75,
+                'similarity' => $career['similarity'] ?? 0.70,
+                'mi' => $career['mi'] ?? [],
+                'cdt_top' => $career['cdt_top'] ?? null,
+                'bartle' => $career['bartle'] ?? null,
+                'why_it_fits' => $career['why_it_fits'] ?? '',
+                'demand_horizon' => $career['demand_horizon'] ?? 'Stable',
+                'education' => $career['education'] ?? 'Varies',
+                'work_env' => $career['work_env'] ?? [],
+                'comp_band' => $career['comp_band'] ?? 'Moderate'
+            ];
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Build system prompt for related careers based on lane
+     */
+    private function build_related_careers_system_prompt($lane) {
+        $base = 'You are a career discovery assistant helping users explore related career paths. ';
+        
+        $lane_descriptions = [
+            'adjacent' => 'Generate adjacent careers: very similar careers with easy transitions, requiring minimal skill retraining. Think lateral moves within the same industry or function.',
+            'parallel' => 'Generate parallel careers: careers using similar skills in different industries or contexts. Same core competencies, different application domains.',
+            'wildcard' => 'Generate wildcard careers: unexpected but genuinely profile-consistent careers that might surprise the user. These should be creative yet realistic matches.'
+        ];
+        
+        $prompt = $base . $lane_descriptions[$lane] . "\n\n";
+        $prompt .= 'Output Requirements:\n';
+        $prompt .= '1) Return valid JSON with structure: {"careers": [...]}';
+        $prompt .= '\n2) Each career object must include: title, fit (0-1 float representing profile match), similarity (0-1 float representing closeness to source career), mi (array of 1-2 matching MI types), cdt_top (string), bartle (string), why_it_fits (max 150 chars), demand_horizon, education, work_env (array), comp_band';
+        $prompt .= '\n3) Ensure all careers are realistic, accessible, and safe.';
+        $prompt .= '\n4) Prioritize diversity in suggestions while maintaining relevance.';
+        $prompt .= '\n5) No prose, markdown, or comments outside the JSON structure.';
+        
+        return $prompt;
+    }
+    
+    /**
+     * Build user prompt for related careers
+     */
+    private function build_related_careers_user_prompt($career_title, $profile, $limit, $novelty) {
+        $prompt = "source_career: " . $career_title . "\n\n";
+        
+        // Profile data
+        $prompt .= "profile:\n";
+        
+        // MI top 3
+        $mi_strings = [];
+        foreach ($profile['mi_top3'] as $mi) {
+            $mi_strings[] = $mi['slug'] . ' (' . $mi['score'] . ')';
+        }
+        $prompt .= "  mi_top3: " . implode(', ', $mi_strings) . "\n";
+        
+        // CDT
+        $prompt .= "  cdt_top: " . $profile['cdt_top'] . "\n";
+        $prompt .= "  cdt_edge: " . $profile['cdt_edge'] . "\n";
+        
+        // Bartle
+        $prompt .= "  bartle: " . $profile['bartle']['primary'];
+        if ($profile['bartle']['secondary']) {
+            $prompt .= ' / ' . $profile['bartle']['secondary'];
+        }
+        $prompt .= "\n\n";
+        
+        $prompt .= "limit: " . $limit . "\n";
+        $prompt .= "novelty: " . number_format($novelty, 2) . "\n";
         
         return $prompt;
     }
