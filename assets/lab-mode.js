@@ -3361,7 +3361,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     <div class="mindmap-header">
                         <div class="mindmap-header-top">
                             <h3>${isDice ? '🎲 Dice Roll' : 'Mind-Map'}: ${seedCareer || 'Your Profile'}</h3>
-                            <span class="mindmap-hint">👆 Click to expand • Double-click to re-center</span>
+                            <span class="mindmap-hint">👆 Click to expand • Hover for quick actions</span>
                         </div>
                         <div class="mindmap-breadcrumbs"></div>
                         <div class="mindmap-legend">
@@ -3965,15 +3965,7 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 }
             });
             
-            // Double-click: re-root graph
-            node.on('dblclick', (event, d) => {
-                event.stopPropagation();
-                if (d.type === 'career') {
-                    this.setMapCenter(d.id);
-                }
-            });
-            
-            // Hover: show tooltip (future implementation)
+            // Hover: show tooltip
             node.on('mouseenter', (event, d) => {
                 if (d.type === 'career') {
                     this.showNodeTooltip(event, d);
@@ -3981,7 +3973,13 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             });
             
             node.on('mouseleave', () => {
-                this.hideNodeTooltip();
+                // Don't hide tooltip immediately - give time to click buttons
+                setTimeout(() => {
+                    const tooltip = $('#mindmap-tooltip');
+                    if (!tooltip.is(':hover')) {
+                        this.hideNodeTooltip();
+                    }
+                }, 100);
             });
             
             // Update positions on tick
@@ -4092,10 +4090,11 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
         
         // Show lightweight tooltip on hover
         showNodeTooltip: function(event, nodeData) {
-            const tooltip = $('#mindmap-tooltip');
+            let tooltip = $('#mindmap-tooltip');
             if (!tooltip.length) {
                 // Create tooltip if it doesn't exist
                 $('body').append('<div id="mindmap-tooltip" class="mindmap-tooltip" style="display: none;"></div>');
+                tooltip = $('#mindmap-tooltip');
             }
             
             const html = `
@@ -4112,18 +4111,39 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                     ${nodeData.bartle ? `<span class="badge-bartle-sm">${nodeData.bartle}</span>` : ''}
                 </div>
                 <div class="tooltip-actions">
-                    <button class="tooltip-btn" onclick="LabModeApp.saveCareerFromMap(LabModeApp.mindMapState.nodes['${nodeData.id}'].data, '${nodeData.lane}')" title="Save">♥</button>
-                    <button class="tooltip-btn" onclick="LabModeApp.dismissCareerFromMap('${nodeData.id}')" title="Not interested">✕</button>
+                    <button class="tooltip-btn tooltip-btn-save" data-node-id="${nodeData.id}" title="Save">♥</button>
+                    <button class="tooltip-btn tooltip-btn-dismiss" data-node-id="${nodeData.id}" title="Not interested">✕</button>
                 </div>
             `;
             
-            $('#mindmap-tooltip')
+            tooltip
                 .html(html)
                 .css({
                     left: event.pageX + 10,
                     top: event.pageY + 10,
                     display: 'block'
                 });
+            
+            // Bind click events to tooltip buttons (use event delegation)
+            tooltip.off('click').on('click', '.tooltip-btn-save', (e) => {
+                e.stopPropagation();
+                const nodeId = $(e.currentTarget).data('node-id');
+                const node = this.mindMapState.nodes[nodeId];
+                if (node && node.data) {
+                    this.saveCareerFromMap(node.data, node.lane);
+                }
+            });
+            
+            tooltip.on('click', '.tooltip-btn-dismiss', (e) => {
+                e.stopPropagation();
+                const nodeId = $(e.currentTarget).data('node-id');
+                this.dismissCareerFromMap(nodeId);
+            });
+            
+            // Keep tooltip visible when hovering over it
+            tooltip.off('mouseleave').on('mouseleave', () => {
+                this.hideNodeTooltip();
+            });
         },
         
         // Hide tooltip

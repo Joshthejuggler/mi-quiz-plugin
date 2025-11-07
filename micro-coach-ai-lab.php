@@ -3258,6 +3258,15 @@ You must:
             wp_send_json_error('career_title is required');
         }
         
+        // Check cache first (transient with 1 hour expiration)
+        $cache_key = 'mc_related_' . md5($career_title . $lane . $user_id);
+        $cached = get_transient($cache_key);
+        
+        if ($cached !== false) {
+            wp_send_json_success($cached);
+            return;
+        }
+        
         // Get user profile data
         $profile_data = $this->get_enhanced_career_profile($user_id);
         
@@ -3273,6 +3282,9 @@ You must:
                 $limit,
                 $novelty
             );
+            
+            // Cache for 1 hour
+            set_transient($cache_key, $related_careers, HOUR_IN_SECONDS);
             
             wp_send_json_success($related_careers);
             
@@ -3310,12 +3322,12 @@ You must:
                 ['role' => 'user', 'content' => $user_prompt]
             ],
             'temperature' => 0.7 + ($novelty * 0.3),
-            'max_tokens' => 1500,
+            'max_tokens' => 800,  // Reduced from 1500 for faster generation
             'response_format' => ['type' => 'json_object']
         ];
         
         $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
-            'timeout' => 60,
+            'timeout' => 30,  // Reduced from 60 seconds
             'headers' => [
                 'Authorization' => 'Bearer ' . $api_key,
                 'Content-Type' => 'application/json'
@@ -3385,11 +3397,10 @@ You must:
         
         $prompt = $base . $lane_descriptions[$lane] . "\n\n";
         $prompt .= 'Output Requirements:\n';
-        $prompt .= '1) Return valid JSON with structure: {"careers": [...]}';
-        $prompt .= '\n2) Each career object must include: title, fit (0-1 float representing profile match), similarity (0-1 float representing closeness to source career), mi (array of 1-2 matching MI types), cdt_top (string), bartle (string), why_it_fits (max 150 chars), demand_horizon, education, work_env (array), comp_band';
-        $prompt .= '\n3) Ensure all careers are realistic, accessible, and safe.';
-        $prompt .= '\n4) Prioritize diversity in suggestions while maintaining relevance.';
-        $prompt .= '\n5) No prose, markdown, or comments outside the JSON structure.';
+        $prompt .= '1) Return valid JSON: {"careers": [{"title", "fit", "similarity", "mi", "cdt_top", "bartle", "why_it_fits"}]}';
+        $prompt .= '\n2) Keep why_it_fits under 100 chars. Omit demand_horizon, education, work_env, comp_band.';
+        $prompt .= '\n3) Realistic, safe careers only.';
+        $prompt .= '\n4) No prose or markdown. JSON only.';
         
         return $prompt;
     }
