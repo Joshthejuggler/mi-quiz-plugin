@@ -3927,13 +3927,8 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 );
                 
                 if (existingNode) {
-                    // Deduplicate: add linking edge instead
-                    console.log('Career already exists, adding edge:', career.title);
-                    this.mindMapState.edges.push({
-                        source: parentId,
-                        target: existingNode.id,
-                        similarity: career.similarity || 0.5
-                    });
+                    // Deduplicate: skip adding duplicate edge to reduce clutter
+                    console.log('Career already exists, skipping duplicate:', career.title);
                 } else {
                     // Add new node
                     const nodeId = career.id || `career-${Math.random().toString(36).substr(2, 9)}`;
@@ -4003,7 +3998,14 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             
             // Convert state to D3 format
             const nodes = Object.values(this.mindMapState.nodes);
-            const links = this.mindMapState.edges.map(e => ({...e})); // Clone edges
+            
+            // Only show parent-child edges (tree structure) to reduce clutter
+            const links = this.mindMapState.edges
+                .filter(e => {
+                    const targetNode = this.mindMapState.nodes[e.target.id || e.target];
+                    return targetNode && targetNode.parentId === (e.source.id || e.source);
+                })
+                .map(e => ({...e})); // Clone edges
             
             console.log('Updating visualization:', { nodeCount: nodes.length, linkCount: links.length });
             
@@ -4086,13 +4088,14 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             });
             
             // Single-click: expand with selected lane
-            node.on('click', (event, d) => {
+            const self = this;
+            node.on('click', function(event, d) {
                 event.stopPropagation();
                 if (d.type === 'career') {
                     // Show first-time alert
-                    if (!this.mindMapState.hasShownLaneAlert) {
-                        this.mindMapState.hasShownLaneAlert = true;
-                        const currentLane = this.getExpansionLane();
+                    if (!self.mindMapState.hasShownLaneAlert) {
+                        self.mindMapState.hasShownLaneAlert = true;
+                        const currentLane = self.getExpansionLane();
                         const laneNames = {
                             goodfit: 'Good Fit (best profile matches, 70%+ fit)',
                             adjacent: 'Adjacent (similar, easy transitions)',
@@ -4103,8 +4106,8 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                         alert(`You're expanding with: ${laneNames[currentLane]}\n\nChange expansion type using the buttons above.`);
                     }
                     
-                    const lane = this.getExpansionLane();
-                    this.expandNodeWithLane(d.id, lane);
+                    const lane = self.getExpansionLane();
+                    self.expandNodeWithLane(d.id, lane);
                 }
             });
             
