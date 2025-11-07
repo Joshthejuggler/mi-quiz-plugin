@@ -3369,8 +3369,15 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                             <span class="legend-item"><span class="legend-dot lane-adjacent"></span> Adjacent</span>
                             <span class="legend-item"><span class="legend-dot lane-parallel"></span> Parallel</span>
                             <span class="legend-item"><span class="legend-dot lane-wildcard"></span> Wildcard</span>
+                            <span class="legend-item legend-highlight"><span class="legend-dot legend-dot-highlight"></span> Matches filters</span>
                         </div>
                     </div>
+                    
+                    <!-- Floating filter summary -->
+                    <div class="mindmap-filter-summary" id="mindmap-filter-summary">
+                        ${this.renderFilterSummary()}
+                    </div>
+                    
                     <div id="career-mindmap-canvas"></div>
                     <div class="mindmap-node-drawer" id="mindmap-drawer" style="display: none;"></div>
                 </div>
@@ -3911,10 +3918,16 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
                 .attr('class', d => `mindmap-node ${d.type}`)
                 .call(this.mindMapDrag(simulation));
             
-            // Node circles
+            // Node circles with filter matching
             node.append('circle')
                 .attr('r', d => d.type === 'seed' ? 30 : 20)
-                .attr('class', d => d.lane ? `node-${d.lane}` : 'node-seed')
+                .attr('class', d => {
+                    let classes = d.lane ? `node-${d.lane}` : 'node-seed';
+                    if (d.type === 'career' && this.nodeMatchesFilters(d)) {
+                        classes += ' node-matches-filter';
+                    }
+                    return classes;
+                })
                 .attr('stroke-width', d => (d.fit || 0.5) * 5);
             
             // Node labels with improved positioning and wrapping
@@ -4178,6 +4191,127 @@ Generate 3-5 personalized experiments that combine the user's MI strengths, addr
             );
             this.hideNodeTooltip();
             this.updateMindMapVisualization();
+        },
+        
+        // Render filter summary for Mind-Map
+        renderFilterSummary: function() {
+            const filters = this.careerFilters || this.getDefaultFilters();
+            const activeFilters = [];
+            
+            // Check each filter type
+            if (filters.demand_horizon) {
+                activeFilters.push({ label: 'Demand', value: filters.demand_horizon.replace(/_/g, ' ') });
+            }
+            if (filters.education_levels && filters.education_levels.length > 0) {
+                activeFilters.push({ label: 'Education', value: filters.education_levels.length + ' selected' });
+            }
+            if (filters.work_env && filters.work_env.length > 0) {
+                activeFilters.push({ label: 'Work Env', value: filters.work_env.length + ' selected' });
+            }
+            if (filters.role_orientation && filters.role_orientation.length > 0) {
+                activeFilters.push({ label: 'Role Type', value: filters.role_orientation.length + ' selected' });
+            }
+            if (filters.comp_band) {
+                activeFilters.push({ label: 'Comp', value: filters.comp_band });
+            }
+            if (filters.social_impact && filters.social_impact.length > 0) {
+                activeFilters.push({ label: 'Impact', value: filters.social_impact.length + ' selected' });
+            }
+            if (filters.remote_only) {
+                activeFilters.push({ label: 'Remote', value: 'only' });
+            }
+            if (filters.stretch_opposites) {
+                activeFilters.push({ label: 'Stretch', value: 'on' });
+            }
+            
+            if (activeFilters.length === 0) {
+                return `
+                    <div class="filter-summary-content">
+                        <span class="filter-summary-icon">🎯</span>
+                        <span class="filter-summary-text">No filters active</span>
+                        <button class="filter-summary-edit" onclick="document.querySelector('.career-filters-bar').scrollIntoView({ behavior: 'smooth', block: 'start' })">
+                            Add filters ↑
+                        </button>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="filter-summary-content">
+                    <span class="filter-summary-icon">🔍</span>
+                    <span class="filter-summary-text">
+                        ${activeFilters.map(f => `<span class="filter-tag">${f.label}: ${f.value}</span>`).join('')}
+                    </span>
+                    <button class="filter-summary-edit" onclick="document.querySelector('.career-filters-bar').scrollIntoView({ behavior: 'smooth', block: 'start' })">
+                        Edit ↑
+                    </button>
+                </div>
+            `;
+        },
+        
+        // Check if a node matches current filters
+        nodeMatchesFilters: function(nodeData) {
+            const filters = this.careerFilters || this.getDefaultFilters();
+            const careerData = nodeData.data || {};
+            const meta = careerData.meta || {};
+            
+            // No filters active = all match
+            const hasActiveFilters = 
+                filters.demand_horizon ||
+                (filters.education_levels && filters.education_levels.length > 0) ||
+                (filters.work_env && filters.work_env.length > 0) ||
+                (filters.role_orientation && filters.role_orientation.length > 0) ||
+                filters.comp_band ||
+                (filters.social_impact && filters.social_impact.length > 0) ||
+                filters.remote_only ||
+                filters.stretch_opposites;
+            
+            if (!hasActiveFilters) return false; // Don't highlight if no filters
+            
+            let matches = 0;
+            let checks = 0;
+            
+            // Check demand horizon
+            if (filters.demand_horizon) {
+                checks++;
+                if (meta.demand_horizon === filters.demand_horizon) matches++;
+            }
+            
+            // Check education
+            if (filters.education_levels && filters.education_levels.length > 0) {
+                checks++;
+                if (meta.education && filters.education_levels.includes(meta.education)) matches++;
+            }
+            
+            // Check work environment
+            if (filters.work_env && filters.work_env.length > 0) {
+                checks++;
+                const careerEnv = meta.work_env || [];
+                if (filters.work_env.some(f => careerEnv.includes(f))) matches++;
+            }
+            
+            // Check remote only
+            if (filters.remote_only) {
+                checks++;
+                const careerEnv = meta.work_env || [];
+                if (careerEnv.includes('remote_friendly')) matches++;
+            }
+            
+            // Check compensation band
+            if (filters.comp_band) {
+                checks++;
+                if (meta.comp_band === filters.comp_band) matches++;
+            }
+            
+            // Check social impact
+            if (filters.social_impact && filters.social_impact.length > 0) {
+                checks++;
+                const careerImpact = meta.social_impact || [];
+                if (filters.social_impact.some(f => careerImpact.includes(f))) matches++;
+            }
+            
+            // Consider it a match if it satisfies at least 70% of active filters
+            return checks > 0 && (matches / checks) >= 0.7;
         },
         
         // Show visual feedback after node interaction
